@@ -1,6 +1,10 @@
-#include <iostream>
+#include <sys/socket.h>   // socket(), bind(), listen(), accept(), send(), recv()
+#include <netinet/in.h>   // sockaddr_in, htons(), htonl(), INADDR_ANY
+#include <arpa/inet.h>    // inet_ntop(), inet_pton()
+#include <unistd.h>       // close()
+#include <iostream>       // std::cout, std::cerr
+#include <cstring>        // memset(), strerror()
 
-// TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 int main() {
     return 42;
 }
