@@ -6,5 +6,17 @@
 #include <cstring>        // memset(), strerror()
 
 int main() {
+
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (server_fd == -1) {
+        std::cout << "Socket failed with error code: " << std::strerror(errno) << std::endl;
+        return 1;
+    }
+
+    std::cout << "Socket created successfully (fd=" << server_fd << ")\n";
+
+    close (server_fd);
+
     return 42;
 }
