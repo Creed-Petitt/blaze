@@ -33,6 +33,25 @@ int main() {
         return 1;
     }
 
+    if (listen(server_fd, 128) == -1) {
+        perror("listen");
+        return 1;
+    }
+
+    sockaddr_in client_addr {};
+    socklen_t client_len = sizeof(client_addr);
+
+    int client_fd = accept(server_fd, reinterpret_cast<sockaddr *>(&client_addr), &client_len); //
+
+    if (client_fd == -1) {
+        perror("accept");
+        return 1;
+    }
+
+    char client_ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+
+    close(client_fd);
     close (server_fd);
 
     return 0;
