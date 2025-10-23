@@ -41,7 +41,7 @@ int main() {
     sockaddr_in client_addr {};
     socklen_t client_len = sizeof(client_addr);
 
-    int client_fd = accept(server_fd, reinterpret_cast<sockaddr *>(&client_addr), &client_len); //
+    int client_fd = accept(server_fd, reinterpret_cast<sockaddr *>(&client_addr), &client_len);
 
     if (client_fd == -1) {
         perror("accept");
@@ -50,6 +50,34 @@ int main() {
 
     char client_ip[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+
+    char buffer[4096];
+
+    ssize_t bytes_reveived = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+    buffer[bytes_reveived] = '\0';
+
+    if (bytes_reveived == 0) {
+        perror("recv");
+        close(client_fd);
+        close(server_fd);
+        return 1;
+    }
+
+    const char* response =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/plain\r\n"
+        "Content-Length: 13\r\n"
+        "\r\n"
+        "Hello, World!";
+
+    ssize_t bytes_sent = send(client_fd, response, strlen(response), 0);
+
+    if (bytes_sent == -1) {
+        perror("send");
+        close(client_fd);
+        close(server_fd);
+        return 1;
+    }
 
     close(client_fd);
     close (server_fd);
