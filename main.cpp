@@ -5,8 +5,21 @@
 #include <iostream>       // std::cout, std::cerr
 #include <cstring>        // memset(), strerror()
 #include <sstream>
+#include <fstream>
+#include <map>
+#include <string>
 
 int main() {
+
+    // Create routing table
+    std::map<std::string, std::string> routes;
+    routes["/api/status"] = "status.json";
+    routes["/api/users"] = "users.json";
+    routes["/api/metrics"] = "metrics.json";
+    routes["/api/config"] = "config.json";
+    routes["/health"] = "health.txt";
+    routes["/info"] = "info.txt";
+    routes["/data"] = "data.csv";
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0); // Open TCP socket
 
@@ -71,25 +84,58 @@ int main() {
         std::string path = request_line.substr(first_space + 1, second_space - (first_space + 1));
         std::string http_ver = request_line.substr(second_space + 1, third_space - (second_space + 1));
 
-        std::cout << method << std::endl;
-        std::cout << path << std::endl;
-        std::cout << http_ver << std::endl;
+        std::string response;
 
+        if (routes.find(path) != routes.end()) {
+            std::string filename = routes[path];
+
+            //Try to open file
+            std::ifstream file("../public/" + filename);
+
+            if (file.is_open()) {
+                std::string content((std::istreambuf_iterator<char>(file)),
+                                      std::istreambuf_iterator<char>());
+                file.close();
+
+                 std::string content_type = "text/plain";
+
+                if (filename.find("json") != std::string::npos) {
+                    content_type = "application/json";
+                } else if (filename.find("csv") != std::string::npos) {
+                    content_type = "text/csv";
+                }
+
+                // Build HTTP response
+                response = "HTTP/1.1 200 OK\r\n";
+                response += "Content-Type: " + content_type + "\r\n";
+                response += "Content-Length: " + std::to_string(content.size()) + "\r\n";
+                response += "\r\n";
+                response += content;
+
+            } else {
+
+                std::string body = "500 Internal Server Error\n";
+                response = "HTTP/1.1 500 Internal Server Error\r\n";
+                response += "Content-Type: text/plain\r\n";
+                response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+                response += "\r\n";
+                response += body;
+            }
+        } else {
+
+            std::string body = "404 Not Found\n";
+            response = "HTTP/1.1 404 Not Found\r\n";
+            response += "Content-Type: text/plain\r\n";
+            response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+            response += "\r\n";
+            response += body;
+        }
         if (bytes_reveived == 0) {
             perror("recv");
             close(client_fd);
             continue;
         }
-
-        const char* response =
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: 13\r\n"
-            "\r\n"
-            "Hello, World!";
-
-        ssize_t bytes_sent = send(client_fd, response, strlen(response), 0);
-
+        ssize_t bytes_sent = send(client_fd, response.c_str(), response.size(), 0);
         if (bytes_sent == -1) {
             perror("send");
             close(client_fd);
