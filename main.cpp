@@ -68,8 +68,15 @@ int main() {
 
         char buffer[4096];
 
-        ssize_t bytes_reveived = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-        buffer[bytes_reveived] = '\0';
+        ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+
+        if (bytes_received == 0) {
+            perror("recv");
+            close(client_fd);
+            continue;
+        }
+
+        buffer[bytes_received] = '\0';
 
         std::string request(buffer);
 
@@ -130,11 +137,7 @@ int main() {
             response += "\r\n";
             response += body;
         }
-        if (bytes_reveived == 0) {
-            perror("recv");
-            close(client_fd);
-            continue;
-        }
+
         ssize_t bytes_sent = send(client_fd, response.c_str(), response.size(), 0);
         if (bytes_sent == -1) {
             perror("send");
