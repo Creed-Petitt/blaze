@@ -70,8 +70,10 @@ int main() {
 
         ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
 
-        if (bytes_received == 0) {
-            perror("recv");
+        if (bytes_received <= 0) {
+            if (bytes_received == -1) {
+                perror("recv");
+            }
             close(client_fd);
             continue;
         }
@@ -81,15 +83,40 @@ int main() {
         std::string request(buffer);
 
         size_t request_line_end = request.find("\r\n");
+        if (request_line_end == std::string::npos) {
+            std::string body = "400 Bad Request\n";
+            std::string response = "HTTP/1.1 400 Bad Request\r\n";
+            response += "Content-Type: text/plain\r\n";
+            response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+            response += "\r\n";
+            response += body;
+
+            send(client_fd, response.c_str(), response.size(), 0);
+            close(client_fd);
+            continue;
+        }
         std::string request_line = request.substr(0, request_line_end);
 
         size_t first_space = request_line.find(' ');
         size_t second_space = request_line.find(' ', first_space + 1);
-        size_t third_space = request_line.find(' ', second_space + 1);
+
+        if (first_space == std::string::npos || second_space == std::string::npos) {
+            std::string body = "400 Bad Request\n";
+            std::string response = "HTTP/1.1 400 Bad Request\r\n";
+            response += "Content-Type: text/plain\r\n";
+            response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+            response += "\r\n";
+            response += body;
+
+            send(client_fd, response.c_str(), response.size(), 0);
+            close(client_fd);
+            continue;  // Skip to next client
+        }
+
 
         std::string method = request_line.substr(0, first_space);
         std::string path = request_line.substr(first_space + 1, second_space - (first_space + 1));
-        std::string http_ver = request_line.substr(second_space + 1, third_space - (second_space + 1));
+        std::string http_ver = request_line.substr(second_space + 1);
 
         std::string response;
 
