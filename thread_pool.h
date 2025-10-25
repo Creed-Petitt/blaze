@@ -49,6 +49,19 @@ public:
         cv.notify_one();
     }
 
+    ~ThreadPool() {
+        {
+           std::unique_lock<std::mutex> lock(queue_mutex);
+            stop = true;
+            cv.notify_all();
+        }
+        for (std::thread& worker : workers) {
+            if (worker.joinable()) {
+                worker.join();
+            }
+        }
+    }
+
 };
 
 #endif //UNTITLED_THREAD_POOL_H
