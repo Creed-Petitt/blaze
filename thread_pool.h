@@ -12,26 +12,37 @@
 class ThreadPool {
 private:
     std::vector<std::thread> workers;
-    std::queue<std::pair<int, std::string>> tasks;
+    std::queue<std::function<void()>> tasks;
     std::mutex queue_mutex;
     std::condition_variable cv;
     bool stop;
 
 public:
-    ThreadPool(size_t num_threads) {
-        stop = false;
+    ThreadPool(size_t num_threads) : stop(false) {
+
         for (size_t i = 0; i < num_threads; i++) {
             workers.emplace_back([this] {
                 while (true) {
-                 // 1. Wait for work
-                 // 2. Grab work from queue
-                 // 3. Process it
-                 // 4. Repeat
+                    std::function<void()> task;
+                    {
+                        std::unique_lock lock(queue_mutex);
+                         cv.wait(lock, [this] {
+                             return !tasks.empty() || stop; });
+
+                        if (stop && tasks.empty()) {
+                            return;
+                        }
+
+                        task = tasks.front();
+                        tasks.pop();
+                    }
+                task();
                 }
-            }
+            });
 
         }
-
     }
+
+};
 
 #endif //UNTITLED_THREAD_POOL_H
