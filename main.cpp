@@ -98,8 +98,9 @@ void handle_client(int client_fd, const std::string& client_ip) {
     std::string response;
 
     if (file.is_open()) {
-        std::string content((std::istreambuf_iterator<char>(file)),
-                            std::istreambuf_iterator<char>());
+        std::stringstream ss;
+        ss << file.rdbuf();
+        std::string content = ss.str();
         file.close();
 
         std::string content_type = get_mime_type(filepath);
