@@ -43,6 +43,12 @@ public:
         }
     }
 
+    void enqueue(const std::function<void()> &task) {
+        std::unique_lock<std::mutex> lock(queue_mutex);
+        tasks.push(task);
+        cv.notify_one();
+    }
+
 };
 
 #endif //UNTITLED_THREAD_POOL_H
