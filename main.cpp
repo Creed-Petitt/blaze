@@ -7,7 +7,9 @@
 #include <sstream>
 #include <fstream>
 #include <string>
+#include <chrono>
 #include "thread_pool.h"
+#include "logger.h"
 
 std::string get_mime_type(const std::string& path) {
     if (path.find(".json") != std::string::npos) return "application/json";
@@ -21,14 +23,15 @@ std::string get_mime_type(const std::string& path) {
     return "application/octet-stream";
 }
 
-void handle_client(int client_fd, const std::string& client_ip) {
+void handle_client(int client_fd, const std::string& client_ip, Logger& logger) {
+    auto start_time = std::chrono::steady_clock::now();
     char buffer[4096];
 
     ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
 
     if (bytes_received <= 0) {
         if (bytes_received == -1) {
-            perror("recv");
+            logger.log_error("recv() failed: " + std::string(strerror(errno)));
         }
         close(client_fd);
         return;
@@ -48,6 +51,9 @@ void handle_client(int client_fd, const std::string& client_ip) {
         response += body;
 
         send(client_fd, response.c_str(), response.size(), 0);
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start_time).count();
+        logger.log_access(client_ip, "UNKNOWN", "UNKNOWN", 400, elapsed);
         close(client_fd);
         return;
     }
@@ -65,6 +71,9 @@ void handle_client(int client_fd, const std::string& client_ip) {
         response += body;
 
         send(client_fd, response.c_str(), response.size(), 0);
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start_time).count();
+        logger.log_access(client_ip, "MALFORMED", "MALFORMED", 400, elapsed);
         close(client_fd);
         return;
     }
@@ -86,6 +95,9 @@ void handle_client(int client_fd, const std::string& client_ip) {
         response += body;
 
         send(client_fd, response.c_str(), response.size(), 0);
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start_time).count();
+        logger.log_access(client_ip, method, path, 403, elapsed);
         close(client_fd);
         return;
     }
@@ -96,6 +108,7 @@ void handle_client(int client_fd, const std::string& client_ip) {
     // Try to open and serve the file
     std::ifstream file(filepath, std::ios::binary);
     std::string response;
+    int status_code;
 
     if (file.is_open()) {
         std::stringstream ss;
@@ -111,6 +124,7 @@ void handle_client(int client_fd, const std::string& client_ip) {
         response += "Content-Length: " + std::to_string(content.size()) + "\r\n";
         response += "\r\n";
         response += content;
+        status_code = 200;
     } else {
         std::string body = "404 Not Found\n";
         response = "HTTP/1.1 404 Not Found\r\n";
@@ -118,16 +132,22 @@ void handle_client(int client_fd, const std::string& client_ip) {
         response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
         response += "\r\n";
         response += body;
+        status_code = 404;
     }
 
     ssize_t bytes_sent = send(client_fd, response.c_str(), response.size(), 0);
     if (bytes_sent == -1) {
-        perror("send");
+        logger.log_error("send() failed: " + std::string(strerror(errno)));
     }
+
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start_time).count();
+    logger.log_access(client_ip, method, path, status_code, elapsed);
     close(client_fd);
 }
 
 int main() {
+    Logger logger;
 
     size_t num_threads = std::thread::hardware_concurrency();
     ThreadPool pool(num_threads);
@@ -139,6 +159,7 @@ int main() {
         return 1;
     }
 
+    std::cout << "Server starting on port 8080 with " << num_threads << " worker threads\n";
     std::cout << "Socket created successfully (fd=" << server_fd << ")\n";
 
     int yes = 1;
@@ -179,8 +200,8 @@ int main() {
 
         std::string client_ip_str(client_ip);
 
-        pool.enqueue([client_fd, client_ip_str]() {
-            handle_client(client_fd, client_ip_str);
+        pool.enqueue([client_fd, client_ip_str, &logger]() {
+            handle_client(client_fd, client_ip_str, logger);
         });
     }
     return 0;
