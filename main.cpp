@@ -56,45 +56,66 @@ void handle_client(int client_fd, const std::string& client_ip, Logger& logger) 
     std::string request(buffer);
 
     size_t request_line_end = request.find("\r\n");
-    if (request_line_end == std::string::npos) {
-        std::string body = "400 Bad Request\n";
-        std::string response = "HTTP/1.1 400 Bad Request\r\n";
-        response += "Content-Type: text/plain\r\n";
-        response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-        response += "\r\n";
-        response += body;
+    size_t headers_end = request.find("\r\n\r\n");
 
-        send(client_fd, response.c_str(), response.size(), 0);
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start_time).count();
-        logger.log_access(client_ip, "UNKNOWN", "UNKNOWN", 400, elapsed);
-        close(client_fd);
-        return;
-    }
+    if (request_line_end == std::string::npos ||
+        headers_end == std::string::npos) {
+        return;}
+
     std::string request_line = request.substr(0, request_line_end);
 
     size_t first_space = request_line.find(' ');
     size_t second_space = request_line.find(' ', first_space + 1);
 
-    if (first_space == std::string::npos || second_space == std::string::npos) {
-        std::string body = "400 Bad Request\n";
-        std::string response = "HTTP/1.1 400 Bad Request\r\n";
-        response += "Content-Type: text/plain\r\n";
-        response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-        response += "\r\n";
-        response += body;
-
-        send(client_fd, response.c_str(), response.size(), 0);
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start_time).count();
-        logger.log_access(client_ip, "MALFORMED", "MALFORMED", 400, elapsed);
-        close(client_fd);
-        return;
-    }
-
     std::string method = request_line.substr(0, first_space);
     std::string path = request_line.substr(first_space + 1, second_space - (first_space + 1));
     std::string http_ver = request_line.substr(second_space + 1);
+
+    std::unordered_map<std::string, std::string> headers;
+
+    std::string headers_section = request.substr(request_line_end + 2,
+                                                headers_end - (request_line_end + 2));
+
+    size_t pos = 0;
+    size_t next_line;
+    while ((next_line = headers_section.find("\r\n", pos)) != std::string::npos) {
+        std::string line = headers_section.substr(pos, next_line - pos);
+
+        size_t colon_pos = line.find(": ");
+        if (colon_pos != std::string::npos) {
+            std::string key = line.substr(0, colon_pos);
+            std::string value = line.substr(colon_pos + 2);
+            headers[key] = value;
+        }
+
+        pos = next_line + 2;
+    }
+
+    std::string body;
+
+    if (headers_end + 4 < request.size()) {
+        body = request.substr(headers_end + 4);  // +4 to skip \r\n\r\n
+    }
+
+    if (headers.count("Content-Length")) {
+        int content_length = std::stoi(headers["Content-Length"]);
+
+        while (body.size() < content_length) {
+            char temp_buffer[4096];
+            ssize_t bytes = recv(client_fd, temp_buffer, sizeof(temp_buffer), 0);
+            if (bytes <= 0) break;
+            body.append(temp_buffer, bytes);
+        }
+    }
+
+    if (pos < headers_section.size()) {
+        std::string line = headers_section.substr(pos);
+        size_t colon_pos = line.find(": ");
+        if (colon_pos != std::string::npos) {
+            headers[line.substr(0, colon_pos)] = line.substr(colon_pos + 2);
+        }
+    }
+
 
     if (path == "/") {
         path = "/index.html";
