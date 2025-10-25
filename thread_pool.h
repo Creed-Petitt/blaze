@@ -1,5 +1,5 @@
-#ifndef UNTITLED_THREAD_POOL_H
-#define UNTITLED_THREAD_POOL_H
+#ifndef HTTP_SERVER_THREAD_POOL_H
+#define HTTP_SERVER_THREAD_POOL_H
 
 #include <thread>              // std::thread
 #include <queue>               // std::queue
@@ -18,7 +18,7 @@ private:
     bool stop;
 
 public:
-    ThreadPool(size_t num_threads) : stop(false) {
+    explicit ThreadPool(const size_t num_threads) : stop(false) {
 
         for (size_t i = 0; i < num_threads; i++) {
             workers.emplace_back([this] {
@@ -64,4 +64,4 @@ public:
 
 };
 
-#endif //UNTITLED_THREAD_POOL_H
+#endif //HTTP_SERVER_THREAD_POOL_H
