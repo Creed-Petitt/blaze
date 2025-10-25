@@ -7,6 +7,7 @@
 #include <sstream>
 #include <fstream>
 #include <string>
+#include "thread_pool.h"
 
 std::string get_mime_type(const std::string& path) {
     if (path.find(".json") != std::string::npos) return "application/json";
@@ -90,7 +91,7 @@ void handle_client(int client_fd, const std::string& client_ip) {
     }
 
     // Construct file path
-    std::string filepath = "./public" + path;
+    std::string filepath = "../public" + path;
 
     // Try to open and serve the file
     std::ifstream file(filepath, std::ios::binary);
@@ -126,6 +127,10 @@ void handle_client(int client_fd, const std::string& client_ip) {
 }
 
 int main() {
+
+    size_t num_threads = std::thread::hardware_concurrency();
+    ThreadPool pool(num_threads);
+
     int server_fd = socket(AF_INET, SOCK_STREAM, 0); // Open TCP socket
 
     if (server_fd == -1) {
@@ -173,7 +178,9 @@ int main() {
 
         std::string client_ip_str(client_ip);
 
-        handle_client(client_fd, client_ip_str);
+        pool.enqueue([client_fd, client_ip_str]() {
+            handle_client(client_fd, client_ip_str);
+        });
     }
     return 0;
 }
