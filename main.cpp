@@ -10,6 +10,11 @@
 #include <chrono>
 #include "thread_pool.h"
 #include "logger.h"
+#include <atomic>
+#include <signal.h>
+
+std::atomic<bool> server_running{true};
+int server_fd = -1;  // Global so signal handler can access
 
 std::string get_mime_type(const std::string& path) {
     if (path.find(".json") != std::string::npos) return "application/json";
@@ -21,6 +26,15 @@ std::string get_mime_type(const std::string& path) {
     if (path.find(".png") != std::string::npos) return "image/png";
     if (path.find(".jpg") != std::string::npos || path.find(".jpeg") != std::string::npos) return "image/jpeg";
     return "application/octet-stream";
+}
+
+void handle_shutdown(const int sig) {
+    std::cout << "\nShutdown signal received (signal " << sig << ")\n";
+    server_running = false;
+    if (server_fd != -1) {
+        shutdown(server_fd, SHUT_RDWR);  // Force accept() to fail
+        close(server_fd);
+    }
 }
 
 void handle_client(int client_fd, const std::string& client_ip, Logger& logger) {
@@ -147,12 +161,15 @@ void handle_client(int client_fd, const std::string& client_ip, Logger& logger) 
 }
 
 int main() {
+
     Logger logger;
+    signal(SIGINT, handle_shutdown);
+    signal(SIGTERM, handle_shutdown);
 
     size_t num_threads = std::thread::hardware_concurrency();
     ThreadPool pool(num_threads);
 
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0); // Open TCP socket
+    server_fd = socket(AF_INET, SOCK_STREAM, 0); // Open TCP socket
 
     if (server_fd == -1) {
         perror("socket");
@@ -187,8 +204,10 @@ int main() {
     sockaddr_in client_addr {};
     socklen_t client_len = sizeof(client_addr);
 
-    while (true) {
+    while (server_running) {
         int client_fd = accept(server_fd, reinterpret_cast<sockaddr *>(&client_addr), &client_len);
+
+        if (!server_running) break;  // Check flag after accept returns
 
         if (client_fd == -1) {
             perror("accept");
@@ -204,5 +223,6 @@ int main() {
             handle_client(client_fd, client_ip_str, logger);
         });
     }
+    std::cout << "Server stopped. Cleaning up...\n";
     return 0;
 }
