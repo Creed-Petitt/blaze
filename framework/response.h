@@ -3,6 +3,9 @@
 
 #include <string>
 #include <unordered_map>
+#include "../json.hpp"
+
+using json = nlohmann::json;
 
 class Response {
 private:
@@ -11,16 +14,17 @@ private:
     std::string body_;
 
     std::string build_response() const;
-    static std::string get_status_text(const int code);
+    static std::string get_status_text(int code);
 
 public:
     Response();
 
-    Response& status(const int code);
+    Response& status(int code);
     Response& header(const std::string& key, const std::string& value);
     Response& send(const std::string& text);
+    Response& json(const nlohmann::json& data);
 
-    void send_to_client(const int client_fd) const;
+    void write(const int client_fd) const;
     int get_status() const;
 
 };

@@ -20,6 +20,13 @@ Response &Response::send(const std::string &text) {
     return *this;
 }
 
+Response& Response::json(const nlohmann::json& data) {
+    body_ = data.dump();
+    headers_["Content-Type"] = "application/json";
+    headers_["Content-Length"] = std::to_string(body_.size());
+    return *this;
+}
+
 std::string Response::build_response() const {
     std::stringstream ss;
     ss << "HTTP/1.1 " << status_code_ << " " << get_status_text(status_code_) << "\r\n";
@@ -33,7 +40,7 @@ std::string Response::build_response() const {
     return ss.str();
 }
 
-void Response::send_to_client(const int client_fd) const {
+void Response::write(const int client_fd) const {
     const std::string response = build_response();
     ::send(client_fd, response.c_str(), response.size(), 0);
 }

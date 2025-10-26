@@ -3,6 +3,9 @@
 
 #include <string>
 #include <unordered_map>
+#include "../json.hpp"
+
+using json = nlohmann::json;
 
 class Request {
 public:
@@ -15,6 +18,8 @@ public:
     std::unordered_map<std::string, std::string> params;
     std::unordered_map<std::string, std::string> query;
     std::string body;
+
+    nlohmann::json json() const;
 
 };
 

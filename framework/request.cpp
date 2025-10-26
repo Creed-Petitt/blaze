@@ -93,3 +93,7 @@ Request::Request(int client_fd) {
         }
     }
 }
+
+nlohmann::json Request::json() const {
+    return nlohmann::json::parse(body);
+}
