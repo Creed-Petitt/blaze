@@ -1,3 +1,6 @@
+#ifndef HTTP_SERVER_RESPONSE_H
+#define HTTP_SERVER_RESPONSE_H
+
 #include <string>
 #include <unordered_map>
 
@@ -21,3 +24,5 @@ public:
     int get_status() const;
 
 };
+
+#endif
