@@ -4,7 +4,7 @@
 #include <cstring>
 
 Request::Request(int client_fd) {
-    char buffer[4096];
+    char buffer[16384];
     ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
 
     if (bytes_received <= 0) {
@@ -21,7 +21,6 @@ Request::Request(int client_fd) {
     if (request_line_end == std::string::npos || headers_end == std::string::npos) {
         return;
     }
-
     std::string request_line = request.substr(0, request_line_end);
 
     size_t first_space = request_line.find(' ');
