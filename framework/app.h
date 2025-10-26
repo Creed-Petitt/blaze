@@ -13,6 +13,7 @@ private:
     ThreadPool* pool_ = nullptr;
     int server_fd_ = -1;
     std::atomic<bool> running_{true};
+    std::vector<Middleware> middleware_;
 
     void handle_client(int client_fd, const std::string& client_ip);
     void setup_signal_handlers();
@@ -28,6 +29,8 @@ public:
     void del(const std::string& path, Handler handler);
 
     void listen(int port);
+
+    void use(const Middleware &mw);
 
     Router& get_router();
 };

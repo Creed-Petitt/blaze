@@ -9,6 +9,7 @@
 #include "request.h"
 #include "response.h"
 
+using Middleware = std::function<void(Request&, Response&, std::function<void()>)>;
 using Handler = std::function<void(Request&, Response&)>;
 
 struct RouteMatch {
