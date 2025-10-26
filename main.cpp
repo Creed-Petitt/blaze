@@ -12,6 +12,8 @@
 #include "logger.h"
 #include <atomic>
 #include <signal.h>
+#include "framework/request.h"
+#include "framework/response.h"
 
 std::atomic<bool> server_running{true};
 int server_fd = -1;  // Global so signal handler can access
@@ -39,145 +41,47 @@ void handle_shutdown(const int sig) {
 
 void handle_client(int client_fd, const std::string& client_ip, Logger& logger) {
     auto start_time = std::chrono::steady_clock::now();
-    char buffer[4096];
 
-    ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+    Request req(client_fd);
+    Response res;
 
-    if (bytes_received <= 0) {
-        if (bytes_received == -1) {
-            logger.log_error("recv() failed: " + std::string(strerror(errno)));
-        }
-        close(client_fd);
-        return;
+    if (req.path == "/") {
+        req.path = "/index.html";
     }
 
-    buffer[bytes_received] = '\0';
+    if (req.path.find("..") != std::string::npos) {
+        res.status(403).send("403 Forbidden\n");
+        res.send_to_client(client_fd);
 
-    std::string request(buffer);
-
-    size_t request_line_end = request.find("\r\n");
-    size_t headers_end = request.find("\r\n\r\n");
-
-    if (request_line_end == std::string::npos ||
-        headers_end == std::string::npos) {
-        return;}
-
-    std::string request_line = request.substr(0, request_line_end);
-
-    size_t first_space = request_line.find(' ');
-    size_t second_space = request_line.find(' ', first_space + 1);
-
-    std::string method = request_line.substr(0, first_space);
-    std::string path = request_line.substr(first_space + 1, second_space - (first_space + 1));
-    std::string http_ver = request_line.substr(second_space + 1);
-
-    std::unordered_map<std::string, std::string> headers;
-
-    std::string headers_section = request.substr(request_line_end + 2,
-                                                headers_end - (request_line_end + 2));
-
-    size_t pos = 0;
-    size_t next_line;
-    while ((next_line = headers_section.find("\r\n", pos)) != std::string::npos) {
-        std::string line = headers_section.substr(pos, next_line - pos);
-
-        size_t colon_pos = line.find(": ");
-        if (colon_pos != std::string::npos) {
-            std::string key = line.substr(0, colon_pos);
-            std::string value = line.substr(colon_pos + 2);
-            headers[key] = value;
-        }
-
-        pos = next_line + 2;
-    }
-
-    std::string body;
-
-    if (headers_end + 4 < request.size()) {
-        body = request.substr(headers_end + 4);  // +4 to skip \r\n\r\n
-    }
-
-    if (headers.count("Content-Length")) {
-        int content_length = std::stoi(headers["Content-Length"]);
-
-        while (body.size() < content_length) {
-            char temp_buffer[4096];
-            ssize_t bytes = recv(client_fd, temp_buffer, sizeof(temp_buffer), 0);
-            if (bytes <= 0) break;
-            body.append(temp_buffer, bytes);
-        }
-    }
-
-    if (pos < headers_section.size()) {
-        std::string line = headers_section.substr(pos);
-        size_t colon_pos = line.find(": ");
-        if (colon_pos != std::string::npos) {
-            headers[line.substr(0, colon_pos)] = line.substr(colon_pos + 2);
-        }
-    }
-
-
-    if (path == "/") {
-        path = "/index.html";
-    }
-
-    if (path.find("..") != std::string::npos) {
-        std::string body = "403 Forbidden\n";
-        std::string response = "HTTP/1.1 403 Forbidden\r\n";
-        response += "Content-Type: text/plain\r\n";
-        response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-        response += "\r\n";
-        response += body;
-
-        send(client_fd, response.c_str(), response.size(), 0);
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start_time).count();
-        logger.log_access(client_ip, method, path, 403, elapsed);
+
+        logger.log_access(client_ip, req.method, req.path, res.get_status(), elapsed);
         close(client_fd);
         return;
+
     }
 
-    // Construct file path
-    std::string filepath = "../public" + path;
 
-    // Try to open and serve the file
+    std::string filepath = "../public" + req.path;
     std::ifstream file(filepath, std::ios::binary);
-    std::string response;
-    int status_code;
 
     if (file.is_open()) {
         std::stringstream ss;
         ss << file.rdbuf();
-        std::string content = ss.str();
-        file.close();
-
-        std::string content_type = get_mime_type(filepath);
-
-        // Build HTTP response
-        response = "HTTP/1.1 200 OK\r\n";
-        response += "Content-Type: " + content_type + "\r\n";
-        response += "Content-Length: " + std::to_string(content.size()) + "\r\n";
-        response += "\r\n";
-        response += content;
-        status_code = 200;
+        res.status(200)
+           .header("Content-Type", get_mime_type(filepath))
+           .send(ss.str());
     } else {
-        std::string body = "404 Not Found\n";
-        response = "HTTP/1.1 404 Not Found\r\n";
-        response += "Content-Type: text/plain\r\n";
-        response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-        response += "\r\n";
-        response += body;
-        status_code = 404;
+        res.status(404).send("404 Not Found\n");
     }
 
-    ssize_t bytes_sent = send(client_fd, response.c_str(), response.size(), 0);
-    if (bytes_sent == -1) {
-        logger.log_error("send() failed: " + std::string(strerror(errno)));
-    }
+    res.send_to_client(client_fd);
 
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start_time).count();
-    logger.log_access(client_ip, method, path, status_code, elapsed);
+      std::chrono::steady_clock::now() - start_time).count();
+
+    logger.log_access(client_ip, req.method, req.path, res.get_status(), elapsed);
     close(client_fd);
 }
 
