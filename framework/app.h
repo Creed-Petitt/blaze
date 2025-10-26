@@ -2,18 +2,32 @@
 #define HTTP_SERVER_APP_H
 
 #include "router.h"
+#include "../thread_pool.h"
+#include "../logger.h"
+#include <atomic>
 
 class App {
 private:
     Router router_;
+    Logger logger_;
+    ThreadPool* pool_ = nullptr;
+    int server_fd_ = -1;
+    std::atomic<bool> running_{true};
+
+    void handle_client(int client_fd, const std::string& client_ip);
+    void setup_signal_handlers();
+    static void signal_handler(int sig);
 
 public:
-    App() = default;
+    App();
+    ~App();
 
     void get(const std::string& path, const Handler &handler);
     void post(const std::string& path, Handler handler);
     void put(const std::string& path, Handler handler);
     void del(const std::string& path, Handler handler);
+
+    void listen(int port);
 
     Router& get_router();
 };
