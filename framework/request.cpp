@@ -30,6 +30,28 @@ Request::Request(int client_fd) {
     path = request_line.substr(first_space + 1, second_space - (first_space + 1));
     http_version = request_line.substr(second_space + 1);
 
+    // Parse query parameters from path (/users?id=42&active=true)
+    size_t query_start = path.find('?');
+    if (query_start != std::string::npos) {
+        std::string query_string = path.substr(query_start + 1);
+        path = path.substr(0, query_start);  // Remove query string from path
+
+        size_t pos = 0;
+        while (pos < query_string.size()) {
+            size_t amp_pos = query_string.find('&', pos);
+            if (amp_pos == std::string::npos) amp_pos = query_string.size();
+
+            std::string pair = query_string.substr(pos, amp_pos - pos);
+            size_t eq_pos = pair.find('=');
+
+            if (eq_pos != std::string::npos) {
+                query[pair.substr(0, eq_pos)] = pair.substr(eq_pos + 1);
+            }
+
+            pos = amp_pos + 1;
+        }
+    }
+
     std::string headers_section = request.substr(request_line_end + 2,
                                                     headers_end - (request_line_end + 2));
 

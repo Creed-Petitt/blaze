@@ -13,6 +13,7 @@ public:
     std::string http_version;
     std::unordered_map<std::string, std::string> headers;
     std::unordered_map<std::string, std::string> params;
+    std::unordered_map<std::string, std::string> query;
     std::string body;
 
 };
