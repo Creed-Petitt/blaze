@@ -1,0 +1,42 @@
+#ifndef HTTP_SERVER_ROUTER_H
+#define HTTP_SERVER_ROUTER_H
+
+#include <string>
+#include <vector>
+#include <functional>
+#include <optional>
+#include <unordered_map>
+#include "request.h"
+#include "response.h"
+
+using Handler = std::function<void(Request&, Response&)>;
+
+struct RouteMatch {
+    Handler handler;                                      // The function to call
+    std::unordered_map<std::string, std::string> params;  // Extracted params like {"id": "42"}
+};
+
+class Router {
+private:
+
+    struct Route {
+        std::string method;   // "GET", "POST", etc.
+        std::string path;     // "/users/:id"
+        Handler handler;      // The lambda function
+    };
+
+    std::vector<Route> routes_;
+
+    bool matches(const std::string& route_path,
+                 const std::string& request_path,
+                 std::unordered_map<std::string, std::string>& params);
+
+    std::vector<std::string> split(const std::string& str, char delimiter);
+
+public:
+    void add_route(const std::string& method, const std::string& path, Handler handler);
+
+    std::optional<RouteMatch> match(const std::string& method, const std::string& path);
+};
+
+#endif
