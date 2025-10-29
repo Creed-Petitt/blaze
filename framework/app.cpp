@@ -15,9 +15,12 @@ App::App() {
 }
 
 App::~App() {
+    running_ = false;
     if (server_fd_ != -1) {
+        shutdown(server_fd_, SHUT_RDWR);
         close(server_fd_);
     }
+    // pool_ is unique_ptr, will auto-destruct
 }
 
 void App::get(const std::string& path, const Handler &handler) {
@@ -100,14 +103,15 @@ void App::handle_client(int client_fd, const std::string& client_ip) {
 }
 
 void App::signal_handler(int sig) {
-    std::cout << "\nShutdown signal received (signal " << sig << ")\n";
+    std::cout << "\nShutdown signal received. Stopping server...\n";
     if (g_app_instance) {
         g_app_instance->running_ = false;
         if (g_app_instance->server_fd_ != -1) {
             shutdown(g_app_instance->server_fd_, SHUT_RDWR);
-            close(g_app_instance->server_fd_);
         }
     }
+    // Exit immediately - OS will clean up resources
+    std::exit(0);
 }
 
 void App::listen(int port) {
@@ -154,11 +158,15 @@ void App::listen(int port) {
     while (running_) {
         int client_fd = accept(server_fd_, reinterpret_cast<sockaddr *>(&client_addr), &client_len);
 
-        if (!running_) break;
-
         if (client_fd == -1) {
+            if (!running_) break;  // Check if shutdown was called
             perror("accept");
             continue;
+        }
+
+        if (!running_) {
+            close(client_fd);
+            break;
         }
 
         char client_ip[INET_ADDRSTRLEN];
@@ -170,7 +178,19 @@ void App::listen(int port) {
             handle_client(client_fd, client_ip_str);
         });
     }
+
     std::cout << "Server stopped. Cleaning up...\n";
+
+    // Destroy thread pool (waits for worker threads to finish)
+    pool_.reset();
+
+    // Final cleanup
+    if (server_fd_ != -1) {
+        close(server_fd_);
+        server_fd_ = -1;
+    }
+
+    std::cout << "Cleanup complete. Exiting.\n";
 }
 
 void App::use(const Middleware &mw) {
