@@ -88,3 +88,28 @@ std::string Response::get_status_text(const int code) {
 int Response::get_status() const {
     return status_code_;
 }
+
+// Helper methods for common response patterns
+Response& Response::redirect(const std::string& url, int code) {
+    return status(code).header("Location", url).send("");
+}
+
+Response& Response::no_content() {
+    return status(204).send("");
+}
+
+Response& Response::bad_request(const std::string& message) {
+    return status(400).json({{"error", message}});
+}
+
+Response& Response::unauthorized(const std::string& message) {
+    return status(401).json({{"error", message}});
+}
+
+Response& Response::forbidden(const std::string& message) {
+    return status(403).json({{"error", message}});
+}
+
+Response& Response::not_found(const std::string& message) {
+    return status(404).json({{"error", message}});
+}

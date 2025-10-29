@@ -3,6 +3,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <optional>
 #include "../json.hpp"
 
 using json = nlohmann::json;
@@ -20,6 +21,13 @@ public:
     std::string body;
 
     nlohmann::json json() const;
+
+    // Helper methods for safe parameter and header access
+    std::string get_query(const std::string& key, const std::string& default_val = "") const;
+    int get_query_int(const std::string& key, int default_val = 0) const;
+    std::string get_header(const std::string& key, const std::string& default_val = "") const;
+    bool has_header(const std::string& key) const;
+    std::optional<int> get_param_int(const std::string& key) const;
 
 };
 

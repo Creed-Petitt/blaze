@@ -27,6 +27,14 @@ public:
     void write(const int client_fd) const;
     int get_status() const;
 
+    // Helper methods for common response patterns
+    Response& redirect(const std::string& url, int code = 302);
+    Response& no_content();
+    Response& bad_request(const std::string& message);
+    Response& unauthorized(const std::string& message = "Unauthorized");
+    Response& forbidden(const std::string& message = "Forbidden");
+    Response& not_found(const std::string& message = "Not Found");
+
 };
 
 #endif
