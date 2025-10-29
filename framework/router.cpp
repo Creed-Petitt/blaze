@@ -2,6 +2,31 @@
 #include <sstream>
 #include <vector>
 
+// RouteGroup implementation
+RouteGroup::RouteGroup(Router& router, const std::string& prefix)
+    : router_(router), prefix_(prefix) {}
+
+void RouteGroup::get(const std::string& path, Handler handler) {
+    router_.add_route("GET", prefix_ + path, handler);
+}
+
+void RouteGroup::post(const std::string& path, Handler handler) {
+    router_.add_route("POST", prefix_ + path, handler);
+}
+
+void RouteGroup::put(const std::string& path, Handler handler) {
+    router_.add_route("PUT", prefix_ + path, handler);
+}
+
+void RouteGroup::del(const std::string& path, Handler handler) {
+    router_.add_route("DELETE", prefix_ + path, handler);
+}
+
+RouteGroup RouteGroup::group(const std::string& subpath) {
+    return RouteGroup(router_, prefix_ + subpath);
+}
+
+// Router implementation
 void Router::add_route(const std::string& method, const std::string& path,
                         Handler handler) {
     routes_.push_back({method, path, handler});

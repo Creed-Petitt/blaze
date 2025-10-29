@@ -17,13 +17,33 @@ struct RouteMatch {
     std::unordered_map<std::string, std::string> params;  // Extracted params like {"id": "42"}
 };
 
+class Router;
+
+// Route grouping for organizing routes with common prefixes
+class RouteGroup {
+private:
+    Router& router_;
+    std::string prefix_;
+
+public:
+    RouteGroup(Router& router, const std::string& prefix);
+
+    void get(const std::string& path, Handler handler);
+    void post(const std::string& path, Handler handler);
+    void put(const std::string& path, Handler handler);
+    void del(const std::string& path, Handler handler);
+
+    // Allow nested groups
+    RouteGroup group(const std::string& subpath);
+};
+
 class Router {
 private:
 
     struct Route {
-        std::string method;   // "GET", "POST", etc.
-        std::string path;     // "/users/:id"
-        Handler handler;      // The lambda function
+        std::string method;
+        std::string path;
+        Handler handler;
     };
 
     std::vector<Route> routes_;
