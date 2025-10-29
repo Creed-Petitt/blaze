@@ -5,12 +5,13 @@
 #include "../thread_pool.h"
 #include "../logger.h"
 #include <atomic>
+#include <memory>
 
 class App {
 private:
     Router router_;
     Logger logger_;
-    ThreadPool* pool_ = nullptr;
+    std::unique_ptr<ThreadPool> pool_;
     int server_fd_ = -1;
     std::atomic<bool> running_{true};
     std::vector<Middleware> middleware_;
@@ -24,9 +25,9 @@ public:
     ~App();
 
     void get(const std::string& path, const Handler &handler);
-    void post(const std::string& path, Handler handler);
-    void put(const std::string& path, Handler handler);
-    void del(const std::string& path, Handler handler);
+    void post(const std::string& path, const Handler &handler);
+    void put(const std::string& path, const Handler &handler);
+    void del(const std::string& path, const Handler &handler);
 
     void listen(int port);
 

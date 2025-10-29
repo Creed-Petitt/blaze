@@ -15,9 +15,6 @@ App::App() {
 }
 
 App::~App() {
-    if (pool_) {
-        delete pool_;
-    }
     if (server_fd_ != -1) {
         close(server_fd_);
     }
@@ -27,15 +24,15 @@ void App::get(const std::string& path, const Handler &handler) {
     router_.add_route("GET", path, handler);
 }
 
-void App::post(const std::string& path, const Handler handler) {
+void App::post(const std::string& path, const Handler &handler) {
     router_.add_route("POST", path, handler);
 }
 
-void App::put(const std::string& path, const Handler handler) {
+void App::put(const std::string& path, const Handler &handler) {
     router_.add_route("PUT", path, handler);
 }
 
-void App::del(const std::string& path, const Handler handler) {
+void App::del(const std::string& path, const Handler &handler) {
     router_.add_route("DELETE", path, handler);
 }
 
@@ -98,7 +95,7 @@ void App::listen(int port) {
     signal(SIGTERM, App::signal_handler);
 
     size_t num_threads = std::thread::hardware_concurrency();
-    pool_ = new ThreadPool(num_threads);
+    pool_ = std::make_unique<ThreadPool>(num_threads);
 
     server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
 
