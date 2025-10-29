@@ -33,6 +33,8 @@ public:
 
     void use(const Middleware &mw);
 
+    RouteGroup group(const std::string& prefix);
+
     Router& get_router();
 };
 

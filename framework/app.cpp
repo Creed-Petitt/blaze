@@ -176,3 +176,7 @@ void App::listen(int port) {
 void App::use(const Middleware &mw) {
     middleware_.push_back(mw);
 }
+
+RouteGroup App::group(const std::string& prefix) {
+    return RouteGroup(router_, prefix);
+}
