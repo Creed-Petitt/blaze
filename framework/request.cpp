@@ -95,5 +95,9 @@ Request::Request(int client_fd) {
 }
 
 nlohmann::json Request::json() const {
-    return nlohmann::json::parse(body);
+    try {
+        return nlohmann::json::parse(body);
+    } catch (const nlohmann::json::parse_error& e) {
+        throw std::runtime_error("Invalid JSON in request body: " + std::string(e.what()));
+    }
 }

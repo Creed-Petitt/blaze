@@ -43,39 +43,59 @@ Router &App::get_router() {
 void App::handle_client(int client_fd, const std::string& client_ip) {
     auto start_time = std::chrono::steady_clock::now();
 
-    Request req(client_fd);
-    Response res;
+    int status_code = 500;
+    std::string method = "UNKNOWN";
+    std::string path = "/";
 
-    size_t middleware_index = 0;
+    try {
+        Request req(client_fd);
+        Response res;
 
-    std::function<void()> next = [&]() {
-        if (middleware_index < middleware_.size()) {
-            auto& mw = middleware_[middleware_index++];
-            mw(req, res, next);  // Middleware calls next() to continue
-        } else {
-            // All middleware done, call route handler
-            auto match = router_.match(req.method, req.path);
-            if (match.has_value()) {
-                req.params = match->params;
-                try {
-                    match->handler(req, res);
-                } catch (const std::exception& e) {
-                    res.status(500).json({{"error", e.what()}});
-                }
+        method = req.method;
+        path = req.path;
+
+        size_t middleware_index = 0;
+
+        std::function<void()> next = [&]() {
+            if (middleware_index < middleware_.size()) {
+                auto& mw = middleware_[middleware_index++];
+                mw(req, res, next);  // Middleware calls next() to continue
             } else {
-                res.status(404).send("404 Not Found\n");
+                // All middleware done, call route handler
+                auto match = router_.match(req.method, req.path);
+                if (match.has_value()) {
+                    req.params = match->params;
+                    try {
+                        match->handler(req, res);
+                    } catch (const std::exception& e) {
+                        res.status(500).json({{"error", e.what()}});
+                    }
+                } else {
+                    res.status(404).send("404 Not Found\n");
+                }
             }
-        }
-    };
+        };
 
-    next();
+        next();
 
-    res.write(client_fd);
+        res.write(client_fd);
+        status_code = res.get_status();
+
+    } catch (const std::exception& e) {
+        Response error_res;
+        error_res.status(500).json({
+            {"error", "Internal Server Error"},
+            {"message", e.what()}
+        });
+        error_res.write(client_fd);
+        status_code = 500;
+        logger_.log_error(std::string("Exception in handle_client: ") + e.what());
+    }
 
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::steady_clock::now() - start_time).count();
 
-    logger_.log_access(client_ip, req.method, req.path, res.get_status(), elapsed);
+    logger_.log_access(client_ip, method, path, status_code, elapsed);
     close(client_fd);
 }
 
