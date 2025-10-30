@@ -10,7 +10,7 @@ using json = nlohmann::json;
 
 class Request {
 public:
-    explicit Request(int client_fd);
+    explicit Request(std::string& raw_http);
 
     std::string method;
     std::string path;

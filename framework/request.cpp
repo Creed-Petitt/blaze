@@ -3,25 +3,14 @@
 #include <unistd.h>
 #include <cstring>
 
-Request::Request(int client_fd) {
-    char buffer[16384];
-    ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-
-    if (bytes_received <= 0) {
-        close(client_fd);
-        return;
-    }
-
-    buffer[bytes_received] = '\0';
-    std::string request(buffer);
-
-    size_t request_line_end = request.find("\r\n");
-    size_t headers_end = request.find("\r\n\r\n");
+Request::Request(std::string& raw_http) {
+    size_t request_line_end = raw_http.find("\r\n");
+    size_t headers_end = raw_http.find("\r\n\r\n");
 
     if (request_line_end == std::string::npos || headers_end == std::string::npos) {
         return;
     }
-    std::string request_line = request.substr(0, request_line_end);
+    std::string request_line = raw_http.substr(0, request_line_end);
 
     size_t first_space = request_line.find(' ');
     size_t second_space = request_line.find(' ', first_space + 1);
@@ -52,7 +41,7 @@ Request::Request(int client_fd) {
         }
     }
 
-    std::string headers_section = request.substr(request_line_end + 2,
+    std::string headers_section = raw_http.substr(request_line_end + 2,
                                                     headers_end - (request_line_end + 2));
 
     size_t pos = 0;
@@ -78,19 +67,8 @@ Request::Request(int client_fd) {
         }
     }
 
-    if (headers_end + 4 < request.size()) {
-        body = request.substr(headers_end + 4);
-    }
-
-    if (headers.count("Content-Length")) {
-        int content_length = std::stoi(headers["Content-Length"]);
-
-        while (body.size() < content_length) {
-            char temp_buffer[4096];
-            ssize_t bytes = recv(client_fd, temp_buffer, sizeof(temp_buffer), 0);
-            if (bytes <= 0) break;
-            body.append(temp_buffer, bytes);
-        }
+    if (headers_end + 4 < raw_http.size()) {
+        body = raw_http.substr(headers_end + 4);
     }
 }
 
