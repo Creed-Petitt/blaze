@@ -1,19 +1,73 @@
 # Concurrent HTTP Server
 
+A lightweight, high-performance HTTP framework built in C++ with routing, concurrent request handling, and built-in JSON support.
+
+## Features
+
+- **Express.js-style API**: Intuitive routing with `app.get()`, `app.post()`, `app.put()`, `app.del()`
+- **Dynamic Route Parameters**: Extract path variables like `/users/:id`
+- **Query String Parsing**: Automatic parsing of URL query parameters
+- **JSON Support**: Built-in JSON request/response handling with nlohmann/json
+- **Concurrent Processing**: Thread pool with producer-consumer pattern for handling multiple requests
+- **Request/Response Objects**: Clean API for working with HTTP requests and responses
+- **Logging**: Thread-safe access and error logging with timestamps
+- **Graceful Shutdown**: Signal handling for clean server termination
+
+## Quick Example
+
+```cpp
+App app;
+
+// Simple route
+app.get("/hello", [](Request& req, Response& res) {
+    res.send("Hello, World!\n");
+});
+
+// Route with parameters
+app.get("/users/:id", [](Request& req, Response& res) {
+    res.send("User ID: " + req.params["id"] + "\n");
+});
+
+// Query parameters
+app.get("/search", [](Request& req, Response& res) {
+    res.send("Query: " + req.query["q"] + "\n");
+});
+
+// JSON response
+app.get("/api/data", [](Request& req, Response& res) {
+    json data = {{"name", "John"}, {"age", 30}};
+    res.json(data);
+});
+
+// POST with body
+app.post("/users", [](Request& req, Response& res) {
+    res.status(201).send("User created! Body: " + req.body + "\n");
+});
+```
 
 ## How It Works
 
 1. **Socket Creation**: Server binds to port 8080 and listens for connections
 2. **Connection Acceptance**: Main loop accepts incoming client connections
 3. **Task Dispatch**: Each connection is queued as a task in the thread pool
-4. **Concurrent Processing**: Worker threads pick up tasks and handle HTTP requests
-5. **Response**: Files are read, proper headers added, and sent back to client
+4. **Request Parsing**: Request object parses HTTP method, path, headers, query params, and body
+5. **Route Matching**: Router matches request to registered route handlers
+6. **Handler Execution**: Worker threads execute matched route handler
+7. **Response Building**: Response object constructs HTTP response with proper headers
+8. **Logging**: Request details and timing logged to access.log
 
 ## Architecture
 
-- **Main Thread**: Accepts incoming connections and dispatches to thread pool
-- **Worker Threads**: Process HTTP requests in parallel using producer-consumer pattern
-- **Thread-Safe Queue**: Coordinates work distribution across threads with mutex/condition variables
+- **Framework Layer**:
+  - `App`: Main application class with routing methods
+  - `Router`: Pattern matching for routes with parameter extraction
+  - `Request`: HTTP request parser with headers, body, params, and query
+  - `Response`: Chainable response builder with status, headers, and body
+- **Concurrency Layer**:
+  - **Main Thread**: Accepts incoming connections and dispatches to thread pool
+  - **Worker Threads**: Process HTTP requests in parallel using producer-consumer pattern
+  - **Thread-Safe Queue**: Coordinates work distribution across threads with mutex/condition variables
+- **Logging Layer**: Thread-safe logger with separate access and error logs
 
 ## Getting Started
 
@@ -61,19 +115,22 @@ Server will be accessible at `http://localhost:8080`
 
 ```
 http_server/
-├── main.cpp           # Server implementation and request handling
-├── thread_pool.h      # Thread pool with producer-consumer pattern
-├── logger.h           # Thread-safe logging with timestamps
-├── public/            # Static files to serve
-│   ├── index.html
-│   ├── health.txt
-│   └── ...
-├── logs/              # Generated log files (created at runtime)
-│   ├── access.log     # Request logs with timing
-│   └── error.log      # Error logs
-├── Dockerfile         # Docker container configuration
-├── docker-compose.yml # Docker Compose configuration
-└── CMakeLists.txt
+├── framework/
+│   ├── app.h/.cpp         # Application class with routing API
+│   ├── router.h/.cpp      # Route matching and parameter extraction
+│   ├── request.h/.cpp     # HTTP request parser
+│   └── response.h/.cpp    # HTTP response builder
+├── main.cpp               # Server setup and example routes
+├── thread_pool.h          # Thread pool with producer-consumer pattern
+├── logger.h               # Thread-safe logging with timestamps
+├── json.hpp               # nlohmann/json library for JSON support
+├── public/                # Static files directory (optional)
+├── logs/                  # Generated log files (created at runtime)
+│   ├── access.log         # Request logs with timing
+│   └── error.log          # Error logs
+├── Dockerfile             # Docker container configuration
+├── docker-compose.yml     # Docker Compose configuration
+└── CMakeLists.txt         # Build configuration
 ```
 
 ## Testing Performance
