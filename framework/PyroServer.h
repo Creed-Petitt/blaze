@@ -10,11 +10,16 @@
 #include <iostream>         // logging
 #include <unordered_map>    // connection tracking
 #include <string>
+#include <string>
+#include <queue>
+#include <mutex>
+
+class App;
 
 class PyroServer {
 
 public:
-    explicit PyroServer(int port);
+    PyroServer(int port, App* app);
 
     ~PyroServer();
 
@@ -32,6 +37,11 @@ private:
     static const int MAX_EVENTS = 1024;
     static const int BACKLOG = 512;
 
+    struct PendingResponse {
+        int fd;
+        std::string response;
+    };
+
     struct Connection {
         int fd;
         std::string read_buffer;   // Incoming HTTP data
@@ -39,6 +49,10 @@ private:
     };
 
     std::unordered_map<int, Connection> connections;
+    std::queue<PendingResponse> response_queue_;
+    std::mutex response_queue_mutex_;
+
+    App* app_;
 
     // Setup methods
     void create_server_socket();
@@ -54,8 +68,9 @@ private:
     void handle_new_connection();
     void handle_readable(int fd);
     void handle_writable(int fd);
-
     void close_connection(int fd);
+
+    void process_response_queue();
 };
 
 
