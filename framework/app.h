@@ -6,6 +6,7 @@
 #include "../logger.h"
 #include <atomic>
 #include <memory>
+#include <functional>
 
 class App {
 private:
@@ -16,7 +17,6 @@ private:
     std::atomic<bool> running_{true};
     std::vector<Middleware> middleware_;
 
-    void handle_client(int client_fd, const std::string& client_ip);
     void setup_signal_handlers();
     static void signal_handler(int sig);
 
@@ -36,6 +36,10 @@ public:
     RouteGroup group(const std::string& prefix);
 
     Router& get_router();
+
+    void dispatch_async(const std::function<void()> &task) const;
+
+    std::string handle_request(Request& req, const std::string& client_ip);
 };
 
 #endif

@@ -8,10 +8,18 @@
 #include <signal.h>
 #include <thread>
 
+#include "PyroServer.h"
+
 static App* g_app_instance = nullptr;
 
 App::App() {
     g_app_instance = this;
+
+    // Initialize thread pool
+    size_t num_threads = std::thread::hardware_concurrency();
+    pool_ = std::make_unique<ThreadPool>(num_threads);
+
+    std::cout << "[App] Thread pool initialized with " << num_threads << " workers\n";
 }
 
 App::~App() {
@@ -43,22 +51,14 @@ Router &App::get_router() {
     return router_;
 }
 
-void App::handle_client(int client_fd, const std::string& client_ip) {
+std::string App::handle_request(Request& req, const std::string& client_ip) {
     auto start_time = std::chrono::steady_clock::now();
+    Response res;
 
     int status_code = 500;
-    std::string method = "UNKNOWN";
-    std::string path = "/";
 
     try {
-        Request req(client_fd);
-        Response res;
-
-        method = req.method;
-        path = req.path;
-
         size_t middleware_index = 0;
-
         std::function<void()> next = [&]() {
             if (middleware_index < middleware_.size()) {
                 auto& mw = middleware_[middleware_index++];
@@ -80,8 +80,6 @@ void App::handle_client(int client_fd, const std::string& client_ip) {
         };
 
         next();
-
-        res.write(client_fd);
         status_code = res.get_status();
 
     } catch (const std::exception& e) {
@@ -90,7 +88,6 @@ void App::handle_client(int client_fd, const std::string& client_ip) {
             {"error", "Internal Server Error"},
             {"message", e.what()}
         });
-        error_res.write(client_fd);
         status_code = 500;
         logger_.log_error(std::string("Exception in handle_client: ") + e.what());
     }
@@ -98,8 +95,8 @@ void App::handle_client(int client_fd, const std::string& client_ip) {
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::steady_clock::now() - start_time).count();
 
-    logger_.log_access(client_ip, method, path, status_code, elapsed);
-    close(client_fd);
+    // logger_.log_access(client_ip, req.method, req.path, status_code, elapsed);
+    return res.build_response();
 }
 
 void App::signal_handler(int sig) {
@@ -118,79 +115,10 @@ void App::listen(int port) {
     signal(SIGINT, App::signal_handler);
     signal(SIGTERM, App::signal_handler);
 
-    size_t num_threads = std::thread::hardware_concurrency();
-    pool_ = std::make_unique<ThreadPool>(num_threads);
+    std::cout << "[App] Starting on port " << port << "\n";
 
-    server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
-
-    if (server_fd_ == -1) {
-        perror("socket");
-        return;
-    }
-
-    std::cout << "Server starting on port " << port << " with " << num_threads << " worker threads\n";
-    std::cout << "Socket created successfully (fd=" << server_fd_ << ")\n";
-
-    int yes = 1;
-    if (setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
-        perror("setsockopt");
-        return;
-    }
-
-    sockaddr_in server_addr {};
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server_addr.sin_port = htons(port);
-
-    if (bind(server_fd_, reinterpret_cast<sockaddr *>(&server_addr), sizeof(server_addr)) == -1) {
-        perror("bind");
-        return;
-    }
-
-    if (::listen(server_fd_, 128) == -1) {
-        perror("listen");
-        return;
-    }
-
-    sockaddr_in client_addr {};
-    socklen_t client_len = sizeof(client_addr);
-
-    while (running_) {
-        int client_fd = accept(server_fd_, reinterpret_cast<sockaddr *>(&client_addr), &client_len);
-
-        if (client_fd == -1) {
-            if (!running_) break;  // Check if shutdown was called
-            perror("accept");
-            continue;
-        }
-
-        if (!running_) {
-            close(client_fd);
-            break;
-        }
-
-        char client_ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
-
-        std::string client_ip_str(client_ip);
-
-        pool_->enqueue([this, client_fd, client_ip_str]() {
-            handle_client(client_fd, client_ip_str);
-        });
-    }
-
-    std::cout << "Server stopped. Cleaning up...\n";
-
-    // Destroy thread pool (waits for worker threads to finish)
-    pool_.reset();
-
-    // Final cleanup
-    if (server_fd_ != -1) {
-        close(server_fd_);
-        server_fd_ = -1;
-    }
-
-    std::cout << "Cleanup complete. Exiting.\n";
+    PyroServer server(port, this);
+    server.run();  // Blocks here in epoll loop
 }
 
 void App::use(const Middleware &mw) {
@@ -199,4 +127,8 @@ void App::use(const Middleware &mw) {
 
 RouteGroup App::group(const std::string& prefix) {
     return RouteGroup(router_, prefix);
+}
+
+void App::dispatch_async(const std::function<void()> &task) const {
+    pool_->enqueue(task);
 }
