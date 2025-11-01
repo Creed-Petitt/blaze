@@ -58,7 +58,7 @@ public:
                       << path << " "
                       << status_code << " "
                       << response_time_ms << "ms\n";
-            access_log.flush();
+            // access_log.flush();
         }
     }
 
@@ -67,7 +67,7 @@ public:
         if (error_log.is_open()) {
             error_log << "[" << get_timestamp() << "] ERROR: "
                      << message << "\n";
-            error_log.flush();
+            // error_log.flush();
         }
     }
 
