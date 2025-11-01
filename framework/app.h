@@ -2,8 +2,8 @@
 #define HTTP_SERVER_APP_H
 
 #include "router.h"
+#include "logger.h"
 #include "../thread_pool.h"
-#include "../logger.h"
 #include <atomic>
 #include <memory>
 #include <functional>
@@ -29,7 +29,7 @@ public:
     void put(const std::string& path, const Handler &handler);
     void del(const std::string& path, const Handler &handler);
 
-    void listen(int port);
+    void listen(int port, size_t num_threads = 0);  // 0 = use hardware_concurrency
 
     void use(const Middleware &mw);
 
@@ -37,9 +37,11 @@ public:
 
     Router& get_router();
 
-    void dispatch_async(const std::function<void()> &task) const;
+    Logger& get_logger();
 
-    std::string handle_request(Request& req, const std::string& client_ip);
+    void dispatch_async(std::function<void()> task) const;
+
+    std::string handle_request(Request& req, const std::string& client_ip, bool keep_alive);
 };
 
 #endif
