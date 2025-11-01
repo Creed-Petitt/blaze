@@ -36,6 +36,7 @@ private:
 
     static const int MAX_EVENTS = 1024;
     static const int BACKLOG = 512;
+    static const size_t MAX_CONNECTIONS = 10000;  // Maximum concurrent connections
 
     struct PendingResponse {
         int fd;
@@ -46,9 +47,12 @@ private:
         int fd;
         std::string read_buffer;   // Incoming HTTP data
         std::string write_buffer;  // Outgoing HTTP response
+        bool keep_alive = true;
+        time_t last_activity = 0;
     };
 
     std::unordered_map<int, Connection> connections;
+    std::mutex connections_mutex_;  // Protects connections map access
     std::queue<PendingResponse> response_queue_;
     std::mutex response_queue_mutex_;
 
