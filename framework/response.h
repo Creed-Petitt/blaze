@@ -2,6 +2,7 @@
 #define HTTP_SERVER_RESPONSE_H
 
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include "../json.hpp"
 
@@ -21,6 +22,7 @@ public:
     Response& header(const std::string& key, const std::string& value);
     Response& send(const std::string& text);
     Response& json(const nlohmann::json& data);
+    Response& json_raw(std::string_view body);
 
     std::string build_response() const;
     void write(const int client_fd) const;

@@ -27,6 +27,13 @@ Response& Response::json(const nlohmann::json& data) {
     return *this;
 }
 
+Response& Response::json_raw(std::string_view body) {
+    body_.assign(body.data(), body.size());
+    headers_["Content-Type"] = "application/json";
+    headers_["Content-Length"] = std::to_string(body_.size());
+    return *this;
+}
+
 std::string Response::build_response() const {
     std::stringstream ss;
     ss << "HTTP/1.1 " << status_code_ << " " << get_status_text(status_code_) << "\r\n";
