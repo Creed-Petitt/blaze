@@ -1,5 +1,5 @@
-#ifndef HTTP_SERVER_PYROSERVER_H
-#define HTTP_SERVER_PYROSERVER_H
+#ifndef HTTP_SERVER_BLAZESERVER_H
+#define HTTP_SERVER_BLAZESERVER_H
 
 #include <sys/epoll.h>      // epoll_create, epoll_ctl, epoll_wait
 #include <sys/socket.h>     // socket, bind, listen, accept
@@ -17,12 +17,12 @@
 
 class App;
 
-class PyroServer {
+class BlazeServer {
 
 public:
-    PyroServer(int port, App* app, int server_fd = -1, bool owns_listener = true);
+    BlazeServer(int port, App* app, int server_fd = -1, bool owns_listener = true);
 
-    ~PyroServer();
+    ~BlazeServer();
 
     void run();
 

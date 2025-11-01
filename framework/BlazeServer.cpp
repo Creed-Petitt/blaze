@@ -1,4 +1,4 @@
-#include "PyroServer.h"
+#include "BlazeServer.h"
 #include "app.h"
 #include "request.h"
 #include "response.h"
@@ -9,7 +9,7 @@
 constexpr size_t MAX_REQUEST_BODY_SIZE = 100 * 1024 * 1024;
 
 
-int PyroServer::create_listening_socket(int port) {
+int BlazeServer::create_listening_socket(int port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         throw std::runtime_error("failed to create server socket");
@@ -48,7 +48,7 @@ int PyroServer::create_listening_socket(int port) {
     return fd;
 }
 
-PyroServer::PyroServer(int port, App* app, int existing_server_fd, bool owns_listener)
+BlazeServer::BlazeServer(int port, App* app, int existing_server_fd, bool owns_listener)
     : port(port),
       running(false),
       server_fd(existing_server_fd),
@@ -70,11 +70,11 @@ PyroServer::PyroServer(int port, App* app, int existing_server_fd, bool owns_lis
     setup_epoll();
 }
 
-PyroServer::~PyroServer() {
+BlazeServer::~BlazeServer() {
     shutdown();
 }
 
-void PyroServer::run() {
+void BlazeServer::run() {
     running.store(true, std::memory_order_release);
     epoll_event events[MAX_EVENTS];
 
@@ -130,7 +130,7 @@ void PyroServer::run() {
     std::cout << "[Pyro] Event loop stopped" << std::endl;
 }
 
-void PyroServer::shutdown() {
+void BlazeServer::shutdown() {
     bool expected = true;
     if (!running.compare_exchange_strong(expected, false, std::memory_order_acq_rel)) {
         return;
@@ -158,11 +158,11 @@ void PyroServer::shutdown() {
     }
 }
 
-void PyroServer::stop() {
+void BlazeServer::stop() {
     running.store(false, std::memory_order_release);
 }
 
-void PyroServer::make_socket_non_blocking(int fd) {
+void BlazeServer::make_socket_non_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0) {
         throw std::runtime_error("could not get the file descriptor flag");
@@ -173,7 +173,7 @@ void PyroServer::make_socket_non_blocking(int fd) {
     }
 }
 
-void PyroServer::epoll_add(int fd, uint32_t events) {
+void BlazeServer::epoll_add(int fd, uint32_t events) {
     epoll_event ev = {};
     ev.events = events;
     ev.data.fd = fd;
@@ -183,7 +183,7 @@ void PyroServer::epoll_add(int fd, uint32_t events) {
     }
 }
 
-void PyroServer::epoll_modify(int fd, uint32_t events) {
+void BlazeServer::epoll_modify(int fd, uint32_t events) {
     epoll_event ev = {};
     ev.events = events;
     ev.data.fd = fd;
@@ -193,14 +193,14 @@ void PyroServer::epoll_modify(int fd, uint32_t events) {
     }
 }
 
-void PyroServer::epoll_remove(int fd) {
+void BlazeServer::epoll_remove(int fd) {
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) < 0) {
         std::cerr << "[Pyro] epoll_remove failed for fd " << fd << std::endl;
     }
 }
 
-void PyroServer::setup_epoll() {
+void BlazeServer::setup_epoll() {
     epoll_fd = epoll_create1(0);
     if (epoll_fd < 0) {
         throw std::runtime_error("epoll_create1 failed");
@@ -216,14 +216,14 @@ void PyroServer::setup_epoll() {
     std::cout << "[Pyro] Epoll initialized (fd=" << epoll_fd << ")" << std::endl;
 }
 
-void PyroServer::close_connection(int fd) {
+void BlazeServer::close_connection(int fd) {
     // std::cout << "[Pyro] Closing connection: fd=" << fd << std::endl;
 
     std::lock_guard<std::mutex> lock(connections_mutex_);
     close_connection_unlocked(fd);
 }
 
-void PyroServer::close_connection_unlocked(int fd) {
+void BlazeServer::close_connection_unlocked(int fd) {
     auto it = connections.find(fd);
     if (it == connections.end()) {
         return;
@@ -234,7 +234,7 @@ void PyroServer::close_connection_unlocked(int fd) {
     close(fd);
 }
 
-void PyroServer::handle_new_connection() {
+void BlazeServer::handle_new_connection() {
     while (true) {
         sockaddr_in client_address;
         socklen_t client_len = sizeof(client_address);
@@ -281,7 +281,7 @@ void PyroServer::handle_new_connection() {
     }
 }
 
-void PyroServer::handle_readable(int fd) {
+void BlazeServer::handle_readable(int fd) {
     std::unique_lock<std::mutex> lock(connections_mutex_);
 
     auto it = connections.find(fd);
@@ -449,7 +449,7 @@ void PyroServer::handle_readable(int fd) {
     }
 }
 
-void PyroServer::handle_writable(int fd) {
+void BlazeServer::handle_writable(int fd) {
     std::unique_lock<std::mutex> lock(connections_mutex_);
 
     auto it = connections.find(fd);
@@ -497,7 +497,7 @@ void PyroServer::handle_writable(int fd) {
     }
 }
 
-void PyroServer::process_response_queue() {
+void BlazeServer::process_response_queue() {
     while (true) {
         PendingResponse resp;
         {
@@ -520,7 +520,7 @@ void PyroServer::process_response_queue() {
     }
 }
 
-void PyroServer::cleanup_stale_connections(int timeout_seconds) {
+void BlazeServer::cleanup_stale_connections(int timeout_seconds) {
     std::lock_guard<std::mutex> lock(connections_mutex_);
     time_t now = time(nullptr);
     std::vector<int> to_close;
@@ -536,7 +536,7 @@ void PyroServer::cleanup_stale_connections(int timeout_seconds) {
     }
 }
 
-void PyroServer::send_error_response(int fd, int status_code, const std::string& message) {
+void BlazeServer::send_error_response(int fd, int status_code, const std::string& message) {
     Response res;
     res.status(status_code).json({{"error", message}});
     std::string response_str = res.build_response();
