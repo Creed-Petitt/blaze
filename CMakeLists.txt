@@ -8,7 +8,7 @@ include_directories(framework)
 add_executable(http_server
     main.cpp
     thread_pool.h
-    logger.h
+    framework/logger.h
     framework/request.h
     framework/request.cpp
     framework/response.h
@@ -17,4 +17,7 @@ add_executable(http_server
     framework/router.cpp
     framework/app.h
     framework/app.cpp
+    framework/BlazeServer.h
+    framework/BlazeServer.cpp
 )
+
