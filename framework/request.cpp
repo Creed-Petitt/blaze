@@ -15,9 +15,22 @@ Request::Request(std::string& raw_http) {
     size_t first_space = request_line.find(' ');
     size_t second_space = request_line.find(' ', first_space + 1);
 
+    if (first_space == std::string::npos || second_space == std::string::npos) {
+        return;
+    }
+
     method = request_line.substr(0, first_space);
     path = request_line.substr(first_space + 1, second_space - (first_space + 1));
     http_version = request_line.substr(second_space + 1);
+
+    if (method != "GET" && method != "POST" && method != "PUT" &&
+        method != "DELETE" && method != "PATCH" && method != "OPTIONS" && method != "HEAD") {
+        return;
+    }
+
+    if (http_version != "HTTP/1.0" && http_version != "HTTP/1.1") {
+        return;
+    }
 
     // Parse query parameters from path (/users?id=42&active=true)
     size_t query_start = path.find('?');
