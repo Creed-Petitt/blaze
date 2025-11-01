@@ -8,6 +8,7 @@
 #include <vector>              // std::vector
 #include <functional>          // std::function
 #include <string>              // std::string
+#include <utility>             // std::move
 
 class ThreadPool {
 private:
@@ -33,7 +34,7 @@ public:
                             return;
                         }
 
-                        task = tasks.front();
+                        task = std::move(tasks.front());
                         tasks.pop();
                     }
                 task();
@@ -43,9 +44,9 @@ public:
         }
     }
 
-    void enqueue(const std::function<void()> &task) {
+    void enqueue(std::function<void()> task) {
         std::unique_lock<std::mutex> lock(queue_mutex);
-        tasks.push(task);
+        tasks.push(std::move(task));
         cv.notify_one();
     }
 
