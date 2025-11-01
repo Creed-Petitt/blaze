@@ -9,9 +9,10 @@
 #include <cstring>          // memset
 #include <iostream>         // logging
 #include <unordered_map>    // connection tracking
-#include <string>
+#include <memory>
 #include <string>
 #include <queue>
+#include <atomic>
 #include <mutex>
 
 class App;
@@ -19,20 +20,24 @@ class App;
 class PyroServer {
 
 public:
-    PyroServer(int port, App* app);
+    PyroServer(int port, App* app, int server_fd = -1, bool owns_listener = true);
 
     ~PyroServer();
 
     void run();
 
     void shutdown();
+    void stop();
+
+    static int create_listening_socket(int port);
 
 private:
     int port;
-    bool running;
+    std::atomic<bool> running;
 
     int server_fd;
     int epoll_fd;
+    bool owns_listener_;
 
     static const int MAX_EVENTS = 1024;
     static const int BACKLOG = 512;
@@ -40,13 +45,14 @@ private:
 
     struct PendingResponse {
         int fd;
-        std::string response;
+        std::unique_ptr<std::string> response;
     };
 
     struct Connection {
         int fd;
-        std::string read_buffer;   // Incoming HTTP data
-        std::string write_buffer;  // Outgoing HTTP response
+        std::string read_buffer;
+        std::string write_buffer;
+        std::string client_ip;
         bool keep_alive = true;
         time_t last_activity = 0;
     };
@@ -59,9 +65,8 @@ private:
     App* app_;
 
     // Setup methods
-    void create_server_socket();
     void setup_epoll();
-    void make_socket_non_blocking(int fd);
+    static void make_socket_non_blocking(int fd);
 
     // Epoll helpers
     void epoll_add(int fd, uint32_t events);
@@ -73,6 +78,9 @@ private:
     void handle_readable(int fd);
     void handle_writable(int fd);
     void close_connection(int fd);
+    void close_connection_unlocked(int fd);
+    void cleanup_stale_connections(int timeout_seconds);
+    void send_error_response(int fd, int status_code, const std::string& message);
 
     void process_response_queue();
 };

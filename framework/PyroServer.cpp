@@ -2,22 +2,71 @@
 #include "app.h"
 #include "request.h"
 #include "response.h"
+#include <arpa/inet.h>
+#include <memory>
 
 // Maximum request body size (100 MB) - hard limit to prevent OOM attacks
 constexpr size_t MAX_REQUEST_BODY_SIZE = 100 * 1024 * 1024;
 
 
-PyroServer::PyroServer(int port, App* app)
+int PyroServer::create_listening_socket(int port) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        throw std::runtime_error("failed to create server socket");
+    }
+
+    int opt = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        close(fd);
+        throw std::runtime_error("setsockopt SO_REUSEADDR failed");
+    }
+
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+        close(fd);
+        throw std::runtime_error("setsockopt SO_REUSEPORT failed");
+    }
+
+    make_socket_non_blocking(fd);
+
+    sockaddr_in address {};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(port);
+
+    if (bind(fd, reinterpret_cast<struct sockaddr *>(&address), sizeof(address)) < 0) {
+        close(fd);
+        throw std::runtime_error("failed to bind server socket");
+    }
+
+    if (listen(fd, BACKLOG) < 0) {
+        close(fd);
+        throw std::runtime_error("failed to listen");
+    }
+
+    std::cout << "[Pyro] Server socket created (non-blocking, fd="
+              << fd << ")" << std::endl;
+    return fd;
+}
+
+PyroServer::PyroServer(int port, App* app, int existing_server_fd, bool owns_listener)
     : port(port),
       running(false),
-      server_fd(-1),
+      server_fd(existing_server_fd),
       epoll_fd(-1),
+      owns_listener_(owns_listener),
       app_(app) {
 
     std::cout << "[Pyro] Initializing event-driven server on port "
                 << port << std::endl;
 
-    create_server_socket();
+    if (server_fd < 0) {
+        server_fd = create_listening_socket(port);
+        owns_listener_ = true;
+    } else if (owns_listener_ && server_fd >= 0) {
+        // ensure listener is non-blocking even if provided
+        make_socket_non_blocking(server_fd);
+    }
+
     setup_epoll();
 }
 
@@ -26,13 +75,15 @@ PyroServer::~PyroServer() {
 }
 
 void PyroServer::run() {
-    running = true;
+    running.store(true, std::memory_order_release);
     epoll_event events[MAX_EVENTS];
 
     std::cout << "[Pyro] Event loop starting..." << std::endl;
 
-    while (running) {
-        int n = epoll_wait(epoll_fd, events, MAX_EVENTS, 1);  // 1ms timeout for fast response queue polling
+    time_t last_cleanup = time(nullptr);
+
+    while (running.load(std::memory_order_acquire)) {
+        int n = epoll_wait(epoll_fd, events, MAX_EVENTS, 1);
 
         if (n < 0) {
             if (errno == EINTR) {
@@ -42,29 +93,49 @@ void PyroServer::run() {
             break;
         }
 
+        if (!running.load(std::memory_order_acquire)) {
+            break;
+        }
+
         for (int i = 0; i < n; i++) {
             int fd = events[i].data.fd;
             uint32_t evt = events[i].events;
 
-            if (fd == server_fd) {
-                handle_new_connection();
-            }
-            else if (evt & EPOLLIN) {
-                handle_readable(fd);
-            }
-            else if (evt & EPOLLOUT) {
-                handle_writable(fd);
+            try {
+                if (fd == server_fd) {
+                    handle_new_connection();
+                }
+                else if (evt & EPOLLIN) {
+                    handle_readable(fd);
+                }
+                else if (evt & EPOLLOUT) {
+                    handle_writable(fd);
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[Pyro] Exception in event handler for fd=" << fd << ": " << e.what() << std::endl;
+                if (fd != server_fd) {
+                    close_connection(fd);
+                }
             }
         }
         process_response_queue();
+
+        time_t now = time(nullptr);
+        if (now - last_cleanup > 60) {
+            cleanup_stale_connections(300);
+            last_cleanup = now;
+        }
     }
 
     std::cout << "[Pyro] Event loop stopped" << std::endl;
 }
 
 void PyroServer::shutdown() {
+    bool expected = true;
+    if (!running.compare_exchange_strong(expected, false, std::memory_order_acq_rel)) {
+        return;
+    }
     std::cout << "[Pyro] Shutting down server..." << std::endl;
-    running = false;
 
     // Close all client connections
     {
@@ -81,10 +152,14 @@ void PyroServer::shutdown() {
         epoll_fd = -1;
     }
 
-    if (server_fd >= 0) {
+    if (server_fd >= 0 && owns_listener_) {
         close(server_fd);
         server_fd = -1;
     }
+}
+
+void PyroServer::stop() {
+    running.store(false, std::memory_order_release);
 }
 
 void PyroServer::make_socket_non_blocking(int fd) {
@@ -125,46 +200,6 @@ void PyroServer::epoll_remove(int fd) {
     }
 }
 
-void PyroServer::create_server_socket() {
-    // Open socket
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) {
-        throw std::runtime_error("failed to create server socket");
-    }
-
-    // Set socket options (reuse address + reuse port for multi-core)
-    int opt = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        throw std::runtime_error("setsockopt SO_REUSEADDR failed");
-    }
-
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
-        throw std::runtime_error("setsockopt SO_REUSEPORT failed");
-    }
-
-    // Make non-blocking
-    make_socket_non_blocking(server_fd);
-
-    // Bind to address
-    sockaddr_in address {};
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(port);
-
-    // Bind to port
-    if (bind(server_fd, reinterpret_cast<struct sockaddr *>(&address), sizeof(address)) < 0) {
-        throw std::runtime_error("failed to bind server socket");
-    }
-
-    // Listen
-    if (listen(server_fd, BACKLOG) < 0) {
-        throw std::runtime_error("failed to listen");
-    }
-
-    std::cout << "[Pyro] Server socket created (non-blocking, fd="
-            << server_fd << ")" << std::endl;
-}
-
 void PyroServer::setup_epoll() {
     epoll_fd = epoll_create1(0);
     if (epoll_fd < 0) {
@@ -172,7 +207,11 @@ void PyroServer::setup_epoll() {
     }
 
     // Add server socket to epoll (watch for incoming connections)
-    epoll_add(server_fd, EPOLLIN);
+    uint32_t events = EPOLLIN;
+#ifdef EPOLLEXCLUSIVE
+    events |= EPOLLEXCLUSIVE;
+#endif
+    epoll_add(server_fd, events);
 
     std::cout << "[Pyro] Epoll initialized (fd=" << epoll_fd << ")" << std::endl;
 }
@@ -180,13 +219,19 @@ void PyroServer::setup_epoll() {
 void PyroServer::close_connection(int fd) {
     // std::cout << "[Pyro] Closing connection: fd=" << fd << std::endl;
 
+    std::lock_guard<std::mutex> lock(connections_mutex_);
+    close_connection_unlocked(fd);
+}
+
+void PyroServer::close_connection_unlocked(int fd) {
+    auto it = connections.find(fd);
+    if (it == connections.end()) {
+        return;
+    }
+
+    connections.erase(it);
     epoll_remove(fd);
     close(fd);
-
-    {
-        std::lock_guard<std::mutex> lock(connections_mutex_);
-        connections.erase(fd);
-    }
 }
 
 void PyroServer::handle_new_connection() {
@@ -199,6 +244,9 @@ void PyroServer::handle_new_connection() {
         if (client_fd < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 break;
+            }
+            if (errno == EBADF || errno == EINVAL || errno == ENOTSOCK) {
+                return;
             }
             std::cerr << "[Pyro] Accept error: " << strerror(errno) << std::endl;
             break;
@@ -218,10 +266,15 @@ void PyroServer::handle_new_connection() {
 
         epoll_add(client_fd, EPOLLIN);
 
+        char ip_str[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &client_address.sin_addr, ip_str, INET_ADDRSTRLEN);
+
         {
             std::lock_guard<std::mutex> lock(connections_mutex_);
             connections[client_fd] = Connection{};
             connections[client_fd].fd = client_fd;
+            connections[client_fd].client_ip = ip_str;
+            connections[client_fd].last_activity = time(nullptr);
         }
 
         // std::cout << "[Pyro] New connection: fd=" << client_fd << std::endl;
@@ -229,12 +282,20 @@ void PyroServer::handle_new_connection() {
 }
 
 void PyroServer::handle_readable(int fd) {
-    std::lock_guard<std::mutex> lock(connections_mutex_);
+    std::unique_lock<std::mutex> lock(connections_mutex_);
 
+    auto it = connections.find(fd);
+    if (it == connections.end()) {
+        return;
+    }
+
+    Connection& conn = it->second;
     char buffer[4096];
 
     while (true) {
+        lock.unlock();
         int bytes = read(fd, buffer, sizeof(buffer));
+        lock.lock();
 
         if (bytes < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -242,38 +303,48 @@ void PyroServer::handle_readable(int fd) {
             }
 
             std::cerr << "[Pyro] Read error on fd=" << fd << ": "
-                            << strerror(errno) << std::endl;
-            close_connection(fd);
+                      << strerror(errno) << std::endl;
+            close_connection_unlocked(fd);
             return;
-        }
-        else if (bytes == 0) {
-            // std::cout << "[Pyro] Client disconnected: fd=" << fd << std::endl;
-            close_connection(fd);
+        } else if (bytes == 0) {
+            close_connection_unlocked(fd);
             return;
-        }
-        else {
-            // Check if appending would exceed max body size (OOM protection)
-            if (connections[fd].read_buffer.size() + bytes > MAX_REQUEST_BODY_SIZE) {
+        } else {
+            if (conn.read_buffer.size() + bytes > MAX_REQUEST_BODY_SIZE) {
                 std::cerr << "[Pyro] Request body too large for fd=" << fd
-                          << " (current: " << connections[fd].read_buffer.size()
+                          << " (current: " << conn.read_buffer.size()
                           << " bytes, max: " << MAX_REQUEST_BODY_SIZE << " bytes)" << std::endl;
-                close_connection(fd);
+                close_connection_unlocked(fd);
                 return;
             }
 
-            connections[fd].read_buffer.append(buffer, bytes);
-            // std::cout << "[Pyro] Read " << bytes << " bytes from fd=" << fd
-            //           << " (total: " << connections[fd].read_buffer.size() << ")" << std::endl;
+            conn.read_buffer.append(buffer, bytes);
+            conn.last_activity = time(nullptr);
         }
     }
 
-    // Check if we have a complete HTTP request
-    std::string& buff = connections[fd].read_buffer;
+    time_t now = time(nullptr);
+    if (now - conn.last_activity > 30) {
+        send_error_response(fd, 408, "Request Timeout");
+        close_connection_unlocked(fd);
+        return;
+    }
+
+    std::string& buff = conn.read_buffer;
 
     size_t headers_end = buff.find("\r\n\r\n");
     if (headers_end == std::string::npos) {
-        // std::cout << "[Pyro] Waiting for complete headers..." << std::endl;
-        return;  // Wait for more data
+        if (buff.size() > 8192) {
+            send_error_response(fd, 400, "Bad Request");
+            close_connection_unlocked(fd);
+        }
+        return;
+    }
+
+    if (headers_end > 8192) {
+        send_error_response(fd, 400, "Bad Request");
+        close_connection_unlocked(fd);
+        return;
     }
 
     size_t content_length = 0;
@@ -288,7 +359,8 @@ void PyroServer::handle_readable(int fd) {
 
             if (cl_str.empty() || cl_str[0] == '-') {
                 std::cerr << "[Pyro] Invalid Content-Length: negative or empty (fd=" << fd << ")" << std::endl;
-                close_connection(fd);
+                send_error_response(fd, 400, "Bad Request");
+                close_connection_unlocked(fd);
                 return;
             }
 
@@ -297,7 +369,8 @@ void PyroServer::handle_readable(int fd) {
             if (cl_value < 0 || static_cast<unsigned long long>(cl_value) > MAX_REQUEST_BODY_SIZE) {
                 std::cerr << "[Pyro] Content-Length too large: " << cl_value
                           << " bytes (max: " << MAX_REQUEST_BODY_SIZE << " bytes) for fd=" << fd << std::endl;
-                close_connection(fd);
+                send_error_response(fd, 413, "Payload Too Large");
+                close_connection_unlocked(fd);
                 return;
             }
 
@@ -305,27 +378,29 @@ void PyroServer::handle_readable(int fd) {
 
         } catch (const std::invalid_argument& e) {
             std::cerr << "[Pyro] Invalid Content-Length format (fd=" << fd << "): " << e.what() << std::endl;
-            close_connection(fd);
+            send_error_response(fd, 400, "Bad Request");
+            close_connection_unlocked(fd);
             return;
         } catch (const std::out_of_range& e) {
             std::cerr << "[Pyro] Content-Length out of range (fd=" << fd << "): " << e.what() << std::endl;
-            close_connection(fd);
+            send_error_response(fd, 400, "Bad Request");
+            close_connection_unlocked(fd);
             return;
         }
     }
 
     size_t required_bytes = headers_end + 4 + content_length;
     if (buff.size() < required_bytes) {
-        // std::cout << "[Pyro] Waiting for body: have " << buff.size()
-        //           << " bytes, need " << required_bytes << std::endl;
-        return;  // Wait for more data
+        return;
     }
 
-    // Request is complete!
-    // std::cout << "[Pyro] Complete HTTP request received (fd=" << fd
-    //           << ", " << buff.size() << " bytes)" << std::endl;
-
     Request req(buff);
+
+    if (req.method.empty()) {
+        send_error_response(fd, 400, "Bad Request");
+        close_connection_unlocked(fd);
+        return;
+    }
 
     bool keep_alive = true;
     if (req.http_version == "HTTP/1.0") {
@@ -333,64 +408,91 @@ void PyroServer::handle_readable(int fd) {
     }
 
     if (req.has_header("Connection")) {
-        std::string conn = req.get_header("Connection");
-        std::transform(conn.begin(), conn.end(), conn.begin(), ::tolower);
-        if (conn == "close") {
+        std::string conn_header = req.get_header("Connection");
+        std::transform(conn_header.begin(), conn_header.end(), conn_header.begin(), ::tolower);
+        if (conn_header == "close") {
             keep_alive = false;
-        }
-        else if (conn == "keep-alive") {
+        } else if (conn_header == "keep-alive") {
             keep_alive = true;
         }
     }
 
-    connections[fd].keep_alive = keep_alive;
+    conn.keep_alive = keep_alive;
 
     int client_fd = fd;
-    bool client_keep_alive = keep_alive;  // Capture for lambda
-    app_->dispatch_async([this, client_fd, req, client_keep_alive]() {
-        // Call App's request handler (middleware + routing)
+    bool client_keep_alive = keep_alive;
+    std::string client_ip = conn.client_ip;
 
-        {
-            std::string response_str = app_->handle_request(const_cast<Request&>(req), "127.0.0.1", client_keep_alive);
-            std::lock_guard lock(response_queue_mutex_);
-            response_queue_.push(PendingResponse{client_fd, response_str});
+    {
+        std::lock_guard<std::mutex> queue_lock(response_queue_mutex_);
+        if (response_queue_.size() >= 900) {
+            send_error_response(fd, 503, "Server Busy");
+            close_connection_unlocked(fd);
+            return;
         }
+    }
 
-        // std::cout << "[Pyro] Response enqueued for fd=" << client_fd << std::endl;
+    lock.unlock();
+    app_->dispatch_async([this, client_fd, req, client_keep_alive, client_ip]() {
+        auto response = std::make_unique<std::string>(
+            app_->handle_request(const_cast<Request&>(req), client_ip, client_keep_alive));
+        std::lock_guard lock(response_queue_mutex_);
+        if (response_queue_.size() < 1000) {
+            response_queue_.push(PendingResponse{client_fd, std::move(response)});
+        }
     });
-    connections[fd].read_buffer.clear();
+    lock.lock();
+
+    auto it_after = connections.find(fd);
+    if (it_after != connections.end()) {
+        it_after->second.read_buffer.clear();
+    }
 }
 
 void PyroServer::handle_writable(int fd) {
-    std::lock_guard<std::mutex> lock(connections_mutex_);
+    std::unique_lock<std::mutex> lock(connections_mutex_);
 
-    std::string& buf = connections[fd].write_buffer;
+    auto it = connections.find(fd);
+    if (it == connections.end()) {
+        return;
+    }
+
+    std::string& buf = it->second.write_buffer;
 
     if (buf.empty()) {
         return;
     }
 
+    lock.unlock();
     ssize_t bytes = write(fd, buf.c_str(), buf.size());
+    lock.lock();
 
     if (bytes < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return;
         }
-        close_connection(fd);
+        close_connection_unlocked(fd);
         return;
     }
 
-    buf.erase(0,bytes);
+    buf.erase(0, bytes);
 
     if (buf.empty()) {
-        if (connections[fd].keep_alive) {
-            connections[fd].read_buffer.clear();
-            connections[fd].write_buffer.clear();
-            connections[fd].last_activity = time(nullptr);
+        auto it_after = connections.find(fd);
+        if (it_after == connections.end()) {
+            return;
+        }
+
+        if (it_after->second.keep_alive) {
+            it_after->second.read_buffer.clear();
+            it_after->second.write_buffer.clear();
+            it_after->second.last_activity = time(nullptr);
             epoll_modify(fd, EPOLLIN);
+            return;
         }
         else {
-            close_connection(fd);
+            close_connection_unlocked(fd);
+            return;
         }
     }
 }
@@ -407,13 +509,43 @@ void PyroServer::process_response_queue() {
 
         {
             std::lock_guard<std::mutex> lock(connections_mutex_);
-            if (connections.count(resp.fd)) {
-                connections[resp.fd].write_buffer = std::move(resp.response);
+            auto it = connections.find(resp.fd);
+            if (it != connections.end() && resp.response) {
+                it->second.write_buffer = std::move(*resp.response);
+                epoll_modify(resp.fd, EPOLLOUT);
             }
         }
 
-        epoll_modify(resp.fd, EPOLLOUT);
-
         // std::cout << "[Pyro] Response ready to send on fd=" << resp.fd << std::endl;
+    }
+}
+
+void PyroServer::cleanup_stale_connections(int timeout_seconds) {
+    std::lock_guard<std::mutex> lock(connections_mutex_);
+    time_t now = time(nullptr);
+    std::vector<int> to_close;
+
+    for (auto& [fd, conn] : connections) {
+        if (now - conn.last_activity > timeout_seconds) {
+            to_close.push_back(fd);
+        }
+    }
+
+    for (int fd : to_close) {
+        close_connection_unlocked(fd);
+    }
+}
+
+void PyroServer::send_error_response(int fd, int status_code, const std::string& message) {
+    Response res;
+    res.status(status_code).json({{"error", message}});
+    std::string response_str = res.build_response();
+
+    ssize_t sent = 0;
+    size_t total = response_str.size();
+    while (sent < static_cast<ssize_t>(total)) {
+        ssize_t n = write(fd, response_str.c_str() + sent, total - sent);
+        if (n <= 0) break;
+        sent += n;
     }
 }
