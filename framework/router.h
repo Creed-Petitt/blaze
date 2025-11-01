@@ -43,16 +43,17 @@ private:
     struct Route {
         std::string method;
         std::string path;
+        std::vector<std::string> segments;
         Handler handler;
     };
 
     std::vector<Route> routes_;
 
-    bool matches(const std::string& route_path,
-                 const std::string& request_path,
+    bool matches(const std::vector<std::string>& route_segments,
+                 const std::vector<std::string>& request_segments,
                  std::unordered_map<std::string, std::string>& params);
 
-    std::vector<std::string> split(const std::string& str, char delimiter);
+    std::vector<std::string> split(const std::string& str);
 
 public:
     void add_route(const std::string& method, const std::string& path, Handler handler);

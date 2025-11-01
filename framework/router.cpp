@@ -1,5 +1,4 @@
 #include "router.h"
-#include <sstream>
 #include <vector>
 
 // RouteGroup implementation
@@ -29,17 +28,23 @@ RouteGroup RouteGroup::group(const std::string& subpath) {
 // Router implementation
 void Router::add_route(const std::string& method, const std::string& path,
                         Handler handler) {
-    routes_.push_back({method, path, handler});
+    routes_.push_back({method, path, split(path), handler});
 }
 
 std::optional<RouteMatch> Router::match(const std::string& method, const std::string& path) {
+    std::vector<std::string> request_segments = split(path);
+
     for (const auto& route : routes_) {
         if (route.method != method) {
             continue;
         }
 
+        if (route.segments.size() != request_segments.size()) {
+            continue;
+        }
+
         std::unordered_map<std::string, std::string> params;
-        if (matches(route.path, path, params)) {
+        if (matches(route.segments, request_segments, params)) {
             return RouteMatch{route.handler, params};
         }
     }
@@ -47,16 +52,9 @@ std::optional<RouteMatch> Router::match(const std::string& method, const std::st
     return std::nullopt;
 }
 
-bool Router::matches(const std::string& route_path,
-                     const std::string& request_path,
+bool Router::matches(const std::vector<std::string>& route_segments,
+                     const std::vector<std::string>& request_segments,
                      std::unordered_map<std::string, std::string>& params) {
-    std::vector<std::string> route_segments = split(route_path, '/');
-    std::vector<std::string> request_segments = split(request_path, '/');
-
-    if (route_segments.size() != request_segments.size()) {
-        return false;
-    }
-
     for (size_t i = 0; i < route_segments.size(); i++) {
         const std::string& route_seg = route_segments[i];
         const std::string& request_seg = request_segments[i];
@@ -74,13 +72,23 @@ bool Router::matches(const std::string& route_path,
     return true;
 }
 
-std::vector<std::string> Router::split(const std::string& str, char delimiter) {
+std::vector<std::string> Router::split(const std::string& str) {
     std::vector<std::string> segments;
-    std::stringstream ss(str);
-    std::string segment;
+    size_t start = 0;
+    while (start <= str.size()) {
+        size_t end = str.find('/', start);
+        if (end == std::string::npos) {
+            end = str.size();
+        }
+        segments.emplace_back(str.substr(start, end - start));
+        if (end == str.size()) {
+            break;
+        }
+        start = end + 1;
+    }
 
-    while (std::getline(ss, segment, delimiter)) {
-        segments.push_back(segment);
+    if (segments.empty()) {
+        segments.emplace_back();
     }
 
     return segments;
