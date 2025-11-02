@@ -28,11 +28,6 @@ int BlazeServer::create_listening_socket(int port) {
         throw std::runtime_error("setsockopt SO_REUSEADDR failed");
     }
 
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
-        close(fd);
-        throw std::runtime_error("setsockopt SO_REUSEPORT failed");
-    }
-
     make_socket_non_blocking(fd);
 
     sockaddr_in address {};
