@@ -2,6 +2,32 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <cstring>
+#include <algorithm>
+#include <cctype>
+
+namespace {
+    std::string to_lower(const std::string& input) {
+        std::string result = input;
+        std::transform(result.begin(), result.end(), result.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return result;
+    }
+
+    std::string trim(const std::string& input) {
+        size_t first = 0;
+        size_t last = input.size();
+
+        while (first < input.size() && std::isspace(static_cast<unsigned char>(input[first]))) {
+            ++first;
+        }
+
+        while (last > first && std::isspace(static_cast<unsigned char>(input[last - 1]))) {
+            --last;
+        }
+
+        return input.substr(first, last - first);
+    }
+}
 
 Request::Request(std::string& raw_http) {
     size_t request_line_end = raw_http.find("\r\n");
@@ -62,11 +88,11 @@ Request::Request(std::string& raw_http) {
     while ((next_line = headers_section.find("\r\n", pos)) != std::string::npos) {
         std::string line = headers_section.substr(pos, next_line - pos);
 
-        size_t colon_pos = line.find(": ");
+        size_t colon_pos = line.find(':');
         if (colon_pos != std::string::npos) {
-            std::string key = line.substr(0, colon_pos);
-            std::string value = line.substr(colon_pos + 2);
-            headers[key] = value;
+            std::string key = trim(line.substr(0, colon_pos));
+            std::string value = trim(line.substr(colon_pos + 1));
+            headers[to_lower(key)] = value;
         }
 
         pos = next_line + 2;
@@ -74,9 +100,11 @@ Request::Request(std::string& raw_http) {
 
     if (pos < headers_section.size()) {
         std::string line = headers_section.substr(pos);
-        size_t colon_pos = line.find(": ");
+        size_t colon_pos = line.find(':');
         if (colon_pos != std::string::npos) {
-            headers[line.substr(0, colon_pos)] = line.substr(colon_pos + 2);
+            std::string key = trim(line.substr(0, colon_pos));
+            std::string value = trim(line.substr(colon_pos + 1));
+            headers[to_lower(key)] = value;
         }
     }
 
@@ -115,7 +143,8 @@ int Request::get_query_int(const std::string& key, int default_val) const {
 }
 
 std::string Request::get_header(const std::string& key, const std::string& default_val) const {
-    auto it = headers.find(key);
+    std::string normalized = to_lower(key);
+    auto it = headers.find(normalized);
     if (it != headers.end()) {
         return it->second;
     }
@@ -123,7 +152,7 @@ std::string Request::get_header(const std::string& key, const std::string& defau
 }
 
 bool Request::has_header(const std::string& key) const {
-    return headers.find(key) != headers.end();
+    return headers.find(to_lower(key)) != headers.end();
 }
 
 std::optional<int> Request::get_param_int(const std::string& key) const {
