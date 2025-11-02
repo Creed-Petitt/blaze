@@ -16,10 +16,14 @@ private:
     std::queue<std::function<void()>> tasks;
     std::mutex queue_mutex;
     std::condition_variable cv;
+    std::condition_variable cv_space;
     bool stop;
+    size_t max_queue_size_;
 
 public:
-    explicit ThreadPool(const size_t num_threads) : stop(false) {
+    explicit ThreadPool(const size_t num_threads, size_t max_queue_size = 1024)
+        : stop(false),
+          max_queue_size_(max_queue_size ? max_queue_size : 1024) {
 
         for (size_t i = 0; i < num_threads; i++) {
             workers.emplace_back([this] {
@@ -31,11 +35,13 @@ public:
                              return !tasks.empty() || stop; });
 
                         if (stop && tasks.empty()) {
+                            cv_space.notify_all();
                             return;
                         }
 
                         task = std::move(tasks.front());
                         tasks.pop();
+                        cv_space.notify_one();
                     }
                 task();
                 }
@@ -46,6 +52,14 @@ public:
 
     void enqueue(std::function<void()> task) {
         std::unique_lock<std::mutex> lock(queue_mutex);
+        cv_space.wait(lock, [this] {
+            return stop || tasks.size() < max_queue_size_;
+        });
+
+        if (stop) {
+            return;
+        }
+
         tasks.push(std::move(task));
         cv.notify_one();
     }
@@ -55,6 +69,7 @@ public:
            std::unique_lock<std::mutex> lock(queue_mutex);
             stop = true;
             cv.notify_all();
+            cv_space.notify_all();
         }
         for (std::thread& worker : workers) {
             if (worker.joinable()) {
