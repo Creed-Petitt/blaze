@@ -20,7 +20,12 @@ class App;
 class BlazeServer {
 
 public:
-    BlazeServer(int port, App* app, int server_fd = -1, bool owns_listener = true);
+    BlazeServer(int port,
+                App* app,
+                int server_fd = -1,
+                bool owns_listener = true,
+                std::atomic<size_t>* active_connections = nullptr,
+                size_t max_connections = MAX_CONNECTIONS);
 
     ~BlazeServer();
 
@@ -34,10 +39,13 @@ public:
 private:
     int port;
     std::atomic<bool> running;
+    std::atomic<bool> shutdown_started_;
 
     int server_fd;
     int epoll_fd;
     bool owns_listener_;
+    std::atomic<size_t>* active_connections_;
+    size_t max_connections_;
 
     static const int MAX_EVENTS = 1024;
     static const int BACKLOG = 512;

@@ -3,10 +3,17 @@
 #include "request.h"
 #include "response.h"
 #include <arpa/inet.h>
+#include <atomic>
+#include <cctype>
 #include <memory>
+#include <algorithm>
 
 // Maximum request body size (100 MB) - hard limit to prevent OOM attacks
 constexpr size_t MAX_REQUEST_BODY_SIZE = 100 * 1024 * 1024;
+
+namespace {
+    std::atomic<size_t> local_connection_counter{0};
+}
 
 
 int BlazeServer::create_listening_socket(int port) {
@@ -48,12 +55,20 @@ int BlazeServer::create_listening_socket(int port) {
     return fd;
 }
 
-BlazeServer::BlazeServer(int port, App* app, int existing_server_fd, bool owns_listener)
+BlazeServer::BlazeServer(int port,
+                         App* app,
+                         int existing_server_fd,
+                         bool owns_listener,
+                         std::atomic<size_t>* active_connections,
+                         size_t max_connections)
     : port(port),
       running(false),
+      shutdown_started_(false),
       server_fd(existing_server_fd),
       epoll_fd(-1),
       owns_listener_(owns_listener),
+      active_connections_(active_connections ? active_connections : &local_connection_counter),
+      max_connections_(max_connections ? max_connections : MAX_CONNECTIONS),
       app_(app) {
 
     std::cout << "[Pyro] Initializing event-driven server on port "
@@ -131,19 +146,21 @@ void BlazeServer::run() {
 }
 
 void BlazeServer::shutdown() {
-    bool expected = true;
-    if (!running.compare_exchange_strong(expected, false, std::memory_order_acq_rel)) {
+    bool expected = false;
+    if (!shutdown_started_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
         return;
     }
+
+    running.store(false, std::memory_order_release);
     std::cout << "[Pyro] Shutting down server..." << std::endl;
 
     // Close all client connections
     {
         std::lock_guard<std::mutex> lock(connections_mutex_);
-        for (auto& [fd, conn] : connections) {
-            close(fd);
+        while (!connections.empty()) {
+            int fd = connections.begin()->first;
+            close_connection_unlocked(fd);
         }
-        connections.clear();
     }
 
     // Close epoll and server socket
@@ -232,6 +249,9 @@ void BlazeServer::close_connection_unlocked(int fd) {
     connections.erase(it);
     epoll_remove(fd);
     close(fd);
+    if (active_connections_) {
+        active_connections_->fetch_sub(1, std::memory_order_acq_rel);
+    }
 }
 
 void BlazeServer::handle_new_connection() {
@@ -252,17 +272,24 @@ void BlazeServer::handle_new_connection() {
             break;
         }
 
-        {
-            std::lock_guard<std::mutex> lock(connections_mutex_);
-            if (connections.size() >= MAX_CONNECTIONS) {
-                std::cerr << "[Pyro] Max connections (" << MAX_CONNECTIONS
-                          << ") reached, rejecting new connection (fd=" << client_fd << ")" << std::endl;
-                close(client_fd);  // Immediately close the socket
-                continue;  // Try to accept more (in case some are closing)
-            }
+        size_t current = active_connections_->fetch_add(1, std::memory_order_acq_rel);
+        if (current >= max_connections_) {
+            active_connections_->fetch_sub(1, std::memory_order_acq_rel);
+            std::cerr << "[Pyro] Max connections (" << max_connections_
+                      << ") reached, rejecting new connection (fd=" << client_fd << ")" << std::endl;
+            close(client_fd);
+            continue;
         }
 
-        make_socket_non_blocking(client_fd);
+        try {
+            make_socket_non_blocking(client_fd);
+        } catch (const std::exception& e) {
+            std::cerr << "[Pyro] Failed to set non-blocking mode for fd=" << client_fd
+                      << ": " << e.what() << std::endl;
+            active_connections_->fetch_sub(1, std::memory_order_acq_rel);
+            close(client_fd);
+            continue;
+        }
 
         epoll_add(client_fd, EPOLLIN);
 
@@ -348,45 +375,74 @@ void BlazeServer::handle_readable(int fd) {
     }
 
     size_t content_length = 0;
-    size_t cl_pos = buff.find("Content-Length: ");
+    size_t header_pos = 0;
 
-    if (cl_pos != std::string::npos && cl_pos < headers_end) {
-        size_t value_start = cl_pos + 16;
-        size_t value_end = buff.find("\r\n", value_start);
-
-        try {
-            std::string cl_str = buff.substr(value_start, value_end - value_start);
-
-            if (cl_str.empty() || cl_str[0] == '-') {
-                std::cerr << "[Pyro] Invalid Content-Length: negative or empty (fd=" << fd << ")" << std::endl;
-                send_error_response(fd, 400, "Bad Request");
-                close_connection_unlocked(fd);
-                return;
-            }
-
-            long long cl_value = std::stoll(cl_str);
-
-            if (cl_value < 0 || static_cast<unsigned long long>(cl_value) > MAX_REQUEST_BODY_SIZE) {
-                std::cerr << "[Pyro] Content-Length too large: " << cl_value
-                          << " bytes (max: " << MAX_REQUEST_BODY_SIZE << " bytes) for fd=" << fd << std::endl;
-                send_error_response(fd, 413, "Payload Too Large");
-                close_connection_unlocked(fd);
-                return;
-            }
-
-            content_length = static_cast<size_t>(cl_value);
-
-        } catch (const std::invalid_argument& e) {
-            std::cerr << "[Pyro] Invalid Content-Length format (fd=" << fd << "): " << e.what() << std::endl;
-            send_error_response(fd, 400, "Bad Request");
-            close_connection_unlocked(fd);
-            return;
-        } catch (const std::out_of_range& e) {
-            std::cerr << "[Pyro] Content-Length out of range (fd=" << fd << "): " << e.what() << std::endl;
-            send_error_response(fd, 400, "Bad Request");
-            close_connection_unlocked(fd);
-            return;
+    while (header_pos < headers_end) {
+        size_t line_end = buff.find("\r\n", header_pos);
+        if (line_end == std::string::npos || line_end > headers_end) {
+            line_end = headers_end;
         }
+
+        std::string line = buff.substr(header_pos, line_end - header_pos);
+        size_t colon_pos = line.find(':');
+
+        if (colon_pos != std::string::npos) {
+            std::string name = line.substr(0, colon_pos);
+            while (!name.empty() && std::isspace(static_cast<unsigned char>(name.back()))) {
+                name.pop_back();
+            }
+
+            std::string value = line.substr(colon_pos + 1);
+            while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
+                value.erase(value.begin());
+            }
+            while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) {
+                value.pop_back();
+            }
+
+            std::transform(name.begin(), name.end(), name.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+            if (name == "content-length") {
+                try {
+                    if (value.empty() || value[0] == '-') {
+                        std::cerr << "[Pyro] Invalid Content-Length: negative or empty (fd=" << fd << ")" << std::endl;
+                        send_error_response(fd, 400, "Bad Request");
+                        close_connection_unlocked(fd);
+                        return;
+                    }
+
+                    long long cl_value = std::stoll(value);
+
+                    if (cl_value < 0 || static_cast<unsigned long long>(cl_value) > MAX_REQUEST_BODY_SIZE) {
+                        std::cerr << "[Pyro] Content-Length too large: " << cl_value
+                                  << " bytes (max: " << MAX_REQUEST_BODY_SIZE << " bytes) for fd=" << fd << std::endl;
+                        send_error_response(fd, 413, "Payload Too Large");
+                        close_connection_unlocked(fd);
+                        return;
+                    }
+
+                    content_length = static_cast<size_t>(cl_value);
+                } catch (const std::invalid_argument& e) {
+                    std::cerr << "[Pyro] Invalid Content-Length format (fd=" << fd << "): " << e.what() << std::endl;
+                    send_error_response(fd, 400, "Bad Request");
+                    close_connection_unlocked(fd);
+                    return;
+                } catch (const std::out_of_range& e) {
+                    std::cerr << "[Pyro] Content-Length out of range (fd=" << fd << "): " << e.what() << std::endl;
+                    send_error_response(fd, 400, "Bad Request");
+                    close_connection_unlocked(fd);
+                    return;
+                }
+
+                break;
+            }
+        }
+
+        if (line_end == headers_end) {
+            break;
+        }
+        header_pos = line_end + 2;
     }
 
     size_t required_bytes = headers_end + 4 + content_length;
