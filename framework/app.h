@@ -15,6 +15,8 @@ private:
     std::unique_ptr<ThreadPool> pool_;
     int server_fd_ = -1;
     std::atomic<bool> running_{true};
+    std::atomic<size_t> active_connections_{0};
+    const size_t max_connections_ = 10000;
     std::vector<Middleware> middleware_;
 
     void setup_signal_handlers();

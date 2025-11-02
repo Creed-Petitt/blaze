@@ -21,7 +21,10 @@ App::App() {
 
     // Initialize thread pool
     size_t num_threads = std::thread::hardware_concurrency();
-    pool_ = std::make_unique<ThreadPool>(num_threads);
+    if (num_threads == 0) {
+        num_threads = 4;
+    }
+    pool_ = std::make_unique<ThreadPool>(num_threads, 1024);
 
     std::cout << "[App] Thread pool initialized with " << num_threads << " workers\n";
 }
@@ -123,6 +126,8 @@ void App::listen(int port, size_t num_threads) {
     signal(SIGINT, App::signal_handler);
     signal(SIGTERM, App::signal_handler);
 
+    active_connections_.store(0, std::memory_order_relaxed);
+
     // Default to number of CPU cores
     if (num_threads == 0) {
         num_threads = std::thread::hardware_concurrency();
@@ -142,7 +147,8 @@ void App::listen(int port, size_t num_threads) {
     workers.reserve(num_threads);
 
     for (size_t i = 0; i < num_threads; ++i) {
-        auto server = std::make_shared<BlazeServer>(port, this, listen_fd, false);
+        auto server = std::make_shared<BlazeServer>(port, this, listen_fd, false,
+                                                    &active_connections_, max_connections_);
         servers.emplace_back(server);
         workers.emplace_back([server, i]() {
             std::cout << "[App] Event loop thread " << i << " starting\n";
