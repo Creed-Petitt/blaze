@@ -17,17 +17,17 @@
 
 class App;
 
-class BlazeServer {
+class HttpServer {
 
 public:
-    BlazeServer(int port,
+    HttpServer(int port,
                 App* app,
                 int server_fd = -1,
                 bool owns_listener = true,
                 std::atomic<size_t>* active_connections = nullptr,
                 size_t max_connections = MAX_CONNECTIONS);
 
-    ~BlazeServer();
+    ~HttpServer();
 
     void run();
 

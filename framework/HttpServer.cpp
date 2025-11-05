@@ -1,4 +1,4 @@
-#include "BlazeServer.h"
+#include "HttpServer.h"
 #include "app.h"
 #include "request.h"
 #include "response.h"
@@ -16,7 +16,7 @@ namespace {
 }
 
 
-int BlazeServer::create_listening_socket(int port) {
+int HttpServer::create_listening_socket(int port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         throw std::runtime_error("failed to create server socket");
@@ -55,7 +55,7 @@ int BlazeServer::create_listening_socket(int port) {
     return fd;
 }
 
-BlazeServer::BlazeServer(int port,
+HttpServer::HttpServer(int port,
                          App* app,
                          int existing_server_fd,
                          bool owns_listener,
@@ -85,11 +85,11 @@ BlazeServer::BlazeServer(int port,
     setup_epoll();
 }
 
-BlazeServer::~BlazeServer() {
+HttpServer::~HttpServer() {
     shutdown();
 }
 
-void BlazeServer::run() {
+void HttpServer::run() {
     running.store(true, std::memory_order_release);
     epoll_event events[MAX_EVENTS];
 
@@ -147,7 +147,7 @@ void BlazeServer::run() {
     std::cout << "[Pyro] Event loop stopped" << std::endl;
 }
 
-void BlazeServer::shutdown() {
+void HttpServer::shutdown() {
     bool expected = false;
     if (!shutdown_started_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
         return;
@@ -174,11 +174,11 @@ void BlazeServer::shutdown() {
     }
 }
 
-void BlazeServer::stop() {
+void HttpServer::stop() {
     running.store(false, std::memory_order_release);
 }
 
-void BlazeServer::make_socket_non_blocking(int fd) {
+void HttpServer::make_socket_non_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0) {
         throw std::runtime_error("could not get the file descriptor flag");
@@ -189,7 +189,7 @@ void BlazeServer::make_socket_non_blocking(int fd) {
     }
 }
 
-void BlazeServer::epoll_add(int fd, uint32_t events) {
+void HttpServer::epoll_add(int fd, uint32_t events) {
     epoll_event ev = {};
     ev.events = events;
     ev.data.fd = fd;
@@ -199,7 +199,7 @@ void BlazeServer::epoll_add(int fd, uint32_t events) {
     }
 }
 
-void BlazeServer::epoll_modify(int fd, uint32_t events) {
+void HttpServer::epoll_modify(int fd, uint32_t events) {
     epoll_event ev = {};
     ev.events = events;
     ev.data.fd = fd;
@@ -209,14 +209,14 @@ void BlazeServer::epoll_modify(int fd, uint32_t events) {
     }
 }
 
-void BlazeServer::epoll_remove(int fd) {
+void HttpServer::epoll_remove(int fd) {
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) < 0) {
         std::cerr << "[Pyro] epoll_remove failed for fd " << fd << std::endl;
     }
 }
 
-void BlazeServer::setup_epoll() {
+void HttpServer::setup_epoll() {
     epoll_fd = epoll_create1(0);
     if (epoll_fd < 0) {
         throw std::runtime_error("epoll_create1 failed");
@@ -232,12 +232,12 @@ void BlazeServer::setup_epoll() {
     std::cout << "[Pyro] Epoll initialized (fd=" << epoll_fd << ")" << std::endl;
 }
 
-void BlazeServer::close_connection(int fd) {
+void HttpServer::close_connection(int fd) {
     // std::cout << "[Pyro] Closing connection: fd=" << fd << std::endl;
     close_connection_unlocked(fd);
 }
 
-void BlazeServer::close_connection_unlocked(int fd) {
+void HttpServer::close_connection_unlocked(int fd) {
     auto it = connections.find(fd);
     if (it == connections.end()) {
         return;
@@ -251,7 +251,7 @@ void BlazeServer::close_connection_unlocked(int fd) {
     }
 }
 
-void BlazeServer::handle_new_connection() {
+void HttpServer::handle_new_connection() {
     while (true) {
         sockaddr_in client_address;
         socklen_t client_len = sizeof(client_address);
@@ -302,7 +302,7 @@ void BlazeServer::handle_new_connection() {
     }
 }
 
-void BlazeServer::handle_readable(int fd) {
+void HttpServer::handle_readable(int fd) {
     auto it = connections.find(fd);
     if (it == connections.end()) {
         return;
@@ -497,7 +497,7 @@ void BlazeServer::handle_readable(int fd) {
     }
 }
 
-void BlazeServer::handle_writable(int fd) {
+void HttpServer::handle_writable(int fd) {
     auto it = connections.find(fd);
     if (it == connections.end()) {
         return;
@@ -546,7 +546,7 @@ void BlazeServer::handle_writable(int fd) {
     }
 }
 
-void BlazeServer::process_response_queue() {
+void HttpServer::process_response_queue() {
     std::lock_guard lock(response_queue_mutex_);
     while (!response_queue_.empty()) {
         auto resp = std::move(response_queue_.front());
@@ -562,7 +562,7 @@ void BlazeServer::process_response_queue() {
     }
 }
 
-void BlazeServer::cleanup_stale_connections(int timeout_seconds) {
+void HttpServer::cleanup_stale_connections(int timeout_seconds) {
     time_t now = time(nullptr);
     std::vector<int> to_close;
 
@@ -577,16 +577,13 @@ void BlazeServer::cleanup_stale_connections(int timeout_seconds) {
     }
 }
 
-void BlazeServer::send_error_response(int fd, int status_code, const std::string& message) {
+void HttpServer::send_error_response(int fd, int status_code, const std::string& message) {
     Response res;
     res.status(status_code).json({{"error", message}});
-    std::string response_str = res.build_response();
 
-    ssize_t sent = 0;
-    size_t total = response_str.size();
-    while (sent < static_cast<ssize_t>(total)) {
-        ssize_t n = write(fd, response_str.c_str() + sent, total - sent);
-        if (n <= 0) break;
-        sent += n;
+    auto it = connections.find(fd);
+    if (it != connections.end()) {
+        it->second.write_buffer = res.build_response();
+        epoll_modify(fd, EPOLLOUT | EPOLLET);
     }
 }
