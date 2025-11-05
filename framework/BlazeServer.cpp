@@ -112,6 +112,9 @@ void BlazeServer::run() {
             break;
         }
 
+        // Process response queue FIRST before handling new events
+        process_response_queue();
+
         for (int i = 0; i < n; i++) {
             int fd = events[i].data.fd;
             uint32_t evt = events[i].events;
@@ -133,7 +136,6 @@ void BlazeServer::run() {
                 }
             }
         }
-        process_response_queue();
 
         time_t now = time(nullptr);
         if (now - last_cleanup > 60) {
@@ -155,12 +157,9 @@ void BlazeServer::shutdown() {
     std::cout << "[Pyro] Shutting down server..." << std::endl;
 
     // Close all client connections
-    {
-        std::lock_guard<std::mutex> lock(connections_mutex_);
-        while (!connections.empty()) {
-            int fd = connections.begin()->first;
-            close_connection_unlocked(fd);
-        }
+    while (!connections.empty()) {
+        int fd = connections.begin()->first;
+        close_connection_unlocked(fd);
     }
 
     // Close epoll and server socket
@@ -235,8 +234,6 @@ void BlazeServer::setup_epoll() {
 
 void BlazeServer::close_connection(int fd) {
     // std::cout << "[Pyro] Closing connection: fd=" << fd << std::endl;
-
-    std::lock_guard<std::mutex> lock(connections_mutex_);
     close_connection_unlocked(fd);
 }
 
@@ -291,26 +288,21 @@ void BlazeServer::handle_new_connection() {
             continue;
         }
 
-        epoll_add(client_fd, EPOLLIN);
+        epoll_add(client_fd, EPOLLIN | EPOLLET);
 
         char ip_str[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &client_address.sin_addr, ip_str, INET_ADDRSTRLEN);
 
-        {
-            std::lock_guard<std::mutex> lock(connections_mutex_);
-            connections[client_fd] = Connection{};
-            connections[client_fd].fd = client_fd;
-            connections[client_fd].client_ip = ip_str;
-            connections[client_fd].last_activity = time(nullptr);
-        }
+        connections[client_fd] = Connection{};
+        connections[client_fd].fd = client_fd;
+        connections[client_fd].client_ip = ip_str;
+        connections[client_fd].last_activity = time(nullptr);
 
         // std::cout << "[Pyro] New connection: fd=" << client_fd << std::endl;
     }
 }
 
 void BlazeServer::handle_readable(int fd) {
-    std::unique_lock<std::mutex> lock(connections_mutex_);
-
     auto it = connections.find(fd);
     if (it == connections.end()) {
         return;
@@ -320,9 +312,7 @@ void BlazeServer::handle_readable(int fd) {
     char buffer[4096];
 
     while (true) {
-        lock.unlock();
         int bytes = read(fd, buffer, sizeof(buffer));
-        lock.lock();
 
         if (bytes < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -350,20 +340,22 @@ void BlazeServer::handle_readable(int fd) {
         }
     }
 
-    time_t now = time(nullptr);
-    if (now - conn.last_activity > 30) {
-        send_error_response(fd, 408, "Request Timeout");
-        close_connection_unlocked(fd);
-        return;
-    }
-
     std::string& buff = conn.read_buffer;
 
     size_t headers_end = buff.find("\r\n\r\n");
     if (headers_end == std::string::npos) {
+        // Only timeout incomplete requests waiting for headers
+        time_t now = time(nullptr);
+        if (now - conn.last_activity > 30) {
+            send_error_response(fd, 408, "Request Timeout");
+            close_connection_unlocked(fd);
+            return;
+        }
+
         if (buff.size() > 8192) {
             send_error_response(fd, 400, "Bad Request");
             close_connection_unlocked(fd);
+            return;
         }
         return;
     }
@@ -479,35 +471,33 @@ void BlazeServer::handle_readable(int fd) {
     bool client_keep_alive = keep_alive;
     std::string client_ip = conn.client_ip;
 
-    {
-        std::lock_guard<std::mutex> queue_lock(response_queue_mutex_);
-        if (response_queue_.size() >= 900) {
-            send_error_response(fd, 503, "Server Busy");
-            close_connection_unlocked(fd);
-            return;
-        }
-    }
-
-    lock.unlock();
-    app_->dispatch_async([this, client_fd, req, client_keep_alive, client_ip]() {
+    bool dispatched = app_->dispatch_async([this, client_fd, req, client_keep_alive, client_ip]() {
         auto response = std::make_unique<std::string>(
             app_->handle_request(const_cast<Request&>(req), client_ip, client_keep_alive));
         std::lock_guard lock(response_queue_mutex_);
-        if (response_queue_.size() < 1000) {
-            response_queue_.push(PendingResponse{client_fd, std::move(response)});
-        }
+        response_queue_.push(PendingResponse{client_fd, std::move(response)});
     });
-    lock.lock();
+
+    if (!dispatched) {
+        // Thread pool queue is full - send 503 and close connection
+        send_error_response(fd, 503, "Service Unavailable");
+        close_connection_unlocked(fd);
+        return;
+    }
 
     auto it_after = connections.find(fd);
     if (it_after != connections.end()) {
-        it_after->second.read_buffer.clear();
+        // Only erase the bytes we consumed, keep any pipelined requests
+        // DON'T process them now - wait until we send the response for THIS request first
+        if (required_bytes < it_after->second.read_buffer.size()) {
+            it_after->second.read_buffer.erase(0, required_bytes);
+        } else {
+            it_after->second.read_buffer.clear();
+        }
     }
 }
 
 void BlazeServer::handle_writable(int fd) {
-    std::unique_lock<std::mutex> lock(connections_mutex_);
-
     auto it = connections.find(fd);
     if (it == connections.end()) {
         return;
@@ -515,61 +505,57 @@ void BlazeServer::handle_writable(int fd) {
 
     std::string& buf = it->second.write_buffer;
 
-    if (buf.empty()) {
-        return;
-    }
+    // With EPOLLET, must write until EAGAIN or buffer is empty
+    while (!buf.empty()) {
+        ssize_t bytes = write(fd, buf.c_str(), buf.size());
 
-    lock.unlock();
-    ssize_t bytes = write(fd, buf.c_str(), buf.size());
-    lock.lock();
-
-    if (bytes < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return;
-        }
-        close_connection_unlocked(fd);
-        return;
-    }
-
-    buf.erase(0, bytes);
-
-    if (buf.empty()) {
-        auto it_after = connections.find(fd);
-        if (it_after == connections.end()) {
-            return;
-        }
-
-        if (it_after->second.keep_alive) {
-            it_after->second.read_buffer.clear();
-            it_after->second.write_buffer.clear();
-            it_after->second.last_activity = time(nullptr);
-            epoll_modify(fd, EPOLLIN);
-            return;
-        }
-        else {
+        if (bytes < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // Socket buffer full, will get notified when writable again
+                return;
+            }
             close_connection_unlocked(fd);
             return;
         }
+
+        buf.erase(0, bytes);
+    }
+
+    // All data written
+    auto it_after = connections.find(fd);
+    if (it_after == connections.end()) {
+        return;
+    }
+
+    if (it_after->second.keep_alive) {
+        // Don't clear read_buffer - may contain partial next request or pipelined data
+        it_after->second.write_buffer.clear();
+        it_after->second.last_activity = time(nullptr);
+        epoll_modify(fd, EPOLLIN | EPOLLET);
+
+        // If there's data in read_buffer, process it now
+        if (!it_after->second.read_buffer.empty()) {
+            handle_readable(fd);
+            return;
+        }
+        return;
+    }
+    else {
+        close_connection_unlocked(fd);
+        return;
     }
 }
 
 void BlazeServer::process_response_queue() {
-    while (true) {
-        PendingResponse resp;
-        {
-            std::lock_guard lock(response_queue_mutex_);
-            if (response_queue_.empty()) break;
-            resp = std::move(response_queue_.front());
-            response_queue_.pop();
-        }
+    std::lock_guard lock(response_queue_mutex_);
+    while (!response_queue_.empty()) {
+        auto resp = std::move(response_queue_.front());
+        response_queue_.pop();
 
-        {
-            std::lock_guard<std::mutex> lock(connections_mutex_);
-            auto it = connections.find(resp.fd);
-            if (it != connections.end() && resp.response) {
-                it->second.write_buffer = std::move(*resp.response);
-                epoll_modify(resp.fd, EPOLLOUT);
-            }
+        auto it = connections.find(resp.fd);
+        if (it != connections.end() && resp.response) {
+            it->second.write_buffer = std::move(*resp.response);
+            epoll_modify(resp.fd, EPOLLOUT | EPOLLET);
         }
 
         // std::cout << "[Pyro] Response ready to send on fd=" << resp.fd << std::endl;
@@ -577,7 +563,6 @@ void BlazeServer::process_response_queue() {
 }
 
 void BlazeServer::cleanup_stale_connections(int timeout_seconds) {
-    std::lock_guard<std::mutex> lock(connections_mutex_);
     time_t now = time(nullptr);
     std::vector<int> to_close;
 

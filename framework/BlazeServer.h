@@ -66,7 +66,6 @@ private:
     };
 
     std::unordered_map<int, Connection> connections;
-    std::mutex connections_mutex_;  // Protects connections map access
     std::queue<PendingResponse> response_queue_;
     std::mutex response_queue_mutex_;
 
