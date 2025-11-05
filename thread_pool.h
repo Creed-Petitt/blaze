@@ -50,18 +50,17 @@ public:
         }
     }
 
-    void enqueue(std::function<void()> task) {
+    // Non-blocking enqueue - returns false if queue is full
+    bool try_enqueue(std::function<void()> task) {
         std::unique_lock<std::mutex> lock(queue_mutex);
-        cv_space.wait(lock, [this] {
-            return stop || tasks.size() < max_queue_size_;
-        });
 
-        if (stop) {
-            return;
+        if (stop || tasks.size() >= max_queue_size_) {
+            return false;
         }
 
         tasks.push(std::move(task));
         cv.notify_one();
+        return true;
     }
 
     ~ThreadPool() {
