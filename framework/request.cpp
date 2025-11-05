@@ -108,8 +108,24 @@ Request::Request(std::string& raw_http) {
         }
     }
 
-    if (headers_end + 4 < raw_http.size()) {
-        body = raw_http.substr(headers_end + 4);
+    size_t body_start = headers_end + 4;
+    if (body_start < raw_http.size()) {
+        size_t content_length = 0;
+        auto cl_it = headers.find("content-length");
+        if (cl_it != headers.end()) {
+            try {
+                content_length = std::stoull(cl_it->second);
+            } catch (...) {
+                // Invalid Content-Length, assume no body
+                content_length = 0;
+            }
+        }
+
+        if (content_length > 0) {
+            size_t available = raw_http.size() - body_start;
+            size_t to_copy = std::min(content_length, available);
+            body = raw_http.substr(body_start, to_copy);
+        }
     }
 }
 
