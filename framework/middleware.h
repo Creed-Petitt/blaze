@@ -16,6 +16,31 @@ namespace middleware {
         return str.compare(str.length() - suffix.length(), suffix.length(), suffix) == 0;
     }
 
+    inline int hex_value(char c) {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+        return -1;
+    }
+
+    inline std::string url_decode(const std::string& input) {
+        std::string output;
+        output.reserve(input.size());
+        for (size_t i = 0; i < input.size(); ++i) {
+            if (input[i] == '%' && i + 2 < input.size()) {
+                int hi = hex_value(input[i + 1]);
+                int lo = hex_value(input[i + 2]);
+                if (hi >= 0 && lo >= 0) {
+                    output.push_back(static_cast<char>((hi << 4) | lo));
+                    i += 2;
+                    continue;
+                }
+            }
+            output.push_back(input[i]);
+        }
+        return output;
+    }
+
     inline Middleware cors() {
         return [](Request& req, Response& res, auto next) {
             res.header("Access-Control-Allow-Origin", "*");
@@ -55,7 +80,9 @@ namespace middleware {
                 return;
             }
 
-            if (req.path.find("..") != std::string::npos) {
+            std::string decoded_path = url_decode(req.path);
+
+            if (decoded_path.find("..") != std::string::npos || decoded_path.find('\\') != std::string::npos) {
                 res.status(403).json({
                     {"error", "Forbidden"},
                     {"message", "Path traversal detected"}
@@ -63,7 +90,7 @@ namespace middleware {
                 return;
             }
 
-            std::string file_path = directory + req.path;
+            std::string file_path = directory + decoded_path;
 
             struct stat stat_buf;
             if (stat(file_path.c_str(), &stat_buf) != 0 || !S_ISREG(stat_buf.st_mode)) {
