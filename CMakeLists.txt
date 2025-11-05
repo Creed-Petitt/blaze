@@ -17,7 +17,7 @@ add_executable(http_server
     framework/router.cpp
     framework/app.h
     framework/app.cpp
-    framework/BlazeServer.h
-    framework/BlazeServer.cpp
+        framework/HttpServer.h
+        framework/HttpServer.cpp
 )
 
