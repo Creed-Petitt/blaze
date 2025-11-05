@@ -12,7 +12,7 @@
 #include <utility>
 #include <stdexcept>
 
-#include "BlazeServer.h"
+#include "HttpServer.h"
 
 static App* g_app_instance = nullptr;
 
@@ -136,18 +136,18 @@ void App::listen(int port, size_t num_threads) {
 
     std::cout << "[App] Starting on port " << port << " with " << num_threads << " event loop threads\n";
 
-    int listen_fd = BlazeServer::create_listening_socket(port);
+    int listen_fd = HttpServer::create_listening_socket(port);
     server_fd_ = listen_fd;
 
     running_.store(true, std::memory_order_release);
 
-    std::vector<std::shared_ptr<BlazeServer>> servers;
+    std::vector<std::shared_ptr<HttpServer>> servers;
     servers.reserve(num_threads);
     std::vector<std::thread> workers;
     workers.reserve(num_threads);
 
     for (size_t i = 0; i < num_threads; ++i) {
-        auto server = std::make_shared<BlazeServer>(port, this, listen_fd, false,
+        auto server = std::make_shared<HttpServer>(port, this, listen_fd, false,
                                                     &active_connections_, max_connections_);
         servers.emplace_back(server);
         workers.emplace_back([server, i]() {
