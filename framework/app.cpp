@@ -184,6 +184,6 @@ RouteGroup App::group(const std::string& prefix) {
     return RouteGroup(router_, prefix);
 }
 
-void App::dispatch_async(std::function<void()> task) const {
-    pool_->enqueue(std::move(task));
+bool App::dispatch_async(std::function<void()> task) const {
+    return pool_->try_enqueue(std::move(task));
 }

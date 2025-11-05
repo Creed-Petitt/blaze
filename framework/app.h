@@ -19,7 +19,6 @@ private:
     const size_t max_connections_ = 10000;
     std::vector<Middleware> middleware_;
 
-    void setup_signal_handlers();
     static void signal_handler(int sig);
 
 public:
@@ -41,7 +40,7 @@ public:
 
     Logger& get_logger();
 
-    void dispatch_async(std::function<void()> task) const;
+    bool dispatch_async(std::function<void()> task) const;
 
     std::string handle_request(Request& req, const std::string& client_ip, bool keep_alive);
 };
