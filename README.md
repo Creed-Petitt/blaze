@@ -69,7 +69,7 @@ int main() {
 
 ## How It Works
 
-Blaze++ uses a **multi-reactor architecture** for high concurrency:
+Uses **multi-reactor architecture** for high concurrency:
 
 1. **Multiple Event Loops**: Each CPU core runs its own independent `epoll` event loop in a dedicated thread
 2. **Load Balancing**: The kernel distributes incoming connections across event loops using `SO_REUSEPORT`
@@ -124,7 +124,7 @@ docker-compose up --build
 
 ### Manual Docker Build
 ```bash
-docker build -t blaze-server .
+docker build -t http-server .
 docker run -p 8080:8080 http-server
 ```
 
@@ -136,7 +136,7 @@ docker run -p 8080:8080 http-server
 http_server/
 ├── framework/
 │   ├── app.h/.cpp           # Application, routing, middleware
-│   ├── BlazeServer.h/.cpp   # Multi-reactor event loops (epoll)
+│   ├── HttpServer.h/.cpp   # Multi-reactor event loops (epoll)
 │   ├── router.h/.cpp        # Route matching and parameters
 │   ├── request.h/.cpp       # HTTP request parsing
 │   ├── response.h/.cpp      # HTTP response building
