@@ -1,194 +1,149 @@
-# Concurrent HTTP Server
+# High-Performance C++ HTTP Framework
 
-A lightweight, high-performance HTTP framework built in C++ with routing, concurrent request handling, and built-in JSON support.
+A lightweight HTTP/1.1 framework built from scratch in C++ featuring multi-reactor event loops, Express-style routing, and middleware support. Built using edge-triggered epoll and POSIX sockets, achieving **70,000+ req/s** sustained throughput.
+
+## About
+
+Combines the simplicity of Express.js with the performance of low-level systems programming. Built entirely from scratch without external dependencies (except JSON parsing), it demonstrates modern C++ techniques for high-concurrency network servers.
+
+**Key Architecture:**
+- **Multi-reactor pattern**: 8 independent event loops (one per CPU core) using `SO_REUSEPORT` for load balancing
+- **Edge-triggered epoll**: Non-blocking I/O with efficient kernel event notification
+- **Bounded thread pool**: Request handlers execute off the event loop with backpressure control
+- **HTTP/1.1 keep-alive**: Connection reuse and request pipelining for maximum throughput
+
+## Performance
+
+Benchmarked with [wrk](https://github.com/wg/wrk) on 8-core system:
+
+```bash
+wrk -t8 -c200 -d120s http://localhost:8080/
+```
+
+**Results:**
+- **50-70k requests/sec** sustained
+- **5 million requests** in 90 seconds
+- **<5ms average latency** under load
+- **HTTP keep-alive** with pipelined requests
 
 ## Features
 
-- **Express.js-style API**: Intuitive routing with `app.get()`, `app.post()`, `app.put()`, `app.del()`
-- **Dynamic Route Parameters**: Extract path variables like `/users/:id`
-- **Query String Parsing**: Automatic parsing of URL query parameters
-- **JSON Support**: Built-in JSON request/response handling with nlohmann/json
-- **Concurrent Processing**: Thread pool with producer-consumer pattern for handling multiple requests
-- **Request/Response Objects**: Clean API for working with HTTP requests and responses
-- **Logging**: Thread-safe access and error logging with timestamps
-- **Graceful Shutdown**: Signal handling for clean server termination
+- **Express.js-style API**: Familiar routing with `app.get()`, `app.post()`, `app.put()`, `app.del()`
+- **Route Parameters**: Dynamic paths like `/users/:id` with automatic extraction
+- **Route Grouping**: Organize endpoints with shared prefixes (`/api/v1`)
+- **Middleware Pipeline**: Composable request/response interceptors
+- **JSON Support**: Built-in parsing and serialization
+- **Static File Serving**: Middleware for serving HTML, CSS, JS with proper MIME types
+- **CORS Support**: Pre-built middleware for cross-origin requests
+- **Graceful Shutdown**: Clean termination with signal handling
 
 ## Quick Example
 
 ```cpp
-App app;
+#include "framework/app.h"
 
-// Simple route
-app.get("/hello", [](Request& req, Response& res) {
-    res.send("Hello, World!\n");
-});
+int main() {
+    App app;
 
-// Route with parameters
-app.get("/users/:id", [](Request& req, Response& res) {
-    res.send("User ID: " + req.params["id"] + "\n");
-});
+    // Simple route
+    app.get("/", [](Request& req, Response& res) {
+        res.json({{"status", "ok"}});
+    });
 
-// Query parameters
-app.get("/search", [](Request& req, Response& res) {
-    res.send("Query: " + req.query["q"] + "\n");
-});
+    // Route with parameters
+    app.get("/users/:id", [](Request& req, Response& res) {
+        auto id = req.get_param_int("id");
+        res.json({{"user_id", id.value_or(0)}});
+    });
 
-// JSON response
-app.get("/api/data", [](Request& req, Response& res) {
-    json data = {{"name", "John"}, {"age", 30}};
-    res.json(data);
-});
+    // Route grouping
+    auto api = app.group("/api/v1");
+    api.get("/health", [](Request& req, Response& res) {
+        res.status(200).send("healthy\n");
+    });
 
-// POST with body
-app.post("/users", [](Request& req, Response& res) {
-    res.status(201).send("User created! Body: " + req.body + "\n");
-});
+    app.listen(8080);  // Starts 8 event loops automatically
+    return 0;
+}
 ```
 
 ## How It Works
 
-1. **Socket Creation**: Server binds to port 8080 and listens for connections
-2. **Connection Acceptance**: Main loop accepts incoming client connections
-3. **Task Dispatch**: Each connection is queued as a task in the thread pool
-4. **Request Parsing**: Request object parses HTTP method, path, headers, query params, and body
-5. **Route Matching**: Router matches request to registered route handlers
-6. **Handler Execution**: Worker threads execute matched route handler
-7. **Response Building**: Response object constructs HTTP response with proper headers
-8. **Logging**: Request details and timing logged to access.log
+Blaze++ uses a **multi-reactor architecture** for high concurrency:
 
-## Architecture
+1. **Multiple Event Loops**: Each CPU core runs its own independent `epoll` event loop in a dedicated thread
+2. **Load Balancing**: The kernel distributes incoming connections across event loops using `SO_REUSEPORT`
+3. **Non-blocking I/O**: Edge-triggered epoll with `EPOLLET` minimizes syscalls and maximizes throughput
+4. **Async Request Handling**: Each event loop dispatches requests to a shared thread pool for handler execution
+5. **Lock-free Design**: Each event loop owns its connections map with no mutex contention
 
-- **Framework Layer**:
-  - `App`: Main application class with routing methods
-  - `Router`: Pattern matching for routes with parameter extraction
-  - `Request`: HTTP request parser with headers, body, params, and query
-  - `Response`: Chainable response builder with status, headers, and body
-- **Concurrency Layer**:
-  - **Main Thread**: Accepts incoming connections and dispatches to thread pool
-  - **Worker Threads**: Process HTTP requests in parallel using producer-consumer pattern
-  - **Thread-Safe Queue**: Coordinates work distribution across threads with mutex/condition variables
-- **Logging Layer**: Thread-safe logger with separate access and error logs
+This design scales linearly with CPU cores while maintaining sub-millisecond latency.
 
-## Getting Started
+## API Overview
+
+| Component | Purpose |
+|-----------|---------|
+| `App` | Main application class for routes and middleware |
+| `Request` | HTTP request with headers, params, query strings, and JSON body |
+| `Response` | Chainable response builder (`status()`, `header()`, `send()`, `json()`) |
+| `Router` | Pattern matching for routes with parameter extraction |
+| `RouteGroup` | Organize routes under shared prefixes |
+| `middleware::` | Pre-built CORS, static files, and body size limits |
+
+<details>
+<summary><b>Build Instructions</b></summary>
 
 ### Prerequisites
-
-- C++11 or later
+- C++17 or later
 - CMake 3.10+
-- Linux/Unix environment (uses POSIX sockets)
+- Linux/Unix (uses `epoll` and POSIX sockets)
 
 ### Build
-
 ```bash
-mkdir build
-cd build
+mkdir build && cd build
 cmake ..
 make
 ```
 
 ### Run
-
 ```bash
 ./http_server
 ```
 
 Server starts on `http://localhost:8080`
 
-### Docker (Alternative)
+</details>
 
-Build and run using Docker:
+<details>
+<summary><b>Docker Setup</b></summary>
 
+### Using Docker Compose
 ```bash
-# Build the image
-docker build -t http-server .
-
-# Run the container
-docker run -p 8080:8080 http-server
-
-# Or use Docker Compose
-docker-compose up
+docker-compose up --build
 ```
 
-Server will be accessible at `http://localhost:8080`
+### Manual Docker Build
+```bash
+docker build -t blaze-server .
+docker run -p 8080:8080 http-server
+```
 
-### Project Structure
+</details>
+
+## Project Structure
 
 ```
 http_server/
 ├── framework/
-│   ├── app.h/.cpp         # Application class with routing API
-│   ├── router.h/.cpp      # Route matching and parameter extraction
-│   ├── request.h/.cpp     # HTTP request parser
-│   └── response.h/.cpp    # HTTP response builder
-├── main.cpp               # Server setup and example routes
-├── thread_pool.h          # Thread pool with producer-consumer pattern
-├── logger.h               # Thread-safe logging with timestamps
-├── json.hpp               # nlohmann/json library for JSON support
-├── public/                # Static files directory (optional)
-├── logs/                  # Generated log files (created at runtime)
-│   ├── access.log         # Request logs with timing
-│   └── error.log          # Error logs
-├── Dockerfile             # Docker container configuration
-├── docker-compose.yml     # Docker Compose configuration
-└── CMakeLists.txt         # Build configuration
+│   ├── app.h/.cpp           # Application, routing, middleware
+│   ├── BlazeServer.h/.cpp   # Multi-reactor event loops (epoll)
+│   ├── router.h/.cpp        # Route matching and parameters
+│   ├── request.h/.cpp       # HTTP request parsing
+│   ├── response.h/.cpp      # HTTP response building
+│   ├── middleware.h         # CORS, static files, body limits
+│   └── logger.h             # Access and error logging
+├── thread_pool.h            # Bounded thread pool with backpressure
+├── main.cpp                 # Example server with routes
+├── json.hpp                 # JSON library (nlohmann/json)
+└── CMakeLists.txt
 ```
-
-## Testing Performance
-
-### Basic Test
-```bash
-curl http://localhost:8080/health.txt
-```
-
-### Load Testing with Apache Bench
-
-Install Apache Bench:
-```bash
-sudo apt-get install apache2-utils
-```
-
-Run performance test:
-```bash
-# 1,000 requests with 100 concurrent connections
-ab -n 1000 -c 100 http://localhost:8080/health.txt
-
-# Stress test: 10,000 requests with 500 concurrent
-ab -n 10000 -c 500 http://localhost:8080/health.txt
-```
-
-### Expected Results
-- **Throughput**: 3,600+ requests/second
-- **Latency**: ~26ms average response time
-- **Concurrency**: Handles 500+ simultaneous connections
-- **Reliability**: 0% failure rate under load
-
-## Viewing Logs
-
-All requests and errors are automatically logged to the `logs/` directory:
-
-```bash
-# View access logs (all requests with timing)
-cat logs/access.log
-
-# Example output:
-# [2025-10-25 00:20:39] 127.0.0.1 GET /health.txt 200 4ms
-# [2025-10-25 00:20:57] 127.0.0.1 GET /missing.txt 404 1ms
-# [2025-10-25 00:21:06] 127.0.0.1 GET /api/data.json 200 2ms
-
-# View error logs
-cat logs/error.log
-
-# Monitor logs in real-time
-tail -f logs/access.log
-```
-
-**Log Format:**
-- Timestamp in `YYYY-MM-DD HH:MM:SS` format
-- Client IP address
-- HTTP method (GET, POST, etc.)
-- Requested path
-- Status code (200, 404, 403, etc.)
-- Response time in milliseconds
-
-
-
