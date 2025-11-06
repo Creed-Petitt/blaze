@@ -50,7 +50,7 @@ int HttpServer::create_listening_socket(int port) {
         throw std::runtime_error("failed to listen");
     }
 
-    std::cout << "[Pyro] Server socket created (non-blocking, fd="
+    std::cout << "Server socket created (non-blocking, fd="
               << fd << ")" << std::endl;
     return fd;
 }
@@ -71,7 +71,7 @@ HttpServer::HttpServer(int port,
       max_connections_(max_connections ? max_connections : MAX_CONNECTIONS),
       app_(app) {
 
-    std::cout << "[Pyro] Initializing event-driven server on port "
+    std::cout << "Initializing event-driven server on port "
                 << port << std::endl;
 
     if (server_fd < 0) {
@@ -93,7 +93,7 @@ void HttpServer::run() {
     running.store(true, std::memory_order_release);
     epoll_event events[MAX_EVENTS];
 
-    std::cout << "[Pyro] Event loop starting..." << std::endl;
+    std::cout << "Event loop starting..." << std::endl;
 
     time_t last_cleanup = time(nullptr);
 
@@ -104,7 +104,7 @@ void HttpServer::run() {
             if (errno == EINTR) {
                 continue;
             }
-            std::cerr << "[Pyro] epoll_wait error: " << strerror(errno) << std::endl;
+            std::cerr << "epoll_wait error: " << strerror(errno) << std::endl;
             break;
         }
 
@@ -130,7 +130,7 @@ void HttpServer::run() {
                     handle_writable(fd);
                 }
             } catch (const std::exception& e) {
-                std::cerr << "[Pyro] Exception in event handler for fd=" << fd << ": " << e.what() << std::endl;
+                std::cerr << "Exception in event handler for fd=" << fd << ": " << e.what() << std::endl;
                 if (fd != server_fd) {
                     close_connection(fd);
                 }
@@ -144,7 +144,7 @@ void HttpServer::run() {
         }
     }
 
-    std::cout << "[Pyro] Event loop stopped" << std::endl;
+    std::cout << "Event loop stopped" << std::endl;
 }
 
 void HttpServer::shutdown() {
@@ -154,7 +154,7 @@ void HttpServer::shutdown() {
     }
 
     running.store(false, std::memory_order_release);
-    std::cout << "[Pyro] Shutting down server..." << std::endl;
+    std::cout << "Shutting down server..." << std::endl;
 
     // Close all client connections
     while (!connections.empty()) {
@@ -195,7 +195,7 @@ void HttpServer::epoll_add(int fd, uint32_t events) {
     ev.data.fd = fd;
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) < 0) {
-        std::cerr << "[Pyro] epoll_add failed for fd " << fd << std::endl;
+        std::cerr << "epoll_add failed for fd " << fd << std::endl;
     }
 }
 
@@ -205,14 +205,14 @@ void HttpServer::epoll_modify(int fd, uint32_t events) {
     ev.data.fd = fd;
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
-        std::cerr << "[Pyro] epoll_modify failed for fd " << fd << std::endl;
+        std::cerr << "epoll_modify failed for fd " << fd << std::endl;
     }
 }
 
 void HttpServer::epoll_remove(int fd) {
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) < 0) {
-        std::cerr << "[Pyro] epoll_remove failed for fd " << fd << std::endl;
+        std::cerr << "epoll_remove failed for fd " << fd << std::endl;
     }
 }
 
@@ -224,16 +224,15 @@ void HttpServer::setup_epoll() {
 
     // Add server socket to epoll (watch for incoming connections)
     uint32_t events = EPOLLIN;
-#ifdef EPOLLEXCLUSIVE
+
     events |= EPOLLEXCLUSIVE;
-#endif
+
     epoll_add(server_fd, events);
 
-    std::cout << "[Pyro] Epoll initialized (fd=" << epoll_fd << ")" << std::endl;
+    std::cout << " Epoll initialized (fd=" << epoll_fd << ")" << std::endl;
 }
 
 void HttpServer::close_connection(int fd) {
-    // std::cout << "[Pyro] Closing connection: fd=" << fd << std::endl;
     close_connection_unlocked(fd);
 }
 
@@ -346,11 +345,6 @@ void HttpServer::handle_readable(int fd) {
     if (headers_end == std::string::npos) {
         // Only timeout incomplete requests waiting for headers
         time_t now = time(nullptr);
-        if (now - conn.last_activity > 30) {
-            send_error_response(fd, 408, "Request Timeout");
-            close_connection_unlocked(fd);
-            return;
-        }
 
         if (buff.size() > 8192) {
             send_error_response(fd, 400, "Bad Request");
@@ -366,75 +360,41 @@ void HttpServer::handle_readable(int fd) {
         return;
     }
 
+    // Simple Content-Length extraction - Request constructor does full header validation
     size_t content_length = 0;
-    size_t header_pos = 0;
+    std::string headers_lower = buff.substr(0, headers_end);
+    std::transform(headers_lower.begin(), headers_lower.end(), headers_lower.begin(), ::tolower);
+    size_t cl_pos = headers_lower.find("content-length:");
 
-    while (header_pos < headers_end) {
-        size_t line_end = buff.find("\r\n", header_pos);
+    if (cl_pos != std::string::npos) {
+        size_t value_start = cl_pos + 15;
+        size_t line_end = buff.find("\r\n", value_start);
         if (line_end == std::string::npos || line_end > headers_end) {
             line_end = headers_end;
         }
 
-        std::string line = buff.substr(header_pos, line_end - header_pos);
-        size_t colon_pos = line.find(':');
+        std::string value = buff.substr(value_start, line_end - value_start);
 
-        if (colon_pos != std::string::npos) {
-            std::string name = line.substr(0, colon_pos);
-            while (!name.empty() && std::isspace(static_cast<unsigned char>(name.back()))) {
-                name.pop_back();
-            }
-
-            std::string value = line.substr(colon_pos + 1);
-            while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
-                value.erase(value.begin());
-            }
-            while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) {
-                value.pop_back();
-            }
-
-            std::transform(name.begin(), name.end(), name.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-
-            if (name == "content-length") {
-                try {
-                    if (value.empty() || value[0] == '-') {
-                        std::cerr << "[Pyro] Invalid Content-Length: negative or empty (fd=" << fd << ")" << std::endl;
-                        send_error_response(fd, 400, "Bad Request");
-                        close_connection_unlocked(fd);
-                        return;
-                    }
-
-                    long long cl_value = std::stoll(value);
-
-                    if (cl_value < 0 || static_cast<unsigned long long>(cl_value) > MAX_REQUEST_BODY_SIZE) {
-                        std::cerr << "[Pyro] Content-Length too large: " << cl_value
-                                  << " bytes (max: " << MAX_REQUEST_BODY_SIZE << " bytes) for fd=" << fd << std::endl;
-                        send_error_response(fd, 413, "Payload Too Large");
-                        close_connection_unlocked(fd);
-                        return;
-                    }
-
-                    content_length = static_cast<size_t>(cl_value);
-                } catch (const std::invalid_argument& e) {
-                    std::cerr << "[Pyro] Invalid Content-Length format (fd=" << fd << "): " << e.what() << std::endl;
-                    send_error_response(fd, 400, "Bad Request");
-                    close_connection_unlocked(fd);
-                    return;
-                } catch (const std::out_of_range& e) {
-                    std::cerr << "[Pyro] Content-Length out of range (fd=" << fd << "): " << e.what() << std::endl;
-                    send_error_response(fd, 400, "Bad Request");
-                    close_connection_unlocked(fd);
-                    return;
-                }
-
-                break;
-            }
+        // Trim whitespace
+        size_t start = value.find_first_not_of(" \t");
+        size_t end = value.find_last_not_of(" \t");
+        if (start != std::string::npos && end != std::string::npos) {
+            value = value.substr(start, end - start + 1);
         }
 
-        if (line_end == headers_end) {
-            break;
+        try {
+            long long cl = std::stoll(value);
+            if (cl < 0 || static_cast<unsigned long long>(cl) > MAX_REQUEST_BODY_SIZE) {
+                send_error_response(fd, 413, "Payload Too Large");
+                close_connection_unlocked(fd);
+                return;
+            }
+            content_length = static_cast<size_t>(cl);
+        } catch (...) {
+            send_error_response(fd, 400, "Bad Request");
+            close_connection_unlocked(fd);
+            return;
         }
-        header_pos = line_end + 2;
     }
 
     size_t required_bytes = headers_end + 4 + content_length;
@@ -536,13 +496,10 @@ void HttpServer::handle_writable(int fd) {
         // If there's data in read_buffer, process it now
         if (!it_after->second.read_buffer.empty()) {
             handle_readable(fd);
-            return;
         }
-        return;
     }
     else {
         close_connection_unlocked(fd);
-        return;
     }
 }
 
@@ -558,7 +515,7 @@ void HttpServer::process_response_queue() {
             epoll_modify(resp.fd, EPOLLOUT | EPOLLET);
         }
 
-        // std::cout << "[Pyro] Response ready to send on fd=" << resp.fd << std::endl;
+        // std::cout << "Response ready to send on fd=" << resp.fd << std::endl;
     }
 }
 
