@@ -1,6 +1,6 @@
-# Hello World - BlazeBlus Example
+# Hello World
 
-The absolute minimum code needed to create a web server with BlazeBlus.
+The absolute minimum code needed to create a web server.
 
 ## Features
 
@@ -38,9 +38,9 @@ Hello, World!
 **GET /json**
 ```json
 {
-  "message": "Hello from BlazeBlus!",
-  "framework": "BlazeBlus",
-  "language": "C++"
+  "message": "Hello, JSON!",
+  "language": "C++",
+  "version": "1.0"
 }
 ```
 
