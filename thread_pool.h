@@ -16,7 +16,6 @@ private:
     std::queue<std::function<void()>> tasks;
     std::mutex queue_mutex;
     std::condition_variable cv;
-    std::condition_variable cv_space;
     bool stop;
     size_t max_queue_size_;
 
@@ -31,17 +30,16 @@ public:
                     std::function<void()> task;
                     {
                         std::unique_lock lock(queue_mutex);
-                         cv.wait(lock, [this] {
-                             return !tasks.empty() || stop; });
+                        cv.wait(lock, [this] {
+                            return !tasks.empty() || stop;
+                        });
 
                         if (stop && tasks.empty()) {
-                            cv_space.notify_all();
                             return;
                         }
 
                         task = std::move(tasks.front());
                         tasks.pop();
-                        cv_space.notify_one();
                     }
                 task();
                 }
@@ -52,7 +50,7 @@ public:
 
     // Non-blocking enqueue - returns false if queue is full
     bool try_enqueue(std::function<void()> task) {
-        std::unique_lock<std::mutex> lock(queue_mutex);
+        std::unique_lock lock(queue_mutex);
 
         if (stop || tasks.size() >= max_queue_size_) {
             return false;
@@ -65,10 +63,9 @@ public:
 
     ~ThreadPool() {
         {
-           std::unique_lock<std::mutex> lock(queue_mutex);
+           std::unique_lock lock(queue_mutex);
             stop = true;
             cv.notify_all();
-            cv_space.notify_all();
         }
         for (std::thread& worker : workers) {
             if (worker.joinable()) {
