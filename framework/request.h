@@ -29,6 +29,15 @@ public:
     bool has_header(const std::string& key) const;
     std::optional<int> get_param_int(const std::string& key) const;
 
+    // Static helper to extract Content-Length before full parsing (shared with HttpServer)
+    static std::optional<size_t> extract_content_length(
+        const std::string& buffer,
+        size_t headers_end,
+        size_t max_size = 100 * 1024 * 1024  // 100 MB default
+    );
+
+private:
+    static size_t parse_content_length_value(const std::string& value);
 };
 
 #endif

@@ -29,6 +29,63 @@ namespace {
     }
 }
 
+// Static helper to parse Content-Length value (shared by both HttpServer and Request constructor)
+size_t Request::parse_content_length_value(const std::string& value) {
+    // Trim whitespace
+    size_t start = value.find_first_not_of(" \t");
+    size_t end = value.find_last_not_of(" \t");
+
+    if (start == std::string::npos || end == std::string::npos) {
+        throw std::invalid_argument("Empty Content-Length value");
+    }
+
+    std::string trimmed = value.substr(start, end - start + 1);
+
+    unsigned long long cl = std::stoull(trimmed);
+
+    return static_cast<size_t>(cl);
+}
+
+std::optional<size_t> Request::extract_content_length(
+    const std::string& buffer,
+    size_t headers_end,
+    size_t max_size
+) {
+
+    std::string headers_lower = buffer.substr(0, headers_end);
+    std::transform(headers_lower.begin(), headers_lower.end(),
+                   headers_lower.begin(), ::tolower);
+
+    size_t cl_pos = headers_lower.find("content-length:");
+    if (cl_pos == std::string::npos) {
+        return 0;  // No Content-Length header
+    }
+
+    // Find the value
+    size_t value_start = cl_pos + 15;  // length of "content-length:"
+    size_t line_end = buffer.find("\r\n", value_start);
+
+    if (line_end == std::string::npos || line_end > headers_end) {
+        line_end = headers_end;
+    }
+
+    std::string value = buffer.substr(value_start, line_end - value_start);
+
+    try {
+        size_t content_length = parse_content_length_value(value);
+
+        // Validate against max size
+        if (content_length > max_size) {
+            return std::nullopt;  // Exceeds max size
+        }
+
+        return content_length;
+
+    } catch (const std::exception&) {
+        return std::nullopt;  // Invalid Content-Length
+    }
+}
+
 Request::Request(std::string& raw_http) {
     size_t request_line_end = raw_http.find("\r\n");
     size_t headers_end = raw_http.find("\r\n\r\n");
@@ -110,18 +167,11 @@ Request::Request(std::string& raw_http) {
 
     size_t body_start = headers_end + 4;
     if (body_start < raw_http.size()) {
-        size_t content_length = 0;
-        auto cl_it = headers.find("content-length");
-        if (cl_it != headers.end()) {
-            try {
-                content_length = std::stoull(cl_it->second);
-            } catch (...) {
-                // Invalid Content-Length, assume no body
-                content_length = 0;
-            }
-        }
+        // Use the same helper HttpServer uses - no duplication!
+        auto content_length_opt = extract_content_length(raw_http, headers_end);
 
-        if (content_length > 0) {
+        if (content_length_opt.has_value() && *content_length_opt > 0) {
+            size_t content_length = *content_length_opt;
             size_t available = raw_http.size() - body_start;
             size_t to_copy = std::min(content_length, available);
             body = raw_http.substr(body_start, to_copy);

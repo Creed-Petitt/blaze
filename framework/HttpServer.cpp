@@ -259,14 +259,14 @@ void HttpServer::handle_new_connection() {
             if (errno == EBADF || errno == EINVAL || errno == ENOTSOCK) {
                 return;
             }
-            std::cerr << "[Pyro] Accept error: " << strerror(errno) << std::endl;
+            std::cerr << "[Server] Accept error: " << strerror(errno) << std::endl;
             break;
         }
 
         size_t current = active_connections_->fetch_add(1, std::memory_order_acq_rel);
         if (current >= max_connections_) {
             active_connections_->fetch_sub(1, std::memory_order_acq_rel);
-            std::cerr << "[Pyro] Max connections (" << max_connections_
+            std::cerr << "[Server] Max connections (" << max_connections_
                       << ") reached, rejecting new connection (fd=" << client_fd << ")" << std::endl;
             close(client_fd);
             continue;
@@ -275,7 +275,7 @@ void HttpServer::handle_new_connection() {
         try {
             make_socket_non_blocking(client_fd);
         } catch (const std::exception& e) {
-            std::cerr << "[Pyro] Failed to set non-blocking mode for fd=" << client_fd
+            std::cerr << "[Server] Failed to set non-blocking mode for fd=" << client_fd
                       << ": " << e.what() << std::endl;
             active_connections_->fetch_sub(1, std::memory_order_acq_rel);
             close(client_fd);
@@ -292,7 +292,7 @@ void HttpServer::handle_new_connection() {
         connections[client_fd].client_ip = ip_str;
         connections[client_fd].last_activity = time(nullptr);
 
-        // std::cout << "[Pyro] New connection: fd=" << client_fd << std::endl;
+        // std::cout << "[Server] New connection: fd=" << client_fd << std::endl;
     }
 }
 
@@ -313,7 +313,7 @@ void HttpServer::handle_readable(int fd) {
                 break;
             }
 
-            std::cerr << "[Pyro] Read error on fd=" << fd << ": "
+            std::cerr << "[Server] Read error on fd=" << fd << ": "
                       << strerror(errno) << std::endl;
             close_connection_unlocked(fd);
             return;
@@ -322,7 +322,7 @@ void HttpServer::handle_readable(int fd) {
             return;
         } else {
             if (conn.read_buffer.size() + bytes > MAX_REQUEST_BODY_SIZE) {
-                std::cerr << "[Pyro] Request body too large for fd=" << fd
+                std::cerr << "[Server] Request body too large for fd=" << fd
                           << " (current: " << conn.read_buffer.size()
                           << " bytes, max: " << MAX_REQUEST_BODY_SIZE << " bytes)" << std::endl;
                 close_connection_unlocked(fd);
@@ -355,43 +355,17 @@ void HttpServer::handle_readable(int fd) {
         return;
     }
 
-    // Simple Content-Length extraction - Request constructor does full header validation
-    size_t content_length = 0;
-    std::string headers_lower = buff.substr(0, headers_end);
-    std::transform(headers_lower.begin(), headers_lower.end(), headers_lower.begin(), ::tolower);
-    size_t cl_pos = headers_lower.find("content-length:");
+    // Use shared helper from Request class - no duplication!
+    auto content_length_opt = Request::extract_content_length(buff, headers_end, MAX_REQUEST_BODY_SIZE);
 
-    if (cl_pos != std::string::npos) {
-        size_t value_start = cl_pos + 15;
-        size_t line_end = buff.find("\r\n", value_start);
-        if (line_end == std::string::npos || line_end > headers_end) {
-            line_end = headers_end;
-        }
-
-        std::string value = buff.substr(value_start, line_end - value_start);
-
-        // Trim whitespace
-        size_t start = value.find_first_not_of(" \t");
-        size_t end = value.find_last_not_of(" \t");
-        if (start != std::string::npos && end != std::string::npos) {
-            value = value.substr(start, end - start + 1);
-        }
-
-        try {
-            long long cl = std::stoll(value);
-            if (cl < 0 || static_cast<unsigned long long>(cl) > MAX_REQUEST_BODY_SIZE) {
-                send_error_response(fd, 413, "Payload Too Large");
-                close_connection_unlocked(fd);
-                return;
-            }
-            content_length = static_cast<size_t>(cl);
-        } catch (...) {
-            send_error_response(fd, 400, "Bad Request");
-            close_connection_unlocked(fd);
-            return;
-        }
+    if (!content_length_opt.has_value()) {
+        // Invalid Content-Length or exceeds max size
+        send_error_response(fd, 413, "Payload Too Large");
+        close_connection_unlocked(fd);
+        return;
     }
 
+    size_t content_length = *content_length_opt;
     size_t required_bytes = headers_end + 4 + content_length;
     if (buff.size() < required_bytes) {
         return;
