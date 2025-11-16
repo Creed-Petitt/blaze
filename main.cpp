@@ -1,5 +1,6 @@
 #include "framework/app.h"
 #include "framework/middleware.h"
+#include <string_view>
 
 int main() {
     App app;
@@ -11,11 +12,9 @@ int main() {
 
     // Root route - Health check
     app.get("/", [](Request& req, Response& res) {
-        res.json({
-            {"status", "ok"},
-            {"framework", "Blaze++"},
-            {"version", "1.0.0"}
-        });
+        static constexpr std::string_view kHealthPayload =
+            R"({"status":"ok","version":"1.0.0"})";
+        res.json_raw(kHealthPayload);
     });
 
     // Redirect example - demonstrates res.redirect()
@@ -199,7 +198,7 @@ int main() {
         });
     });
 
-    std::cout << "\n=== Blaze++ ===\n";
+    std::cout << "\n=== HTTP Server ===\n";
     std::cout << "Server starting on http://localhost:8080\n\n";
     std::cout << "Available endpoints:\n";
     std::cout << "  GET  /                     - Health check\n";
