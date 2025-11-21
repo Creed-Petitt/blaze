@@ -136,7 +136,7 @@ docker run -p 8080:8080 http-server
 http_server/
 ├── framework/
 │   ├── app.h/.cpp           # Application, routing, middleware
-│   ├── HttpServer.h/.cpp   # Multi-reactor event loops (epoll)
+│   ├── HttpServer.h/.cpp    # Multi-reactor event loops (epoll)
 │   ├── router.h/.cpp        # Route matching and parameters
 │   ├── request.h/.cpp       # HTTP request parsing
 │   ├── response.h/.cpp      # HTTP response building
