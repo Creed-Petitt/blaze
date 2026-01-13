@@ -1,9 +1,9 @@
 #ifndef HTTP_SERVER_MIDDLEWARE_H
 #define HTTP_SERVER_MIDDLEWARE_H
 
-#include "router.h"
-#include "request.h"
-#include "response.h"
+#include <blaze/router.h>
+#include <blaze/request.h>
+#include <blaze/response.h>
 #include <string>
 #include <fstream>
 #include <sys/stat.h>

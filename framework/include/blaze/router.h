@@ -6,8 +6,8 @@
 #include <functional>
 #include <optional>
 #include <unordered_map>
-#include "request.h"
-#include "response.h"
+#include <blaze/request.h>
+#include <blaze/response.h>
 
 using Middleware = std::function<void(Request&, Response&, std::function<void()>)>;
 using Handler = std::function<void(Request&, Response&)>;

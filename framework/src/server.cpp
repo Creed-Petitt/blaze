@@ -1,7 +1,7 @@
-#include "HttpServer.h"
-#include "app.h"
-#include "request.h"
-#include "response.h"
+#include "server.h"
+#include <blaze/app.h>
+#include <blaze/request.h>
+#include <blaze/response.h>
 #include <arpa/inet.h>
 #include <atomic>
 #include <cctype>

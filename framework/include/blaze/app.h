@@ -1,9 +1,9 @@
 #ifndef HTTP_SERVER_APP_H
 #define HTTP_SERVER_APP_H
 
-#include "router.h"
-#include "logger.h"
-#include "../thread_pool.h"
+#include <blaze/router.h>
+#include <blaze/logger.h>
+#include <blaze/thread_pool.h>
 #include <atomic>
 #include <memory>
 #include <functional>

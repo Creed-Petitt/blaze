@@ -1,23 +1,8 @@
-cmake_minimum_required(VERSION 3.10)
-project(http_server)
+cmake_minimum_required(VERSION 3.20)
+project(blaze)
 
 set(CMAKE_CXX_STANDARD 20)
 
-include_directories(framework)
+add_subdirectory(framework)
 
-add_executable(http_server
-    main.cpp
-    thread_pool.h
-    framework/logger.h
-    framework/request.h
-    framework/request.cpp
-    framework/response.h
-    framework/response.cpp
-    framework/router.h
-    framework/router.cpp
-    framework/app.h
-    framework/app.cpp
-        framework/HttpServer.h
-        framework/HttpServer.cpp
-)
-
+add_subdirectory(examples)

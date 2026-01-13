@@ -1,5 +1,5 @@
-#include "framework/app.h"
-#include "framework/middleware.h"
+#include <blaze/app.h>
+#include <blaze/middleware.h>
 #include <string_view>
 
 int main() {

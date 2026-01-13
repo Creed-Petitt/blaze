@@ -1,4 +1,4 @@
-#include "app.h"
+#include <blaze/app.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -12,7 +12,7 @@
 #include <utility>
 #include <stdexcept>
 
-#include "HttpServer.h"
+#include "server.h"
 
 static App* g_app_instance = nullptr;
 
