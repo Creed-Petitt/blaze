@@ -12,6 +12,41 @@ namespace {
     }
 }
 
+void Request::set_target(std::string_view target) {
+    const size_t query_pos = target.find('?');
+
+    if (query_pos != std::string_view::npos) {
+        path = std::string(target.substr(0, query_pos));
+        std::string_view query_str = target.substr(query_pos + 1);
+
+        // Parse Query Params
+        size_t pos = 0;
+        while (pos < query_str.size()) {
+            size_t amp_pos = query_str.find('&', pos);
+            if (amp_pos == std::string_view::npos) amp_pos = query_str.size();
+
+            std::string_view pair = query_str.substr(pos, amp_pos - pos);
+            const size_t eq_pos = pair.find('=');
+
+            if (eq_pos != std::string_view::npos) {
+                auto key = std::string(pair.substr(0, eq_pos));
+                auto value = std::string(pair.substr(eq_pos + 1));
+                query[std::move(key)] = std::move(value);
+            }
+            pos = amp_pos + 1;
+        }
+    } else {
+        path = std::string(target);
+    }
+}
+
+void Request::add_header(const std::string_view key, const std::string_view value) {
+    std::string k{key};
+    for(auto& c : k)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    headers[std::move(k)] = std::string(value);
+}
+
 nlohmann::json Request::json() const {
     try {
         return nlohmann::json::parse(body);

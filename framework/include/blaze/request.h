@@ -2,6 +2,7 @@
 #define HTTP_SERVER_REQUEST_H
 
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <optional>
 #include <json.hpp>
@@ -15,6 +16,9 @@ struct Request {
     std::unordered_map<std::string, std::string> headers;
     std::unordered_map<std::string, std::string> params;
     std::unordered_map<std::string, std::string> query;
+
+    void set_target(std::string_view target);
+    void add_header(std::string_view key, std::string_view value);
 
     nlohmann::json json() const;
 
