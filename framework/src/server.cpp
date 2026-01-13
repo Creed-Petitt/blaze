@@ -7,7 +7,6 @@
 Session::Session(tcp::socket&& socket, App& app)
     : stream_(std::move(socket)), app_(app) {}
 
-
 void Session::run() {
     // We need to be executing within a strand to perform async operations
     // on the I/O objects in this session.
@@ -65,7 +64,7 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
 
     const auto response_ptr = std::make_shared<std::string>(std::move(response_str));
 
-    // Write response from handler
+    // Write response from App handler
     net::async_write(
         stream_,
         net::buffer(*response_ptr),
@@ -78,9 +77,7 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
 void Session::on_write(const bool keep_alive, beast::error_code ec, const std::size_t bytes_transferred) {
     boost::ignore_unused(bytes_transferred);
 
-    if (ec) {
-        return;
-    }
+    if (ec) return;
 
     if (!keep_alive) {
         stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
@@ -88,4 +85,64 @@ void Session::on_write(const bool keep_alive, beast::error_code ec, const std::s
     }
 
     do_read();
+}
+
+Listener::Listener(net::io_context& ioc, const tcp::endpoint &endpoint, App& app)
+    : ioc_(ioc), acceptor_(ioc), app_(app) {
+
+    beast::error_code ec;
+
+    // Open the acceptor
+    acceptor_.open(endpoint.protocol(), ec);
+    if(ec) {
+        std::cerr << "Open error: " << ec.message() << std::endl;
+        return;
+    }
+
+    // Allow address reuse
+    acceptor_.set_option(net::socket_base::reuse_address(true), ec);
+    if(ec) {
+        std::cerr << "Set option error: " << ec.message() << std::endl;
+        return;
+    }
+
+    // Bind to the server address
+    acceptor_.bind(endpoint, ec);
+    if(ec) {
+        std::cerr << "Bind error: " << ec.message() << std::endl;
+        return;
+    }
+
+    // Start listening for connections
+    acceptor_.listen(net::socket_base::max_listen_connections, ec);
+    if(ec) {
+        std::cerr << "Listen error: " << ec.message() << std::endl;
+        return;
+    }
+}
+
+void Listener::run() {
+    do_accept();
+}
+
+void Listener::do_accept() {
+// The new connection gets its own strand
+    acceptor_.async_accept(
+    net::make_strand(ioc_),
+        beast::bind_front_handler(
+            &Listener::on_accept,
+            shared_from_this())
+    );
+}
+
+void Listener::on_accept(const beast::error_code ec, tcp::socket socket) {
+    if(ec) {
+        std::cerr << "accept error: " << ec.message() << std::endl;
+    } else {
+    // Create the session and run it
+        std::make_shared<Session>(std::move(socket), app_)->run();
+    }
+
+    // Accept another connection
+   do_accept();
 }

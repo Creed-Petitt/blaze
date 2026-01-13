@@ -36,7 +36,7 @@ class Listener : public std::enable_shared_from_this<Listener> {
     App& app_;
 
 public:
-    Listener(net::io_context& ioc, tcp::endpoint endpoint, App& app);
+    Listener(net::io_context& ioc, const tcp::endpoint &endpoint, App& app);
     void run();
     void do_accept();
     void on_accept(beast::error_code ec, tcp::socket socket);
