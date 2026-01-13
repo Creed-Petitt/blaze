@@ -28,13 +28,13 @@ private:
 public:
     RouteGroup(Router& router, const std::string& prefix);
 
-    void get(const std::string& path, Handler handler);
-    void post(const std::string& path, Handler handler);
-    void put(const std::string& path, Handler handler);
-    void del(const std::string& path, Handler handler);
+    void get(const std::string& path, const Handler &handler) const;
+    void post(const std::string& path, const Handler &handler) const;
+    void put(const std::string& path, const Handler &handler) const;
+    void del(const std::string& path, const Handler &handler) const;
 
     // Allow nested groups
-    RouteGroup group(const std::string& subpath);
+    RouteGroup group(const std::string& subpath) const;
 };
 
 class Router {
@@ -49,16 +49,16 @@ private:
 
     std::vector<Route> routes_;
 
-    bool matches(const std::vector<std::string>& route_segments,
-                 const std::vector<std::string>& request_segments,
-                 std::unordered_map<std::string, std::string>& params);
+    static bool matches(const std::vector<std::string>& route_segments,
+                        const std::vector<std::string>& request_segments,
+                        std::unordered_map<std::string, std::string>& params);
 
-    std::vector<std::string> split(const std::string& str);
+    static std::vector<std::string> split(const std::string& str);
 
 public:
-    void add_route(const std::string& method, const std::string& path, Handler handler);
+    void add_route(const std::string& method, const std::string& path, const Handler &handler);
 
-    std::optional<RouteMatch> match(const std::string& method, const std::string& path);
+    std::optional<RouteMatch> match(const std::string& method, const std::string& path) const;
 };
 
 #endif
