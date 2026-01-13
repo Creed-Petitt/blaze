@@ -1,96 +1,45 @@
-#ifndef HTTP_SERVER_BLAZESERVER_H
-#define HTTP_SERVER_BLAZESERVER_H
+#ifndef SERVER_H
+#define SERVER_H
 
-#include <sys/epoll.h>      // epoll_create, epoll_ctl, epoll_wait
-#include <sys/socket.h>     // socket, bind, listen, accept
-#include <netinet/in.h>     // sockaddr_in
-#include <fcntl.h>          // fcntl, O_NONBLOCK
-#include <unistd.h>         // close, read, write
-#include <cstring>          // memset
-#include <iostream>         // logging
-#include <unordered_map>    // connection tracking
+#include <boost/beast/core.hpp>         // buffer, tcp_stream
+#include <boost/beast/http.hpp>         // request, response, parsing
+#include <boost/asio/ip/tcp.hpp>        // sockets, acceptor
+#include <boost/asio.hpp>               // io_context
 #include <memory>
-#include <string>
-#include <queue>
-#include <atomic>
-#include <mutex>
+
+namespace beast = boost::beast;
+namespace http = beast::http;
+namespace net = boost::asio;
+using tcp = boost::asio::ip::tcp;
 
 class App;
 
-class HttpServer {
+// Handles HTTP server connection
+class Session : public std::enable_shared_from_this<Session> {
+    beast::tcp_stream stream_;
+    beast::flat_buffer buffer_;
+    http::request<http::string_body> req_;
+    App& app_;
 
 public:
-    HttpServer(int port,
-                App* app,
-                int server_fd = -1,
-                bool owns_listener = true,
-                std::atomic<size_t>* active_connections = nullptr,
-                size_t max_connections = MAX_CONNECTIONS);
-
-    ~HttpServer();
-
+    Session(tcp::socket&& socket, App& app);
     void run();
-
-    void shutdown();
-    void stop();
-
-    static int create_listening_socket(int port);
-
-private:
-    int port;
-    std::atomic<bool> running;
-    std::atomic<bool> shutdown_started_;
-
-    int server_fd;
-    int epoll_fd;
-    bool owns_listener_;
-    std::atomic<size_t>* active_connections_;
-    size_t max_connections_;
-
-    static const int MAX_EVENTS = 1024;
-    static const int BACKLOG = 512;
-    static const size_t MAX_CONNECTIONS = 10000;  // Maximum concurrent connections
-
-    struct PendingResponse {
-        int fd;
-        std::unique_ptr<std::string> response;
-    };
-
-    struct Connection {
-        int fd;
-        std::string read_buffer;
-        std::string write_buffer;
-        std::string client_ip;
-        bool keep_alive = true;
-        time_t last_activity = 0;
-    };
-
-    std::unordered_map<int, Connection> connections;
-    std::queue<PendingResponse> response_queue_;
-    std::mutex response_queue_mutex_;
-
-    App* app_;
-
-    // Setup methods
-    void setup_epoll();
-    static void make_socket_non_blocking(int fd);
-
-    // Epoll helpers
-    void epoll_add(int fd, uint32_t events);
-    void epoll_modify(int fd, uint32_t events);
-    void epoll_remove(int fd);
-
-    // Event handlers
-    void handle_new_connection();
-    void handle_readable(int fd);
-    void handle_writable(int fd);
-    void close_connection(int fd);
-    void close_connection_unlocked(int fd);
-    void cleanup_stale_connections(int timeout_seconds);
-    void send_error_response(int fd, int status_code, const std::string& message);
-
-    void process_response_queue();
+    void do_read();
+    void on_read(beast::error_code ec, std::size_t bytes_transferred);
+    void on_write(bool keep_alive, beast::error_code ec, std::size_t bytes_transferred);
 };
 
+// Accepts incoming connections and launches the sessions
+class Listener : public std::enable_shared_from_this<Listener> {
+    net::io_context& ioc_;
+    tcp::acceptor acceptor_;
+    App& app_;
+
+public:
+    Listener(net::io_context& ioc, tcp::endpoint endpoint, App& app);
+    void run();
+    void do_accept();
+    void on_accept(beast::error_code ec, tcp::socket socket);
+};
 
 #endif
