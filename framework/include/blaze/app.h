@@ -3,7 +3,6 @@
 
 #include <blaze/router.h>
 #include <blaze/logger.h>
-#include <blaze/thread_pool.h>
 #include <atomic>
 #include <memory>
 #include <functional>
@@ -12,7 +11,6 @@ class App {
 private:
     Router router_;
     Logger logger_;
-    std::unique_ptr<ThreadPool> pool_;
     int server_fd_ = -1;
     std::atomic<bool> running_{true};
     std::atomic<size_t> active_connections_{0};
@@ -39,8 +37,6 @@ public:
     Router& get_router();
 
     Logger& get_logger();
-
-    bool dispatch_async(std::function<void()> task) const;
 
     std::string handle_request(Request& req, const std::string& client_ip, bool keep_alive);
 };

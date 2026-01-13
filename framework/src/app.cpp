@@ -18,15 +18,6 @@ static App* g_app_instance = nullptr;
 
 App::App() {
     g_app_instance = this;
-
-    // Initialize thread pool
-    size_t num_threads = std::thread::hardware_concurrency();
-    if (num_threads == 0) {
-        num_threads = 4;
-    }
-    pool_ = std::make_unique<ThreadPool>(num_threads, 1024);
-
-    std::cout << "[App] Thread pool initialized with " << num_threads << " workers\n";
 }
 
 App::~App() {
@@ -35,7 +26,6 @@ App::~App() {
         shutdown(server_fd_, SHUT_RDWR);
         close(server_fd_);
     }
-    // pool_ is unique_ptr, will auto-destruct
 }
 
 void App::get(const std::string& path, const Handler &handler) {
@@ -182,8 +172,4 @@ void App::use(const Middleware &mw) {
 
 RouteGroup App::group(const std::string& prefix) {
     return RouteGroup(router_, prefix);
-}
-
-bool App::dispatch_async(std::function<void()> task) const {
-    return pool_->try_enqueue(std::move(task));
 }
