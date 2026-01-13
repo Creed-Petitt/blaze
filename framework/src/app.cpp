@@ -1,30 +1,16 @@
 #include <blaze/app.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <iostream>
 #include <chrono>
 #include <memory>
-#include <signal.h>
-#include <thread>
 #include <vector>
-#include <utility>
-#include <stdexcept>
-
 #include "server.h"
 
-static App* g_app_instance = nullptr;
-
 App::App() {
-    g_app_instance = this;
 }
 
 App::~App() {
-    running_ = false;
-    if (server_fd_ != -1) {
-        shutdown(server_fd_, SHUT_RDWR);
-        close(server_fd_);
+    // Stop the IO context cleanly
+    if(!ioc_.stopped()) {
+        ioc_.stop();
     }
 }
 
@@ -52,8 +38,8 @@ Logger &App::get_logger() {
     return logger_;
 }
 
-std::string App::handle_request(Request& req, const std::string& client_ip, bool keep_alive) {
-    auto start_time = std::chrono::steady_clock::now();
+std::string App::handle_request(Request& req, const std::string& client_ip, const bool keep_alive) {
+    const auto start_time = std::chrono::steady_clock::now();
     Response res;
 
     int status_code = 500;
@@ -62,11 +48,10 @@ std::string App::handle_request(Request& req, const std::string& client_ip, bool
         size_t middleware_index = 0;
         std::function<void()> next = [&]() {
             if (middleware_index < middleware_.size()) {
-                auto& mw = middleware_[middleware_index++];
-                mw(req, res, next);  // Middleware calls next() to continue
+                const auto& mw = middleware_[middleware_index++];
+                mw(req, res, next);
             } else {
-                // All middleware done, call route handler
-                auto match = router_.match(req.method, req.path);
+                const auto match = router_.match(req.method, req.path);
                 if (match.has_value()) {
                     req.params = match->params;
                     try {
@@ -92,10 +77,6 @@ std::string App::handle_request(Request& req, const std::string& client_ip, bool
         logger_.log_error(std::string("Exception in handle_client: ") + e.what());
     }
 
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::steady_clock::now() - start_time).count();
-
-    // Set Connection header based on what PyroServer decided
     if (keep_alive) {
         res.header("Connection", "keep-alive");
     } else {
@@ -106,64 +87,38 @@ std::string App::handle_request(Request& req, const std::string& client_ip, bool
     return res.build_response();
 }
 
-void App::signal_handler(int sig) {
-    if (g_app_instance) {
-        g_app_instance->running_ = false;
-    }
-}
-
-void App::listen(int port, size_t num_threads) {
-    signal(SIGINT, App::signal_handler);
-    signal(SIGTERM, App::signal_handler);
-
-    active_connections_.store(0, std::memory_order_relaxed);
-
-    // Default to number of CPU cores
-    if (num_threads == 0) {
-        num_threads = std::thread::hardware_concurrency();
-        if (num_threads == 0) num_threads = 4;  // Fallback if detection fails
+void App::listen(const int port, int num_threads) {
+    if (num_threads <= 0) {
+        num_threads = 4;
     }
 
-    std::cout << "[App] Starting on port " << port << " with " << num_threads << " event loop threads\n";
+    auto const address = net::ip::make_address("0.0.0.0");
+    auto const endpoint = net::ip::tcp::endpoint{address, static_cast<unsigned short>(port)};
 
-    int listen_fd = HttpServer::create_listening_socket(port);
-    server_fd_ = listen_fd;
+    // Create and launch listening port
+    std::make_shared<Listener>(ioc_, endpoint, *this)->run();
 
-    running_.store(true, std::memory_order_release);
+    // (Ctrl+C) to stop cleanly
+    net::signal_set signals(ioc_, SIGINT, SIGTERM);
+    signals.async_wait([this](boost::system::error_code const&, int) {
+        ioc_.stop();
+    });
 
-    std::vector<std::shared_ptr<HttpServer>> servers;
-    servers.reserve(num_threads);
-    std::vector<std::thread> workers;
-    workers.reserve(num_threads);
+    std::cout << "[App] Starting on port " << port << " with " << num_threads << " threads\n";
 
-    for (size_t i = 0; i < num_threads; ++i) {
-        auto server = std::make_shared<HttpServer>(port, this, listen_fd, false,
-                                                    &active_connections_, max_connections_);
-        servers.emplace_back(server);
-        workers.emplace_back([server, i]() {
-            std::cout << "[App] Event loop thread " << i << " starting\n";
-            server->run();
+    // Run the IO Context on n threads
+    std::vector<std::thread> v;
+    v.reserve(num_threads - 1);
+    for(auto i = num_threads - 1; i > 0; --i)
+        v.emplace_back([this]{
+            ioc_.run();
         });
-    }
-
-    while (running_.load(std::memory_order_acquire)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-
-    for (auto& server : servers) {
-        server->stop();
-    }
-
-    shutdown(listen_fd, SHUT_RDWR);
-
-    for (auto& worker : workers) {
-        if (worker.joinable()) {
-            worker.join();
-        }
-    }
-
-    close(listen_fd);
-    server_fd_ = -1;
+    
+    // Run on the main thread too
+    ioc_.run();
+    
+    for(auto& t : v)
+        if(t.joinable()) t.join();
 }
 
 void App::use(const Middleware &mw) {
