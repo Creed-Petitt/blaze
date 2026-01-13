@@ -25,7 +25,6 @@ public:
     Response& json_raw(std::string_view body);
 
     std::string build_response() const;
-    void write(const int client_fd) const;
     int get_status() const;
 
     // Helper methods for common response patterns

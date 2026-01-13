@@ -47,11 +47,6 @@ std::string Response::build_response() const {
     return ss.str();
 }
 
-void Response::write(const int client_fd) const {
-    const std::string response = build_response();
-    ::send(client_fd, response.c_str(), response.size(), 0);
-}
-
 std::string Response::get_status_text(const int code) {
     switch (code) {
         // 2xx Success
