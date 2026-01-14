@@ -47,8 +47,7 @@ public:
     void on_read(beast::error_code ec, std::size_t bytes_transferred);
     void on_write(bool keep_alive, beast::error_code ec, std::size_t bytes_transferred);
     void do_shutdown();
-
-    static void on_shutdown(beast::error_code ec);
+    void on_shutdown(beast::error_code ec);
 };
 
 // Accepts incoming connections and launches the sessions

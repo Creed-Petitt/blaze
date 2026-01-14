@@ -252,7 +252,7 @@ void SslSession::do_shutdown() {
             shared_from_this()));
 }
 
-void SslSession::on_shutdown(const beast::error_code ec) {
+void SslSession::on_shutdown(beast::error_code ec) {
     if(ec && ec != net::ssl::error::stream_truncated) {
          // Log shutdown error if needed
     }
