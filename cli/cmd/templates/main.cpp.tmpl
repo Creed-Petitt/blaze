@@ -1,0 +1,21 @@
+#include <blaze/app.h>
+#include <iostream>
+
+int main() {
+    App app;
+
+    // Health check route
+    app.get("/", [](Request& req, Response& res) {
+        res.json({
+            {"status", "ok"},
+            {"message", "Welcome to Blaze!"}
+        });
+    });
+
+    std::cout << "Starting server on http://localhost:8080" << std::endl;
+    
+    // Start the server on port 8080 with 4 threads
+    app.listen(8080, 4);
+
+    return 0;
+}

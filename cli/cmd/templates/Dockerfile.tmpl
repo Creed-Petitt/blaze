@@ -1,0 +1,37 @@
+FROM ubuntu:22.04 AS builder
+
+# Install Build Tools
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    libboost-all-dev
+
+WORKDIR /app
+
+# Copy Source Code
+COPY . .
+
+# Compile
+# We assume the project name is passed as an argument to CMake or derived from the folder
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release
+RUN cmake --build build --parallel
+
+# Run
+FROM ubuntu:22.04
+
+# Install Runtime Dependencies (Boost Libraries)
+RUN apt-get update && apt-get install -y \
+    libboost-system-dev \
+    libboost-thread-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the compiled binary from Stage 1
+# Note: CMake usually outputs the binary to build/{{ .ProjectName }}
+COPY --from=builder /app/build/{{ .ProjectName }} ./server
+
+EXPOSE 8080
+
+CMD ["./server"]
