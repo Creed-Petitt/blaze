@@ -1,4 +1,5 @@
 find_package(Boost REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 set(SOURCES
 src/app.cpp
@@ -11,4 +12,4 @@ add_library(blaze STATIC ${SOURCES})
 
 target_include_directories(blaze PUBLIC include)
 target_include_directories(blaze PRIVATE src)
-target_link_libraries(blaze PUBLIC Boost::boost)
+target_link_libraries(blaze PUBLIC Boost::boost OpenSSL::SSL OpenSSL::Crypto)
