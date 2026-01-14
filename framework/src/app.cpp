@@ -121,6 +121,48 @@ void App::listen(const int port, int num_threads) {
         if(t.joinable()) t.join();
 }
 
+void App::listen_ssl(const int port, const std::string& cert_path, const std::string& key_path, int num_threads) {
+    if (num_threads <= 0) {
+        num_threads = 4;
+    }
+
+    try {
+        ssl_ctx_.use_certificate_chain_file(cert_path);
+        ssl_ctx_.use_private_key_file(key_path, ssl::context::pem);
+    } catch (const std::exception& e) {
+        std::cerr << "[App] SSL Error: " << e.what() << "\n";
+        return;
+    }
+
+    auto const address = net::ip::make_address("0.0.0.0");
+    auto const endpoint = net::ip::tcp::endpoint{address, static_cast<unsigned short>(port)};
+
+    // Create and launch SSL listening port
+    std::make_shared<SslListener>(ioc_, ssl_ctx_, endpoint, *this)->run();
+
+    // (Ctrl+C) to stop cleanly
+    net::signal_set signals(ioc_, SIGINT, SIGTERM);
+    signals.async_wait([this](boost::system::error_code const&, int) {
+        ioc_.stop();
+    });
+
+    std::cout << "[App] Starting HTTPS on port " << port << " with " << num_threads << " threads\n";
+
+    // Run the IO Context on n threads
+    std::vector<std::thread> v;
+    v.reserve(num_threads - 1);
+    for(auto i = num_threads - 1; i > 0; --i)
+        v.emplace_back([this]{
+            ioc_.run();
+        });
+    
+    // Run on the main thread too
+    ioc_.run();
+    
+    for(auto& t : v)
+        if(t.joinable()) t.join();
+}
+
 void App::use(const Middleware &mw) {
     middleware_.push_back(mw);
 }
