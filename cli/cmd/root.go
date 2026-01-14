@@ -11,7 +11,7 @@ var rootCmd = &cobra.Command{
 	Use:   "blaze",
 	Short: "A blazing fast C++ web framework CLI",
 	Long: `Blaze is a CLI tool for scaffolding, building, and deploying
-	modern C++ web applications using the Blaze framework.`,
+modern C++ web applications using the Blaze framework.`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately

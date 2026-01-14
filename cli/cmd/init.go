@@ -18,7 +18,7 @@ var initCmd = &cobra.Command{
 	Use:   "init [name]",
 	Short: "Initialize a new Blaze project",
 	Long: `Scaffolds a new C++ project with CMake, Docker, and source files.
-	Example: blaze init my-api`,
+Example: blaze init my-api`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		projectName := args[0]
@@ -101,5 +101,5 @@ func createProject(name string) {
 		fmt.Printf("Created %s\n", outPath)
 	}
 
-	fmt.Printf("\n Project ready! Run:\n  cd %s\n  cmake -B build\n  cmake --build build\n", name)
+	fmt.Printf("\nProject ready! Run:\n  cd %s\n  blaze run\n", name)
 }

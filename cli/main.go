@@ -1,6 +1,6 @@
 package main
 
-import "blaze-cli/cmd"
+import "blaze/cmd"
 
 func main() {
 	cmd.Execute()
