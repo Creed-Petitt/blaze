@@ -4,6 +4,8 @@
 #include <vector>
 #include "server.h"
 
+namespace blaze {
+
 App::App() {
 }
 
@@ -38,34 +40,26 @@ Logger &App::get_logger() {
     return logger_;
 }
 
-std::string App::handle_request(Request& req, const std::string& client_ip, const bool keep_alive) {
+boost::asio::awaitable<std::string> App::handle_request(Request& req, const std::string& client_ip, const bool keep_alive) {
     const auto start_time = std::chrono::steady_clock::now();
     Response res;
 
     int status_code = 500;
 
     try {
-        size_t middleware_index = 0;
-        std::function<void()> next = [&]() {
-            if (middleware_index < middleware_.size()) {
-                const auto& mw = middleware_[middleware_index++];
-                mw(req, res, next);
-            } else {
-                const auto match = router_.match(req.method, req.path);
-                if (match.has_value()) {
-                    req.params = match->params;
-                    try {
-                        match->handler(req, res);
-                    } catch (const std::exception& e) {
-                        res.status(500).json({{"error", e.what()}});
-                    }
-                } else {
-                    res.status(404).send("404 Not Found\n");
-                }
+        // Simple Router Logic (Middleware temporarily bypassed)
+        const auto match = router_.match(req.method, req.path);
+        if (match.has_value()) {
+            req.params = match->params;
+            try {
+                co_await match->handler(req, res);
+            } catch (const std::exception& e) {
+                res.status(500).json({{"error", e.what()}});
             }
-        };
+        } else {
+            res.status(404).send("404 Not Found\n");
+        }
 
-        next();
         status_code = res.get_status();
 
     } catch (const std::exception& e) {
@@ -83,8 +77,7 @@ std::string App::handle_request(Request& req, const std::string& client_ip, cons
         res.header("Connection", "close");
     }
 
-    // logger_.log_access(client_ip, req.method, req.path, status_code, elapsed);
-    return res.build_response();
+    co_return res.build_response();
 }
 
 void App::listen(const int port, int num_threads) {
@@ -170,3 +163,5 @@ void App::use(const Middleware &mw) {
 RouteGroup App::group(const std::string& prefix) {
     return RouteGroup(router_, prefix);
 }
+
+} // namespace blaze

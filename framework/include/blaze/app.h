@@ -11,6 +11,8 @@
 namespace net = boost::asio;
 namespace ssl = boost::asio::ssl;
 
+namespace blaze {
+
 class App {
 private:
     Router router_;
@@ -39,7 +41,11 @@ public:
 
     Logger& get_logger();
 
-    std::string handle_request(Request& req, const std::string& client_ip, bool keep_alive);
+    net::io_context& engine() { return ioc_; }
+
+    boost::asio::awaitable<std::string> handle_request(Request& req, const std::string& client_ip, bool keep_alive);
 };
+
+} // namespace blaze
 
 #endif
