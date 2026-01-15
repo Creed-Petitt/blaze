@@ -14,6 +14,8 @@ namespace net = boost::asio;
 namespace ssl = boost::asio::ssl;
 using tcp = boost::asio::ip::tcp;
 
+namespace blaze {
+
 class App;
 
 // Handles HTTP server connection
@@ -74,7 +76,10 @@ public:
     SslListener(net::io_context& ioc, ssl::context& ctx, const tcp::endpoint &endpoint, App& app);
     void run();
     void do_accept();
-    void on_accept(beast::error_code ec, tcp::socket socket);
-};
-
-#endif
+        void on_accept(beast::error_code ec, tcp::socket socket);
+    };
+    
+    } // namespace blaze
+    
+    #endif
+    

@@ -4,6 +4,8 @@
 #include <blaze/response.h>
 #include <iostream>
 
+namespace blaze {
+
 Session::Session(tcp::socket&& socket, App& app)
     : stream_(std::move(socket)), app_(app) {}
 
@@ -60,17 +62,32 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
     }
 
     const std::string client_ip = stream_.socket().remote_endpoint().address().to_string();
-    std::string response_str = app_.handle_request(blaze_req, client_ip, req_.keep_alive());
+    
+    // Spawn async handler
+    boost::asio::co_spawn(
+        stream_.get_executor(),
+        [self = shared_from_this(), req = std::move(blaze_req), client_ip, keep_alive = req_.keep_alive()]() mutable -> boost::asio::awaitable<void> {
+            try {
+                std::string response_str = co_await self->app_.handle_request(req, client_ip, keep_alive);
+                
+                // Write response
+                co_await boost::asio::async_write(
+                    self->stream_,
+                    boost::asio::buffer(response_str),
+                    boost::asio::use_awaitable
+                );
 
-    const auto response_ptr = std::make_shared<std::string>(std::move(response_str));
-
-    // Write response from App handler
-    net::async_write(
-        stream_,
-        net::buffer(*response_ptr),
-        [self = shared_from_this(), response_ptr](const beast::error_code code, const std::size_t bytes){
-                self->on_write(self->req_.keep_alive(), code, bytes);
-        }
+                if (!keep_alive) {
+                    beast::error_code ec;
+                    self->stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
+                } else {
+                    self->do_read();
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Async Handler Error: " << e.what() << "\n";
+            }
+        },
+        boost::asio::detached
     );
 }
 
@@ -218,16 +235,29 @@ void SslSession::on_read(beast::error_code ec, std::size_t bytes_transferred) {
     }
 
     const std::string client_ip = beast::get_lowest_layer(stream_).socket().remote_endpoint().address().to_string();
-    std::string response_str = app_.handle_request(blaze_req, client_ip, req_.keep_alive());
+    
+    // Spawn async handler
+    boost::asio::co_spawn(
+        stream_.get_executor(),
+        [self = shared_from_this(), req = std::move(blaze_req), client_ip, keep_alive = req_.keep_alive()]() mutable -> boost::asio::awaitable<void> {
+            try {
+                std::string response_str = co_await self->app_.handle_request(req, client_ip, keep_alive);
+                
+                const auto response_ptr = std::make_shared<std::string>(std::move(response_str));
 
-    const auto response_ptr = std::make_shared<std::string>(std::move(response_str));
+                // Write response
+                co_await net::async_write(
+                    self->stream_,
+                    net::buffer(*response_ptr),
+                    boost::asio::use_awaitable
+                );
 
-    net::async_write(
-        stream_,
-        net::buffer(*response_ptr),
-        [self = shared_from_this(), response_ptr](const beast::error_code code, const std::size_t bytes){
-                self->on_write(self->req_.keep_alive(), code, bytes);
-        }
+                self->on_write(keep_alive, {}, 0); // Manually trigger next step
+            } catch (const std::exception& e) {
+                std::cerr << "Async Handler Error: " << e.what() << "\n";
+            }
+        },
+        boost::asio::detached
     );
 }
 
@@ -296,3 +326,5 @@ void SslListener::on_accept(const beast::error_code ec, tcp::socket socket) {
     }
     do_accept();
 }
+
+} // namespace blaze
