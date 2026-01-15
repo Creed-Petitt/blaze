@@ -2,6 +2,8 @@
 #include <sys/socket.h>
 #include <sstream>
 
+namespace blaze {
+
 Response::Response() : status_code_(200) {}
 
 Response& Response::status(const int code) {
@@ -115,3 +117,5 @@ Response& Response::forbidden(const std::string& message) {
 Response& Response::not_found(const std::string& message) {
     return status(404).json({{"error", message}});
 }
+
+} // namespace blaze

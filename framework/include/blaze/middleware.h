@@ -9,6 +9,8 @@
 #include <sys/stat.h>
 #include <sstream>
 
+namespace blaze {
+
 namespace middleware {
 
     inline bool ends_with(const std::string& str, const std::string& suffix) {
@@ -155,6 +157,8 @@ namespace middleware {
         };
     }
 
-}
+} // namespace middleware
+
+} // namespace blaze
 
 #endif

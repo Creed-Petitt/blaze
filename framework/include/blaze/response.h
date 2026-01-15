@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <json.hpp>
 
+namespace blaze {
+
 using json = nlohmann::json;
 
 class Response {
@@ -36,5 +38,7 @@ public:
     Response& not_found(const std::string& message = "Not Found");
 
 };
+
+} // namespace blaze
 
 #endif

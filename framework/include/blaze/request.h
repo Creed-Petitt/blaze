@@ -7,6 +7,8 @@
 #include <optional>
 #include <json.hpp>
 
+namespace blaze {
+
 using json = nlohmann::json;
 
 struct Request {
@@ -29,5 +31,7 @@ struct Request {
     bool has_header(const std::string& key) const;
     std::optional<int> get_param_int(const std::string& key) const;
 };
+
+} // namespace blaze
 
 #endif

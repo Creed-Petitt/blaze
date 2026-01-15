@@ -10,6 +10,8 @@
 #include <iostream>
 #include <sys/stat.h>
 
+namespace blaze {
+
 class Logger {
 private:
     std::ofstream access_log;
@@ -80,5 +82,7 @@ public:
         }
     }
 };
+
+} // namespace blaze
 
 #endif //HTTP_SERVER_LOGGER_H

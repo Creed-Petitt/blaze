@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 
+namespace blaze {
+
 namespace {
     std::string to_lower(std::string s) {
         for (auto& c : s) {
@@ -101,3 +103,5 @@ std::optional<int> Request::get_param_int(const std::string& key) const {
     }
     return std::nullopt;
 }
+
+} // namespace blaze

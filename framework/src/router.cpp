@@ -1,6 +1,8 @@
 #include <blaze/router.h>
 #include <vector>
 
+namespace blaze {
+
 // RouteGroup implementation
 RouteGroup::RouteGroup(Router& router, const std::string& prefix)
     : router_(router), prefix_(prefix) {}
@@ -93,3 +95,5 @@ std::vector<std::string> Router::split(const std::string& str) {
 
     return segments;
 }
+
+} // namespace blaze

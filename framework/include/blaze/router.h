@@ -8,9 +8,13 @@
 #include <unordered_map>
 #include <blaze/request.h>
 #include <blaze/response.h>
+#include <boost/asio/awaitable.hpp>
 
+namespace blaze {
+
+using Task = boost::asio::awaitable<void>;
 using Middleware = std::function<void(Request&, Response&, std::function<void()>)>;
-using Handler = std::function<void(Request&, Response&)>;
+using Handler = std::function<Task(Request&, Response&)>;
 
 struct RouteMatch {
     Handler handler;                                      // The function to call
@@ -60,5 +64,7 @@ public:
 
     std::optional<RouteMatch> match(const std::string& method, const std::string& path) const;
 };
+
+} // namespace blaze
 
 #endif
