@@ -20,4 +20,4 @@ find_package(Boost REQUIRED)
 add_executable({{ .ProjectName }} src/main.cpp)
 
 # Link Libraries
-target_link_libraries({{ .ProjectName }} PRIVATE blaze Boost::boost)
+target_link_libraries({{ .ProjectName }} PRIVATE blaze::core blaze::postgres)

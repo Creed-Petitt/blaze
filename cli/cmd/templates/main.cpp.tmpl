@@ -1,21 +1,25 @@
 #include <blaze/app.h>
 #include <iostream>
 
+using namespace blaze;
+
 int main() {
     App app;
 
     // Health check route
-    app.get("/", [](Request& req, Response& res) {
+    // Note: Handler returns blaze::Task (async)
+    app.get("/", [](Request& req, Response& res) -> Task {
         res.json({
             {"status", "ok"},
             {"message", "Welcome to Blaze!"}
         });
+        co_return;
     });
 
     std::cout << "Starting server on http://localhost:8080" << std::endl;
     
-    // Start the server on port 8080 with 4 threads
-    app.listen(8080, 4);
+    // Start the server on port 8080
+    app.listen(8080);
 
     return 0;
 }
