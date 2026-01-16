@@ -13,7 +13,7 @@ namespace blaze {
 
 namespace middleware {
 
-    inline bool ends_with(const std::string& str, const std::string& suffix) {
+    inline bool ends_with(std::string_view str, std::string_view suffix) {
         if (suffix.length() > str.length()) return false;
         return str.compare(str.length() - suffix.length(), suffix.length(), suffix) == 0;
     }
@@ -25,7 +25,7 @@ namespace middleware {
         return -1;
     }
 
-    inline std::string url_decode(const std::string& input) {
+    inline std::string url_decode(std::string_view input) {
         std::string output;
         output.reserve(input.size());
         for (size_t i = 0; i < input.size(); ++i) {
@@ -44,59 +44,58 @@ namespace middleware {
     }
 
     inline Middleware cors() {
-        return [](Request& req, Response& res, auto next) {
+        return [](Request& req, Response& res, auto next) -> Task {
             res.header("Access-Control-Allow-Origin", "*");
             res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
             res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
             if (req.method == "OPTIONS") {
                 res.status(204).send("");
-                return;
+                co_return;
             }
 
-            next();
+            co_await next();
         };
     }
 
     inline Middleware cors(const std::string& origin,
                           const std::string& methods = "GET, POST, PUT, DELETE, OPTIONS",
                           const std::string& headers = "Content-Type, Authorization") {
-        return [origin, methods, headers](Request& req, Response& res, const auto& next) {
+        return [origin, methods, headers](Request& req, Response& res, const auto& next) -> Task {
             res.header("Access-Control-Allow-Origin", origin);
             res.header("Access-Control-Allow-Methods", methods);
             res.header("Access-Control-Allow-Headers", headers);
 
             if (req.method == "OPTIONS") {
                 res.status(204).send("");
-                return;
+                co_return;
             }
 
-            next();
+            co_await next();
         };
     }
 
     inline Middleware static_files(const std::string& directory, bool serve_index = true) {
-        return [directory, serve_index](Request& req, Response& res, auto next) {
+        return [directory, serve_index](Request& req, Response& res, auto next) -> Task {
             if (req.method != "GET") {
-                next();
-                return;
+                co_await next();
+                co_return;
             }
 
             std::string decoded_path = url_decode(req.path);
 
-            if (decoded_path.find("..") != std::string::npos || decoded_path.find('\\') != std::string::npos) {
+            if (decoded_path.find(".." ) != std::string::npos || decoded_path.find('\\') != std::string::npos) {
                 res.status(403).json({
                     {"error", "Forbidden"},
                     {"message", "Path traversal detected"}
                 });
-                return;
+                co_return;
             }
 
             std::string file_path = directory + decoded_path;
 
             struct stat stat_buf;
             if (stat(file_path.c_str(), &stat_buf) != 0 || !S_ISREG(stat_buf.st_mode)) {
-                // If path is a directory and serve_index is enabled, try index.html
                 if (serve_index && stat(file_path.c_str(), &stat_buf) == 0 && S_ISDIR(stat_buf.st_mode)) {
                     std::string index_path = file_path;
                     if (!index_path.empty() && index_path.back() != '/') {
@@ -107,19 +106,19 @@ namespace middleware {
                     if (stat(index_path.c_str(), &stat_buf) == 0 && S_ISREG(stat_buf.st_mode)) {
                         file_path = index_path;
                     } else {
-                        next();
-                        return;
+                        co_await next();
+                        co_return;
                     }
                 } else {
-                    next();
-                    return;
+                    co_await next();
+                    co_return;
                 }
             }
 
             std::ifstream file(file_path, std::ios::binary);
             if (!file.is_open()) {
-                next();
-                return;
+                co_await next();
+                co_return;
             }
 
             std::stringstream buffer;
@@ -138,22 +137,22 @@ namespace middleware {
 
             res.header("Content-Type", content_type);
             res.send(content);
-
+            co_return;
         };
     }
 
     inline Middleware limit_body_size(size_t max_bytes) {
-        return [max_bytes](Request& req, Response& res, auto next) {
+        return [max_bytes](Request& req, Response& res, auto next) -> Task {
             if (req.body.size() > max_bytes) {
                 res.status(413).json({
                     {"error", "Request body too large"},
                     {"max_size", max_bytes},
                     {"received_size", req.body.size()}
                 });
-                return;
+                co_return;
             }
 
-            next();
+            co_await next();
         };
     }
 

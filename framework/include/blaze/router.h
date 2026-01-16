@@ -13,7 +13,8 @@
 namespace blaze {
 
 using Task = boost::asio::awaitable<void>;
-using Middleware = std::function<void(Request&, Response&, std::function<void()>)>;
+using Next = std::function<Task()>;
+using Middleware = std::function<Task(Request&, Response&, Next)>;
 using Handler = std::function<Task(Request&, Response&)>;
 
 struct RouteMatch {

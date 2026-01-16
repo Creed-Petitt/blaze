@@ -10,7 +10,6 @@ App::App() {
 }
 
 App::~App() {
-    // Stop the IO context cleanly
     if(!ioc_.stopped()) {
         ioc_.stop();
     }
@@ -40,25 +39,37 @@ Logger &App::get_logger() {
     return logger_;
 }
 
-boost::asio::awaitable<std::string> App::handle_request(Request& req, const std::string& client_ip, const bool keep_alive) {
-    const auto start_time = std::chrono::steady_clock::now();
-    Response res;
+boost::asio::awaitable<void> App::run_middleware(size_t index, Request& req, Response& res, const Handler& final_handler) {
+    if (index < middleware_.size()) {
+        const auto& mw = middleware_[index];
+        co_await mw(req, res, [this, index, &req, &res, &final_handler]() -> boost::asio::awaitable<void> {
+            co_await run_middleware(index + 1, req, res, final_handler);
+        });
+    } else {
+        co_await final_handler(req, res);
+    }
+}
 
+boost::asio::awaitable<std::string> App::handle_request(Request& req, const std::string& client_ip, const bool keep_alive) {
+    Response res;
     int status_code = 500;
 
     try {
-        // Simple Router Logic (Middleware temporarily bypassed)
         const auto match = router_.match(req.method, req.path);
+        
+        Handler handler;
         if (match.has_value()) {
             req.params = match->params;
-            try {
-                co_await match->handler(req, res);
-            } catch (const std::exception& e) {
-                res.status(500).json({{"error", e.what()}});
-            }
+            handler = match->handler;
         } else {
-            res.status(404).send("404 Not Found\n");
+            handler = [](Request&, Response& res) -> boost::asio::awaitable<void> {
+                res.status(404).send("404 Not Found\n");
+                co_return;
+            };
         }
+
+        // Run the chain
+        co_await run_middleware(0, req, res, handler);
 
         status_code = res.get_status();
 
@@ -68,7 +79,7 @@ boost::asio::awaitable<std::string> App::handle_request(Request& req, const std:
             {"message", e.what()}
         });
         status_code = 500;
-        logger_.log_error(std::string("Exception in handle_client: ") + e.what());
+        logger_.log_error(std::string("Exception in handle_request: ") + e.what());
     }
 
     if (keep_alive) {

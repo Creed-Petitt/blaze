@@ -44,6 +44,9 @@ public:
     net::io_context& engine() { return ioc_; }
 
     boost::asio::awaitable<std::string> handle_request(Request& req, const std::string& client_ip, bool keep_alive);
+
+private:
+    boost::asio::awaitable<void> run_middleware(size_t index, Request& req, Response& res, const Handler& final_handler);
 };
 
 } // namespace blaze
