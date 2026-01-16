@@ -37,9 +37,9 @@ void Request::set_fields(const boost::beast::http::header<true, boost::beast::ht
     fields_ = &fields;
 }
 
-boost::json::value Request::json() const {
+blaze::Json Request::json() const {
     try {
-        return boost::json::parse(body);
+        return blaze::Json(boost::json::parse(body));
     } catch (const std::exception& e) {
         throw std::runtime_error("Invalid JSON in request body: " + std::string(e.what()));
     }

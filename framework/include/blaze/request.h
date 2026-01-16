@@ -8,6 +8,7 @@
 #include <boost/json.hpp>
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
+#include <blaze/json.h>
 
 namespace blaze {
 
@@ -24,8 +25,8 @@ struct Request {
     void set_target(std::string_view target);
     void set_fields(const boost::beast::http::header<true, boost::beast::http::fields>& fields);
 
-    // Returns parsed JSON body
-    boost::json::value json() const;
+    // Returns parsed JSON body wrapper
+    blaze::Json json() const;
 
     // Helper methods for safe parameter and header access
     std::string get_query(const std::string& key, const std::string& default_val = "") const;
