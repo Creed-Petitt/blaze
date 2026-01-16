@@ -45,7 +45,10 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
     }
 
     if (ec) {
-        if (ec != net::error::connection_reset && ec != net::error::eof) {
+
+        if (ec != net::error::connection_reset && 
+            ec != net::error::eof && 
+            ec != beast::error::timeout) {
             std::cerr << "read error: " << ec.message() << std::endl;
         }
         return;
@@ -215,7 +218,10 @@ void SslSession::on_read(beast::error_code ec, std::size_t bytes_transferred) {
     }
 
     if(ec) {
-        if (ec != net::error::connection_reset && ec != net::error::eof && ec != ssl::error::stream_truncated) {
+        if (ec != net::error::connection_reset && 
+            ec != net::error::eof && 
+            ec != ssl::error::stream_truncated &&
+            ec != beast::error::timeout) {
             std::cerr << "SSL read error: " << ec.message() << std::endl;
         }
         return;
