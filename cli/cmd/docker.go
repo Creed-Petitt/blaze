@@ -110,22 +110,20 @@ func runDockerContainer() {
 func runComposeService(service string) {
 	fmt.Printf("Starting %s service...\n", service)
 
-	// Try modern "docker compose"
+	// Try modern "docker compose" first
 	cmd := exec.Command("docker", "compose", "up", "-d", service)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	
 	if err := cmd.Run(); err != nil {
-		// Fallback to old "docker-compose"
-		fmt.Println("Modern 'docker compose' failed, trying legacy 'docker-compose'...")
+		// Only fallback if the error is "command not found"
+		// If it's a port conflict, show error
+		fmt.Println("Modern 'docker compose' failed, attempting legacy 'docker-compose'...")
 		legacyCmd := exec.Command("docker-compose", "up", "-d", service)
 		legacyCmd.Stdout = os.Stdout
 		legacyCmd.Stderr = os.Stderr
-		
 		if err := legacyCmd.Run(); err != nil {
-			fmt.Printf("Error: Failed to start %s. Please ensure Docker Compose is installed.\n", service)
-		} else {
-			fmt.Printf("%s (legacy) is now running in the background.\n", service)
+			fmt.Printf("Error: Failed to start %s. Please check Docker Compose installation.\n", service)
 		}
 	} else {
 		fmt.Printf("%s is now running in the background.\n", service)
@@ -134,23 +132,24 @@ func runComposeService(service string) {
 
 func stopCompose() {
 	fmt.Println("Stopping all Blaze services...")
-	cmd := exec.Command("docker", "compose", "down")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	
-	if err := cmd.Run(); err != nil {
-		legacyCmd := exec.Command("docker-compose", "down")
-		legacyCmd.Stdout = os.Stdout
-		legacyCmd.Stderr = os.Stderr
-		legacyCmd.Run()
+	// Try modern, then legacy
+	if err := exec.Command("docker", "compose", "down").Run(); err != nil {
+		exec.Command("docker-compose", "down").Run()
 	}
 }
 
 func viewLogs() {
 	fmt.Println("Showing Blaze service logs (Ctrl+C to stop)...")
+	// Try modern, then legacy
 	cmd := exec.Command("docker", "compose", "logs", "-f")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	cmd.Run()
+	if err := cmd.Run(); err != nil {
+		legacyCmd := exec.Command("docker-compose", "logs", "-f")
+		legacyCmd.Stdout = os.Stdout
+		legacyCmd.Stderr = os.Stderr
+		legacyCmd.Stdin = os.Stdin
+		legacyCmd.Run()
+	}
 }
