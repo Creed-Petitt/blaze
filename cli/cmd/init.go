@@ -56,6 +56,7 @@ func createProject(name string) {
 		"templates/main.cpp.tmpl":       filepath.Join(name, "src/main.cpp"),
 		"templates/CMakeLists.txt.tmpl": filepath.Join(name, "CMakeLists.txt"),
 		"templates/gitignore.tmpl":      filepath.Join(name, ".gitignore"),
+		"templates/dockerignore.tmpl":   filepath.Join(name, ".dockerignore"),
 		"templates/Dockerfile.tmpl":     filepath.Join(name, "Dockerfile"),
 	}
 
