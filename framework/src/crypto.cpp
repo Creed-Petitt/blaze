@@ -4,6 +4,8 @@
 #include <openssl/rand.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
+#include <openssl/kdf.h>
+#include <openssl/params.h>
 #include <iomanip>
 #include <sstream>
 
@@ -130,12 +132,11 @@ namespace blaze::crypto {
             std::string payload_json = base64url_decode(token.substr(first_dot + 1, last_dot - first_dot - 1));
             auto payload = boost::json::parse(payload_json);
             
-            // Security: Check for standard expiration claim 'exp'
             if (payload.is_object() && payload.as_object().contains("exp")) {
                 auto& exp_val = payload.at("exp");
                 if (exp_val.is_number()) {
                     if (std::time(nullptr) > exp_val.to_number<std::int64_t>()) {
-                        return nullptr; // Token has expired
+                        return nullptr; 
                     }
                 }
             }
@@ -144,6 +145,85 @@ namespace blaze::crypto {
         } catch (...) {
             return nullptr;
         }
+    }
+
+    std::string hash_password(std::string_view password) {
+        unsigned char salt[16];
+        unsigned char out[32];
+        RAND_bytes(salt, sizeof(salt));
+
+        EVP_KDF *kdf = EVP_KDF_fetch(nullptr, "SCRYPT", nullptr);
+        EVP_KDF_CTX *kctx = EVP_KDF_CTX_new(kdf);
+
+        OSSL_PARAM params[6];
+        uint64_t n = 16384; // CPU/Memory cost
+        uint32_t r = 8;     // Block size
+        uint32_t p = 1;     // Parallelization
+
+        params[0] = OSSL_PARAM_construct_octet_string("pass", (void*)password.data(), password.size());
+        params[1] = OSSL_PARAM_construct_octet_string("salt", (void*)salt, sizeof(salt));
+        params[2] = OSSL_PARAM_construct_uint64("n", &n);
+        params[3] = OSSL_PARAM_construct_uint32("r", &r);
+        params[4] = OSSL_PARAM_construct_uint32("p", &p);
+        params[5] = OSSL_PARAM_construct_end();
+
+        if (EVP_KDF_derive(kctx, out, sizeof(out), params) <= 0) {
+            EVP_KDF_CTX_free(kctx);
+            EVP_KDF_free(kdf);
+            return "";
+        }
+
+        EVP_KDF_CTX_free(kctx);
+        EVP_KDF_free(kdf);
+
+        // Encode as: $s1$N$r$p$salt_b64$hash_b64
+        return "$s1$" + std::to_string(n) + "$" + std::to_string(r) + "$" + std::to_string(p) + "$" + 
+               base64url_encode(std::string_view((char*)salt, 16)) + "$" + 
+               base64url_encode(std::string_view((char*)out, 32));
+    }
+
+    bool verify_password(std::string_view password, std::string_view hash) {
+        if (hash.substr(0, 4) != "$s1$") return false;
+
+        // Parse format: $s1$N$r$p$salt$hash
+        std::string s_hash(hash);
+        std::vector<std::string> parts;
+        size_t pos = 0;
+        while ((pos = s_hash.find('$')) != std::string::npos) {
+            parts.push_back(s_hash.substr(0, pos));
+            s_hash.erase(0, pos + 1);
+        }
+        parts.push_back(s_hash);
+        
+        if (parts.size() < 7) return false;
+
+        uint64_t n = std::stoull(parts[2]);
+        uint32_t r = std::stoul(parts[3]);
+        uint32_t p = std::stoul(parts[4]);
+        std::string salt = base64url_decode(parts[5]);
+        std::string expected_hash = base64url_decode(parts[6]);
+
+        unsigned char out[32];
+        EVP_KDF *kdf = EVP_KDF_fetch(nullptr, "SCRYPT", nullptr);
+        EVP_KDF_CTX *kctx = EVP_KDF_CTX_new(kdf);
+
+        OSSL_PARAM params[6];
+        params[0] = OSSL_PARAM_construct_octet_string("pass", (void*)password.data(), password.size());
+        params[1] = OSSL_PARAM_construct_octet_string("salt", (void*)salt.data(), salt.size());
+        params[2] = OSSL_PARAM_construct_uint64("n", &n);
+        params[3] = OSSL_PARAM_construct_uint32("r", &r);
+        params[4] = OSSL_PARAM_construct_uint32("p", &p);
+        params[5] = OSSL_PARAM_construct_end();
+
+        bool success = (EVP_KDF_derive(kctx, out, sizeof(out), params) > 0);
+        
+        EVP_KDF_CTX_free(kctx);
+        EVP_KDF_free(kdf);
+
+        if (!success) return false;
+        
+        // Constant-time comparison
+        return std::string_view((char*)out, 32) == expected_hash;
     }
 
 } // namespace blaze::crypto

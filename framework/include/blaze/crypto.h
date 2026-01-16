@@ -23,6 +23,9 @@ namespace blaze::crypto {
     std::string jwt_sign(const boost::json::value& payload, std::string_view secret, int expires_in = 3600);
     boost::json::value jwt_verify(std::string_view token, std::string_view secret);
 
+    std::string hash_password(std::string_view password);
+    bool verify_password(std::string_view password, std::string_view hash);
+
 } // namespace blaze::crypto
 
 #endif
