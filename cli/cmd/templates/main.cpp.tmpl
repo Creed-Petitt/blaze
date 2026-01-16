@@ -1,13 +1,7 @@
 #include <blaze/app.h>
 #include <iostream>
 
-
-        boost::json::value full_payload = payload;
-        if (full_payload.is_object()) {
-            full_payload.as_object()["exp"] = std::time(nullptr) + expires_in;
-        }
-
-        std:/**
+/**
  * DATABASE DRIVERS:
  * To use databases, uncomment the following:
  * #include <blaze/postgres.h>
