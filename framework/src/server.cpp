@@ -151,6 +151,7 @@ void Listener::do_accept() {
 void Listener::on_accept(const beast::error_code ec, tcp::socket socket) {
     if(ec) {
         std::cerr << "accept error: " << ec.message() << std::endl;
+        if (ec == net::error::bad_descriptor || ec == net::error::invalid_argument) return;
     } else {
     // Create the session and run it
         std::make_shared<Session>(std::move(socket), app_)->run();
@@ -313,6 +314,7 @@ void SslListener::do_accept() {
 void SslListener::on_accept(const beast::error_code ec, tcp::socket socket) {
     if(ec) {
         std::cerr << "accept error: " << ec.message() << std::endl;
+        if (ec == net::error::bad_descriptor || ec == net::error::invalid_argument) return;
     } else {
         std::make_shared<SslSession>(std::move(socket), ctx_, app_)->run();
     }

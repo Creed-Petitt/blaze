@@ -51,6 +51,7 @@ boost::asio::awaitable<void> App::run_middleware(size_t index, Request& req, Res
 }
 
 boost::asio::awaitable<std::string> App::handle_request(Request& req, const std::string& client_ip, const bool keep_alive) {
+    const auto start_time = std::chrono::steady_clock::now();
     Response res;
     int status_code = 500;
 
@@ -87,6 +88,11 @@ boost::asio::awaitable<std::string> App::handle_request(Request& req, const std:
     } else {
         res.header("Connection", "close");
     }
+
+    // Async Logger
+    const auto end_time = std::chrono::steady_clock::now();
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    logger_.log_access(client_ip, req.method, req.path, status_code, duration);
 
     co_return res.build_response();
 }
