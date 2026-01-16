@@ -53,11 +53,12 @@ func createProject(name string) {
 
 	// Map Template File -> Output File
 	files := map[string]string{
-		"templates/main.cpp.tmpl":       filepath.Join(name, "src/main.cpp"),
-		"templates/CMakeLists.txt.tmpl": filepath.Join(name, "CMakeLists.txt"),
-		"templates/gitignore.tmpl":      filepath.Join(name, ".gitignore"),
-		"templates/dockerignore.tmpl":   filepath.Join(name, ".dockerignore"),
-		"templates/Dockerfile.tmpl":     filepath.Join(name, "Dockerfile"),
+		"templates/main.cpp.tmpl":           filepath.Join(name, "src/main.cpp"),
+		"templates/CMakeLists.txt.tmpl":     filepath.Join(name, "CMakeLists.txt"),
+		"templates/gitignore.tmpl":          filepath.Join(name, ".gitignore"),
+		"templates/dockerignore.tmpl":       filepath.Join(name, ".dockerignore"),
+		"templates/Dockerfile.tmpl":         filepath.Join(name, "Dockerfile"),
+		"templates/docker-compose.yml.tmpl": filepath.Join(name, "docker-compose.yml"),
 	}
 
 	data := ProjectData{ProjectName: name}

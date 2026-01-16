@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_URL=postgres://postgres:blaze_secret@db:5432/postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MYSQL_URL=mysql://root:blaze_secret@mysql:3306/blaze
+    depends_on:
+      - db
+      - redis
+      - mysql
+
+  db:
+    image: postgres:14
+    environment:
+      - POSTGRES_PASSWORD=blaze_secret
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  mysql:
+    image: mysql:8
+    environment:
+      - MYSQL_ROOT_PASSWORD=blaze_secret
+      - MYSQL_DATABASE=blaze
+    ports:
+      - "3306:3306"
