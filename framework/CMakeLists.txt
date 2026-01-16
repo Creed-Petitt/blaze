@@ -38,6 +38,7 @@ add_library(blaze_core STATIC
     src/response.cpp
     src/router.cpp
     src/server.cpp
+    src/crypto.cpp
 )
 add_library(blaze::core ALIAS blaze_core)
 
