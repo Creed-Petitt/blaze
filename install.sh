@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set(CMAKE_CXX_STANDARD 20)
-
 set -e
 
 echo "--- Blaze CLI Installer ---"
