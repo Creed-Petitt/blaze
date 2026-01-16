@@ -96,10 +96,16 @@ namespace blaze::crypto {
         return hex_encode(res);
     }
 
-    std::string jwt_sign(const boost::json::value& payload, std::string_view secret) {
+    std::string jwt_sign(const boost::json::value& payload, std::string_view secret, int expires_in) {
         std::string header = R"({"alg":"HS256","typ":"JWT"})";
+        
+        boost::json::value full_payload = payload;
+        if (full_payload.is_object()) {
+            full_payload.as_object()["exp"] = std::time(nullptr) + expires_in;
+        }
+
         std::string encoded_header = base64url_encode(header);
-        std::string encoded_payload = base64url_encode(boost::json::serialize(payload));
+        std::string encoded_payload = base64url_encode(boost::json::serialize(full_payload));
         
         std::string data = encoded_header + "." + encoded_payload;
         std::string signature = hmac_sha256(secret, data);

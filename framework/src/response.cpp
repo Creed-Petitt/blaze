@@ -1,9 +1,11 @@
 #include <blaze/response.h>
+#include <boost/json/src.hpp>
 #include <sstream>
 
 namespace blaze {
 
-Response::Response() : status_code_(200) {}
+Response::Response() : status_code_(200) {
+}
 
 Response& Response::status(int code) {
     status_code_ = code;
@@ -17,78 +19,72 @@ Response& Response::header(const std::string& key, const std::string& value) {
 
 Response& Response::send(const std::string& text) {
     body_ = text;
-    if (headers_.find("Content-Type") == headers_.end()) {
-        headers_["Content-Type"] = "text/plain";
-    }
     return *this;
 }
 
 Response& Response::json(const boost::json::value& data) {
+    header("Content-Type", "application/json");
     body_ = boost::json::serialize(data);
-    headers_["Content-Type"] = "application/json";
     return *this;
 }
 
 Response& Response::json_raw(std::string_view body) {
+    header("Content-Type", "application/json");
     body_ = std::string(body);
-    headers_["Content-Type"] = "application/json";
     return *this;
 }
 
 std::string Response::build_response() const {
-    std::stringstream ss;
-    ss << "HTTP/1.1 " << status_code_ << " " << get_status_text(status_code_) << "\r\n";
+    std::ostringstream oss;
+    oss << "HTTP/1.1 " << status_code_ << " " << get_status_text(status_code_) << "\r\n";
     
-    for (const auto& [key, value] : headers_) {
-        ss << key << ": " << value << "\r\n";
+    for (const auto& [name, value] : headers_) {
+        oss << name << ": " << value << "\r\n";
     }
-    
-    ss << "Content-Length: " << body_.size() << "\r\n";
-    ss << "\r\n";
-    ss << body_;
-    
-    return ss.str();
+
+    if (headers_.find("Content-Length") == headers_.end()) {
+        oss << "Content-Length: " << body_.length() << "\r\n";
+    }
+
+    oss << "\r\n";
+    oss << body_;
+    return oss.str();
 }
 
 int Response::get_status() const {
     return status_code_;
 }
 
-// ... helper methods ...
-
 Response& Response::redirect(const std::string& url, int code) {
-    status_code_ = code;
-    headers_["Location"] = url;
+    status(code);
+    header("Location", url);
     return *this;
 }
 
 Response& Response::no_content() {
-    status_code_ = 204;
+    status(204);
+    body_.clear();
     return *this;
 }
 
 Response& Response::bad_request(const std::string& message) {
-    status_code_ = 400;
-    json({{"error", "Bad Request"}, {"message", message}});
-    return *this;
+    status(400);
+    return json({{"error", "Bad Request"}, {"message", message}});
 }
 
 Response& Response::unauthorized(const std::string& message) {
-    status_code_ = 401;
-    json({{"error", "Unauthorized"}, {"message", message}});
-    return *this;
+    status(401);
+    return json({{"error", "Unauthorized"}, {"message", message}});
 }
 
 Response& Response::forbidden(const std::string& message) {
-    status_code_ = 403;
-    json({{"error", "Forbidden"}, {"message", message}});
-    return *this;
+    status(403);
+    return json({{"error", "Forbidden"}, {"message", message}});
 }
 
 Response& Response::not_found(const std::string& message) {
-    status_code_ = 404;
-    json({{"error", "Not Found"}, {"message", message}});
-    return *this;
+    status(404);
+    return json({{"error", "Not Found"}, {"message", message}});
 }
 
 std::string Response::get_status_text(int code) {
@@ -103,9 +99,7 @@ std::string Response::get_status_text(int code) {
         case 403: return "Forbidden";
         case 404: return "Not Found";
         case 500: return "Internal Server Error";
-        case 502: return "Bad Gateway";
-        case 503: return "Service Unavailable";
-        default: return "Unknown";
+        default: return "Unknown Status";
     }
 }
 
