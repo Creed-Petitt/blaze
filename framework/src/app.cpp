@@ -114,8 +114,6 @@ void App::listen(const int port, int num_threads) {
         ioc_.stop();
     });
 
-    std::cout << "[App] Starting on port " << port << " with " << num_threads << " threads\n";
-
     // Run the IO Context on n threads
     std::vector<std::thread> v;
     v.reserve(num_threads - 1);
@@ -128,7 +126,7 @@ void App::listen(const int port, int num_threads) {
     ioc_.run();
     
     for(auto& t : v)
-        if(t.joinable()) t.join();
+        t.join();
 }
 
 void App::listen_ssl(const int port, const std::string& cert_path, const std::string& key_path, int num_threads) {
