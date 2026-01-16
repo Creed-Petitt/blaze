@@ -33,8 +33,8 @@ void Router::add_route(const std::string& method, const std::string& path,
     routes_.push_back({method, path, split(path), handler});
 }
 
-std::optional<RouteMatch> Router::match(const std::string& method, const std::string& path) const {
-    const std::vector<std::string> request_segments = split(path);
+std::optional<RouteMatch> Router::match(std::string_view method, std::string_view path) const {
+    const std::vector<std::string_view> request_segments = split_view(path);
 
     for (const auto& route : routes_) {
         if (route.method != method) {
@@ -55,15 +55,15 @@ std::optional<RouteMatch> Router::match(const std::string& method, const std::st
 }
 
 bool Router::matches(const std::vector<std::string>& route_segments,
-                     const std::vector<std::string>& request_segments,
+                     const std::vector<std::string_view>& request_segments,
                      std::unordered_map<std::string, std::string>& params) {
     for (size_t i = 0; i < route_segments.size(); i++) {
         const std::string& route_seg = route_segments[i];
-        const std::string& request_seg = request_segments[i];
+        const std::string_view& request_seg = request_segments[i];
 
         if (!route_seg.empty() && route_seg[0] == ':') {
             std::string param_name = route_seg.substr(1);
-            params[param_name] = request_seg;
+            params[param_name] = std::string(request_seg);
         } else {
             if (route_seg != request_seg) {
                 return false;
@@ -80,6 +80,28 @@ std::vector<std::string> Router::split(const std::string& str) {
     while (start <= str.size()) {
         size_t end = str.find('/', start);
         if (end == std::string::npos) {
+            end = str.size();
+        }
+        segments.emplace_back(str.substr(start, end - start));
+        if (end == str.size()) {
+            break;
+        }
+        start = end + 1;
+    }
+
+    if (segments.empty()) {
+        segments.emplace_back();
+    }
+
+    return segments;
+}
+
+std::vector<std::string_view> Router::split_view(std::string_view str) {
+    std::vector<std::string_view> segments;
+    size_t start = 0;
+    while (start <= str.size()) {
+        size_t end = str.find('/', start);
+        if (end == std::string_view::npos) {
             end = str.size();
         }
         segments.emplace_back(str.substr(start, end - start));

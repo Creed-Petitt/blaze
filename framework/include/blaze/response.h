@@ -4,11 +4,9 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <json.hpp>
+#include <boost/json.hpp>
 
 namespace blaze {
-
-using json = nlohmann::json;
 
 class Response {
 private:
@@ -23,7 +21,11 @@ public:
     Response& status(int code);
     Response& header(const std::string& key, const std::string& value);
     Response& send(const std::string& text);
-    Response& json(const nlohmann::json& data);
+    
+    // Boost.JSON overload
+    Response& json(const boost::json::value& data);
+    
+    // Raw JSON string
     Response& json_raw(std::string_view body);
 
     std::string build_response() const;

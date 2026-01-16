@@ -54,15 +54,16 @@ private:
     std::vector<Route> routes_;
 
     static bool matches(const std::vector<std::string>& route_segments,
-                        const std::vector<std::string>& request_segments,
+                        const std::vector<std::string_view>& request_segments,
                         std::unordered_map<std::string, std::string>& params);
 
     static std::vector<std::string> split(const std::string& str);
+    static std::vector<std::string_view> split_view(std::string_view str);
 
 public:
     void add_route(const std::string& method, const std::string& path, const Handler &handler);
 
-    std::optional<RouteMatch> match(const std::string& method, const std::string& path) const;
+    std::optional<RouteMatch> match(std::string_view method, std::string_view path) const;
 };
 
 } // namespace blaze

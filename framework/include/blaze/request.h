@@ -5,30 +5,35 @@
 #include <string_view>
 #include <unordered_map>
 #include <optional>
-#include <json.hpp>
+#include <boost/json.hpp>
+#include <boost/beast/http/message.hpp>
+#include <boost/beast/http/string_body.hpp>
 
 namespace blaze {
 
-using json = nlohmann::json;
-
 struct Request {
-    std::string method;
-    std::string path;
-    std::string body;
-    std::unordered_map<std::string, std::string> headers;
+    std::string_view method;
+    std::string_view path;
+    std::string_view body;
     std::unordered_map<std::string, std::string> params;
     std::unordered_map<std::string, std::string> query;
 
-    void set_target(std::string_view target);
-    void add_header(std::string_view key, std::string_view value);
+    // Zero-copy reference to Beast headers
+    const boost::beast::http::header<true, boost::beast::http::fields>* fields_ = nullptr;
 
-    nlohmann::json json() const;
+    void set_target(std::string_view target);
+    void set_fields(const boost::beast::http::header<true, boost::beast::http::fields>& fields);
+
+    // Returns parsed JSON body
+    boost::json::value json() const;
 
     // Helper methods for safe parameter and header access
     std::string get_query(const std::string& key, const std::string& default_val = "") const;
     int get_query_int(const std::string& key, int default_val = 0) const;
-    std::string get_header(const std::string& key, const std::string& default_val = "") const;
-    bool has_header(const std::string& key) const;
+    
+    std::string_view get_header(std::string_view key) const;
+    bool has_header(std::string_view key) const;
+    
     std::optional<int> get_param_int(const std::string& key) const;
 };
 

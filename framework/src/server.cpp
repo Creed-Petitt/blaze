@@ -45,21 +45,17 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
     }
 
     if (ec) {
-        std::cerr << "read error: " << ec.message() << std::endl;
+        if (ec != net::error::connection_reset && ec != net::error::eof) {
+            std::cerr << "read error: " << ec.message() << std::endl;
+        }
         return;
     }
 
-    Request blaze_req;
-    blaze_req.method = std::string(req_.method_string());
-    blaze_req.set_target({req_.target().data(), req_.target().size()});
-    blaze_req.body = req_.body();
-
-    for(auto const& field : req_) {
-        blaze_req.add_header(
-            {field.name_string().data(), field.name_string().size()},
-            {field.value().data(), field.value().size()}
-        );
-    }
+            Request blaze_req;
+            blaze_req.method = {req_.method_string().data(), req_.method_string().size()};
+            blaze_req.set_target({req_.target().data(), req_.target().size()});
+            blaze_req.body = req_.body();
+            blaze_req.set_fields(req_.base());
 
     const std::string client_ip = stream_.socket().remote_endpoint().address().to_string();
     
@@ -218,21 +214,17 @@ void SslSession::on_read(beast::error_code ec, std::size_t bytes_transferred) {
     }
 
     if(ec) {
-        std::cerr << "SSL read error: " << ec.message() << std::endl;
+        if (ec != net::error::connection_reset && ec != net::error::eof && ec != ssl::error::stream_truncated) {
+            std::cerr << "SSL read error: " << ec.message() << std::endl;
+        }
         return;
     }
 
-    Request blaze_req;
-    blaze_req.method = std::string(req_.method_string());
-    blaze_req.set_target({req_.target().data(), req_.target().size()});
-    blaze_req.body = req_.body();
-
-    for(auto const& field : req_) {
-        blaze_req.add_header(
-            {field.name_string().data(), field.name_string().size()},
-            {field.value().data(), field.value().size()}
-        );
-    }
+            Request blaze_req;
+            blaze_req.method = {req_.method_string().data(), req_.method_string().size()};
+            blaze_req.set_target({req_.target().data(), req_.target().size()});
+            blaze_req.body = req_.body();
+            blaze_req.set_fields(req_.base());
 
     const std::string client_ip = beast::get_lowest_layer(stream_).socket().remote_endpoint().address().to_string();
     
