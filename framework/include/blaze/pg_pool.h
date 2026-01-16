@@ -39,6 +39,7 @@ namespace blaze {
         std::vector<std::unique_ptr<PgConnection>> pool_;
         std::queue<PgConnection*> available_;
         std::queue<std::shared_ptr<boost::asio::steady_timer>> waiters_;
+        std::mutex mutex_;
     };
 
 } // namespace blaze

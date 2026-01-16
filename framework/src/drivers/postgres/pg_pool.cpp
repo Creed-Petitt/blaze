@@ -26,6 +26,8 @@ namespace blaze {
         for (int i = 0; i < size_; ++i) {
             auto conn = std::make_unique<PgConnection>(ctx_);
             co_await conn->connect(conn_str_);
+            
+            std::lock_guard<std::mutex> lock(mutex_);
             available_.push(conn.get());
             pool_.push_back(std::move(conn));
         }
@@ -33,17 +35,22 @@ namespace blaze {
     }
 
     boost::asio::awaitable<PgConnection*> PgPool::acquire() {
-        if (!available_.empty()) {
-            PgConnection* conn = available_.front();
-            available_.pop();
-            co_return conn;
-        }
+        std::shared_ptr<boost::asio::steady_timer> timer;
+        
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!available_.empty()) {
+                PgConnection* conn = available_.front();
+                available_.pop();
+                co_return conn;
+            }
 
-        // Pool exhausted, must wait
-        auto timer = std::make_shared<boost::asio::steady_timer>(
-            ctx_, std::chrono::steady_clock::time_point::max()
-        );
-        waiters_.push(timer);
+            // Pool exhausted, must wait
+            timer = std::make_shared<boost::asio::steady_timer>(
+                ctx_, std::chrono::steady_clock::time_point::max()
+            );
+            waiters_.push(timer);
+        }
 
         try {
             co_await timer->async_wait(boost::asio::use_awaitable);
@@ -58,12 +65,13 @@ namespace blaze {
     }
 
     void PgPool::release(PgConnection* conn) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        available_.push(conn);
+        
         if (!waiters_.empty()) {
             auto timer = waiters_.front();
             waiters_.pop();
             timer->cancel(); // Wake up the next waiter
-        } else {
-            available_.push(conn);
         }
     }
 
