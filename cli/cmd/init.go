@@ -59,6 +59,7 @@ func createProject(name string) {
 		"templates/dockerignore.tmpl":       filepath.Join(name, ".dockerignore"),
 		"templates/Dockerfile.tmpl":         filepath.Join(name, "Dockerfile"),
 		"templates/docker-compose.yml.tmpl": filepath.Join(name, "docker-compose.yml"),
+		"templates/env.tmpl":                filepath.Join(name, ".env"),
 	}
 
 	data := ProjectData{ProjectName: name}
