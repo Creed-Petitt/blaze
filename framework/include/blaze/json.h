@@ -3,108 +3,64 @@
 
 #include <boost/json.hpp>
 #include <string>
-#include <string_view>
-#include <stdexcept>
+#include <memory>
+#include <variant>
 
 namespace blaze {
 
+class PgResult;
+class MySqlResult;
+
 class Json {
-private:
-    boost::json::value value_;
-    const boost::json::value* ptr_ = nullptr;
-
-    // Helper to get the underlying value ptr
-    const boost::json::value* get() const {
-        return ptr_ ? ptr_ : &value_;
-    }
-
 public:
-    Json() : value_(nullptr) {}
-    Json(boost::json::value v) : value_(std::move(v)) {}
-    Json(const boost::json::value* v) : ptr_(v) {} // Const pointer constructor
-
-
-    Json operator[](std::string_view key) const {
-        auto* v = get();
-        if (!v->is_object()) throw std::runtime_error("JSON is not an object");
-
-        return Json( &v->as_object().at(key) );
-    }
-
-
-    Json operator[](const char* key) const {
-        return operator[](std::string_view(key));
-    }
-
-    template<typename T>
-    T as() const {
-        return boost::json::value_to<T>(*get());
-    }
-
-    operator std::string() const {
-        return as<std::string>();
-    }
-
-    operator int() const {
-        return as<int>();
-    }
-
-    operator bool() const {
-        return as<bool>();
-    }
-
-    bool contains(std::string_view key) const {
-        auto* v = get();
-        return v->is_object() && v->as_object().contains(key);
-    }
-
-    const boost::json::value& raw() const { return *get(); }
-
-    class Iterator {
-        const boost::json::value* ptr_;
-        bool is_array_;
-        size_t idx_;
-    public:
-        Iterator(const boost::json::value* v, size_t idx) : ptr_(v), idx_(idx) {
-            is_array_ = v->is_array();
-        }
-        
-        Json operator*() const {
-            if (is_array_) return Json( &ptr_->as_array().at(idx_) );
-            return Json(); // Should not happen for non-arrays in loop
-        }
-
-        Iterator& operator++() {
-            idx_++;
-            return *this;
-        }
-
-        bool operator!=(const Iterator& other) const {
-            return idx_ != other.idx_;
-        }
+    enum class Type { 
+        NONE, 
+        BOOST_VAL, 
+        PG_RESULT, 
+        MYSQL_RESULT,
+        PG_ROW,
+        MYSQL_ROW,
+        FIELD_PG,
+        FIELD_MYSQL
     };
 
-    Iterator begin() const {
-        auto* v = get();
-        if (v->is_array()) return Iterator(v, 0);
-        return Iterator(v, 0); // Empty iterator if not array
-    }
+    Json();
+    Json(boost::json::value v);
+    Json(std::shared_ptr<PgResult> res);
+    Json(std::shared_ptr<MySqlResult> res);
 
-    Iterator end() const {
-        auto* v = get();
-        if (v->is_array()) return Iterator(v, v->as_array().size());
-        return Iterator(v, 0);
-    }
+    Json operator[](size_t idx) const;
+    Json operator[](int idx) const { return (*this)[static_cast<size_t>(idx)]; }
+    Json operator[](std::string_view key) const;
+    Json operator[](const char* key) const { return (*this)[std::string_view(key)]; }
 
-    size_t size() const {
-        auto* v = get();
-        if (v->is_array()) return v->as_array().size();
-        if (v->is_object()) return v->as_object().size();
-        return 0;
-    }
+    template<typename T>
+    T as() const;
 
+    operator std::string() const;
+    operator int() const;
+    operator boost::json::value() const;
+
+    size_t size() const;
     bool empty() const { return size() == 0; }
+    bool is_ok() const;
+
+private:
+    struct Internal {
+        Type type = Type::NONE;
+        std::shared_ptr<boost::json::value> boost_ptr;
+        std::shared_ptr<PgResult> pg_ptr;
+        std::shared_ptr<MySqlResult> mysql_ptr;
+        int row = -1;
+        int col = -1;
+    };
+
+    Internal data_;
+    Json(Internal data) : data_(std::move(data)) {}
 };
+
+template<> std::string Json::as<std::string>() const;
+template<> int Json::as<int>() const;
 
 } // namespace blaze
 

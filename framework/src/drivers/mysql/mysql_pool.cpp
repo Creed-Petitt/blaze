@@ -77,12 +77,12 @@ void MySqlPool::release(MySqlConnection* conn) {
     }
 }
 
-boost::asio::awaitable<MySqlResult> MySqlPool::query(const std::string& sql) {
+boost::asio::awaitable<Json> MySqlPool::query(const std::string& sql) {
     auto* conn = co_await acquire();
     try {
         auto res = co_await conn->query(sql);
         release(conn);
-        co_return res;
+        co_return Json(std::make_shared<MySqlResult>(std::move(res)));
     } catch (...) {
         release(conn);
         throw;

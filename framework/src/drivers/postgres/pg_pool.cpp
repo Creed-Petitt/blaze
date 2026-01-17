@@ -75,12 +75,12 @@ namespace blaze {
         }
     }
 
-    boost::asio::awaitable<PgResult> PgPool::query(const std::string& sql) {
+    boost::asio::awaitable<Json> PgPool::query(const std::string& sql) {
         PgConnection* conn = co_await acquire();
         try {
             PgResult res = co_await conn->query(sql);
             release(conn);
-            co_return res;
+            co_return Json(std::make_shared<PgResult>(std::move(res)));
         } catch (...) {
             release(conn);
             throw;

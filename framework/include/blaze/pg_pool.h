@@ -8,6 +8,7 @@
 #include <memory>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
+#include <blaze/json.h>
 #include "pg_connection.h"
 
 namespace blaze {
@@ -16,14 +17,11 @@ namespace blaze {
 
     class PgPool {
     public:
-        // Added default size = 10 to match Redis and MySQL
         explicit PgPool(boost::asio::io_context& ctx, std::string conn_str, int size = 10);
         explicit PgPool(App& app, std::string conn_str, int size = 10);
 
         void connect();
-
-        // High-level query API
-        boost::asio::awaitable<PgResult> query(const std::string& sql);
+        boost::asio::awaitable<Json> query(const std::string& sql);
 
     private:
         boost::asio::io_context& ctx_;
