@@ -64,7 +64,7 @@ void MySql::connect() {
     }
 }
 
-boost::asio::awaitable<boost::json::value> MySql::query(std::string_view sql) {
+boost::asio::awaitable<blaze::Json> MySql::query(std::string_view sql) {
     boost::mysql::any_connection* conn = nullptr;
     while (true) {
         {
@@ -86,21 +86,29 @@ boost::asio::awaitable<boost::json::value> MySql::query(std::string_view sql) {
         boost::json::array rows;
         for (auto row : res.rows()) {
             boost::json::object json_row;
+            auto meta = res.meta();
             for (std::size_t i = 0; i < row.size(); ++i) {
+                // Try column_name() first, then original_column_name()
+                std::string col_name = std::string(meta[i].column_name());
+                if (col_name.empty()) col_name = std::string(meta[i].original_column_name());
+                
+                // Final fallback to index
+                if (col_name.empty()) col_name = std::to_string(i);
+
                 std::stringstream ss;
                 ss << row[i];
-                json_row[res.meta()[i].column_name()] = ss.str(); 
+                json_row[col_name] = ss.str(); 
             }
             rows.push_back(std::move(json_row));
         }
 
         std::lock_guard<std::mutex> lock(impl_->mtx);
         impl_->available.push(conn);
-        co_return rows;
+        co_return blaze::Json(std::move(rows));
     } catch (...) {
         std::lock_guard<std::mutex> lock(impl_->mtx);
         impl_->available.push(conn);
-        co_return boost::json::array();
+        co_return blaze::Json(boost::json::array());
     }
 }
 

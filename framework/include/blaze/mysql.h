@@ -5,7 +5,7 @@
 #include <vector>
 #include <memory>
 #include <boost/asio/awaitable.hpp>
-#include <boost/json.hpp>
+#include <blaze/json.h>
 
 namespace blaze {
 
@@ -20,7 +20,7 @@ public:
     void connect();
 
     // Core Query API
-    boost::asio::awaitable<boost::json::value> query(std::string_view sql);
+    boost::asio::awaitable<blaze::Json> query(std::string_view sql);
 
 private:
     struct Impl;

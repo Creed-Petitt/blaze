@@ -11,17 +11,17 @@ namespace blaze {
 class Json {
 private:
     boost::json::value value_;
-    boost::json::value* ptr_ = nullptr; // If set, we are a reference/view
+    const boost::json::value* ptr_ = nullptr;
 
     // Helper to get the underlying value ptr
-    boost::json::value* get() const {
-        return ptr_ ? ptr_ : const_cast<boost::json::value*>(&value_);
+    const boost::json::value* get() const {
+        return ptr_ ? ptr_ : &value_;
     }
 
 public:
     Json() : value_(nullptr) {}
     Json(boost::json::value v) : value_(std::move(v)) {}
-    Json(boost::json::value* v) : ptr_(v) {} // Reference constructor
+    Json(const boost::json::value* v) : ptr_(v) {} // Const pointer constructor
 
 
     Json operator[](std::string_view key) const {
@@ -58,8 +58,52 @@ public:
         return v->is_object() && v->as_object().contains(key);
     }
 
-    boost::json::value& raw() { return *get(); }
     const boost::json::value& raw() const { return *get(); }
+
+    class Iterator {
+        const boost::json::value* ptr_;
+        bool is_array_;
+        size_t idx_;
+    public:
+        Iterator(const boost::json::value* v, size_t idx) : ptr_(v), idx_(idx) {
+            is_array_ = v->is_array();
+        }
+        
+        Json operator*() const {
+            if (is_array_) return Json( &ptr_->as_array().at(idx_) );
+            return Json(); // Should not happen for non-arrays in loop
+        }
+
+        Iterator& operator++() {
+            idx_++;
+            return *this;
+        }
+
+        bool operator!=(const Iterator& other) const {
+            return idx_ != other.idx_;
+        }
+    };
+
+    Iterator begin() const {
+        auto* v = get();
+        if (v->is_array()) return Iterator(v, 0);
+        return Iterator(v, 0); // Empty iterator if not array
+    }
+
+    Iterator end() const {
+        auto* v = get();
+        if (v->is_array()) return Iterator(v, v->as_array().size());
+        return Iterator(v, 0);
+    }
+
+    size_t size() const {
+        auto* v = get();
+        if (v->is_array()) return v->as_array().size();
+        if (v->is_object()) return v->as_object().size();
+        return 0;
+    }
+
+    bool empty() const { return size() == 0; }
 };
 
 } // namespace blaze
