@@ -90,6 +90,15 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
                 }
             } catch (const std::exception& e) {
                 std::cerr << "Async Handler Error: " << e.what() << "\n";
+                // Attempt to send a raw 500 response
+                try {
+                    std::string error_res = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 21\r\nConnection: close\r\n\r\nInternal Server Error";
+                    co_await boost::asio::async_write(
+                        self->stream_,
+                        boost::asio::buffer(error_res),
+                        boost::asio::use_awaitable
+                    );
+                } catch (...) {}
             }
         },
         boost::asio::detached
@@ -266,6 +275,15 @@ void SslSession::on_read(beast::error_code ec, std::size_t bytes_transferred) {
                 self->on_write(keep_alive, {}, 0); // Manually trigger next step
             } catch (const std::exception& e) {
                 std::cerr << "Async Handler Error: " << e.what() << "\n";
+                // Attempt to send a raw 500 response
+                try {
+                    std::string error_res = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 21\r\nConnection: close\r\n\r\nInternal Server Error";
+                    co_await boost::asio::async_write(
+                        self->stream_,
+                        boost::asio::buffer(error_res),
+                        boost::asio::use_awaitable
+                    );
+                } catch (...) {}
             }
         },
         boost::asio::detached
