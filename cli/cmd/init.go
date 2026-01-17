@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"text/template"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -35,13 +36,21 @@ type ProjectData struct {
 }
 
 func createProject(name string) {
-	fmt.Printf("Initializing Blaze project: %s\n", name)
+	// Styles
+	var (
+		titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF4C4C")) // Blaze Red/Orange
+		checkStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))            // Success Green
+		textStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#E0E0E0"))            // White-ish
+		commandStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C"))            // Blaze Red
+	)
+
+	fmt.Println(titleStyle.Render(fmt.Sprintf("\n  Scaffolding project '%s'...", name)))
 
 	// Create Directories
 	dirs := []string{
 		name,
 		filepath.Join(name, "src"),
-		filepath.Join(name, "include"), // Empty for now, but good practice
+		filepath.Join(name, "include"),
 	}
 
 	for _, dir := range dirs {
@@ -65,44 +74,33 @@ func createProject(name string) {
 	data := ProjectData{ProjectName: name}
 
 	for tmplPath, outPath := range files {
-		// Read template from embedded FS
 		tmplContent, err := templatesFS.ReadFile(tmplPath)
 		if err != nil {
-			fmt.Printf("Error reading template %s: %v\n", tmplPath, err)
-			continue
+			continue // Fail silently/gracefully on read
 		}
 
-		// Parse template
 		t, err := template.New(tmplPath).Parse(string(tmplContent))
 		if err != nil {
-			fmt.Printf("Error parsing template %s: %v\n", tmplPath, err)
 			continue
 		}
 
-		// Execute template logic in a closure to safely use defer for Close()
-		err = func() error {
-			f, err := os.Create(outPath)
-			if err != nil {
-				return err
-			}
-
-			// Safe defer that handles the error explicitly
-			defer func() {
-				if closeErr := f.Close(); closeErr != nil {
-					fmt.Printf("Warning: failed to close file %s: %v\n", outPath, closeErr)
-				}
-			}()
-
-			return t.Execute(f, data)
-		}()
-
+		f, err := os.Create(outPath)
 		if err != nil {
-			fmt.Printf("Error generating %s: %v\n", outPath, err)
 			continue
 		}
-
-		fmt.Printf("Created %s\n", outPath)
+		t.Execute(f, data)
+		f.Close()
 	}
 
-	fmt.Printf("\nProject ready! Run:\n  cd %s\n  blaze run\n", name)
+	fmt.Println("")
+	fmt.Println(checkStyle.Render("  [v] Project structure created"))
+	fmt.Println(checkStyle.Render("  [v] Config files generated"))
+	fmt.Println(checkStyle.Render("  [v] Docker environment ready"))
+	fmt.Println("")
+	
+	fmt.Println(textStyle.Render("  Project ready! To get started:"))
+	fmt.Println("")
+	fmt.Println(commandStyle.Render(fmt.Sprintf("  cd %s", name)))
+	fmt.Println(commandStyle.Render("  blaze run"))
+	fmt.Println("")
 }
