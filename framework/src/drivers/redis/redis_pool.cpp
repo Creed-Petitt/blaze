@@ -24,6 +24,7 @@ struct Redis::Impl {
     
     std::vector<std::unique_ptr<boost::redis::connection>> pool;
     std::queue<boost::redis::connection*> available;
+    std::queue<std::shared_ptr<boost::asio::steady_timer>> waiters; // Queue for waiting coroutines
     std::mutex mtx;
 
     Impl(boost::asio::io_context& ctx, std::string h, std::string p, int sz)
@@ -65,6 +66,7 @@ void Redis::connect() {
 
 boost::asio::awaitable<boost::redis::connection*> Redis::acquire() {
     while (true) {
+        std::shared_ptr<boost::asio::steady_timer> timer;
         {
             std::lock_guard<std::mutex> lock(impl_->mtx);
             if (!impl_->available.empty()) {
@@ -72,9 +74,23 @@ boost::asio::awaitable<boost::redis::connection*> Redis::acquire() {
                 impl_->available.pop();
                 co_return conn;
             }
+
+            // Pool is empty, add to wait list
+            timer = std::make_shared<boost::asio::steady_timer>(
+                impl_->ioc, std::chrono::steady_clock::time_point::max()
+            );
+            impl_->waiters.push(timer);
         }
-        boost::asio::steady_timer timer(impl_->ioc, std::chrono::milliseconds(1));
-        co_await timer.async_wait(boost::asio::use_awaitable);
+
+        try {
+            co_await timer->async_wait(boost::asio::use_awaitable);
+        } catch (const boost::system::system_error& e) {
+            if (e.code() != boost::asio::error::operation_aborted) {
+                throw; // Real error
+            }
+            // Operation aborted means we were woken up!
+            // Loop back to try acquiring again
+        }
     }
 }
 
