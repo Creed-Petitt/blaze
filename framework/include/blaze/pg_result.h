@@ -81,6 +81,8 @@ namespace blaze {
         [[nodiscard]] bool is_ok() const;
         [[nodiscard]] std::string error_message() const;
 
+        [[nodiscard]] PGresult* get_raw() const { return res_; }
+
     private:
         PGresult* res_;
     };

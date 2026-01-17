@@ -64,6 +64,10 @@ namespace blaze {
         MySqlRowIterator begin();
         MySqlRowIterator end();
 
+        [[nodiscard]] MYSQL_RES* get_raw() const { return res_; }
+        [[nodiscard]] MYSQL_ROW get_row_raw(size_t idx) const { return rows_[idx]; }
+        [[nodiscard]] unsigned long* get_lengths_raw(size_t idx) const { return lengths_[idx]; }
+
         [[nodiscard]] bool is_ok() const { return ok_; }
         [[nodiscard]] std::string error_message() const { return error_; }
 
