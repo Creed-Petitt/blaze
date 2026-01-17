@@ -22,7 +22,7 @@ class App;
 class Session : public std::enable_shared_from_this<Session> {
     beast::tcp_stream stream_;
     beast::flat_buffer buffer_;
-    http::request<http::string_body> req_;
+    std::optional<http::request_parser<http::string_body>> parser_;
     App& app_;
 
 public:
@@ -37,7 +37,7 @@ public:
 class SslSession : public std::enable_shared_from_this<SslSession> {
     ssl::stream<beast::tcp_stream> stream_;
     beast::flat_buffer buffer_;
-    http::request<http::string_body> req_;
+    std::optional<http::request_parser<http::string_body>> parser_;
     App& app_;
 
 public:

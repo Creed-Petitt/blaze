@@ -13,6 +13,11 @@ namespace ssl = boost::asio::ssl;
 
 namespace blaze {
 
+struct AppConfig {
+    size_t max_body_size = 10 * 1024 * 1024; // 10MB default
+    int timeout_seconds = 30;                // 30s timeout
+};
+
 class App {
 private:
     Router router_;
@@ -20,10 +25,15 @@ private:
     net::io_context ioc_;
     ssl::context ssl_ctx_{ssl::context::tlsv12};
     std::vector<Middleware> middleware_;
+    AppConfig config_;
 
 public:
     App();
     ~App();
+
+    // Configuration Access
+    AppConfig& config() { return config_; }
+    const AppConfig& get_config() const { return config_; }
 
     void get(const std::string& path, const Handler &handler);
     void post(const std::string& path, const Handler &handler);

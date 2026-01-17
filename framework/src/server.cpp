@@ -20,16 +20,19 @@ void Session::run() {
 }
 
 void Session::do_read() {
-    // Make the request empty before reading,
-    // otherwise the operation behavior is undefined.
-    req_ = {};
+    // Construct a new parser for each request
+    parser_.emplace();
+    
+    // Apply Limits from App Config
+    parser_->body_limit(app_.get_config().max_body_size);
 
     // Set the timeout
-    beast::get_lowest_layer(stream_).
-        expires_after(std::chrono::seconds(30));
+    beast::get_lowest_layer(stream_).expires_after(
+        std::chrono::seconds(app_.get_config().timeout_seconds)
+    );
 
-    // Read a request
-    http::async_read(stream_, buffer_, req_,
+    // Read a request using the parser
+    http::async_read(stream_, buffer_, *parser_,
         beast::bind_front_handler(
             &Session::on_read,
             shared_from_this()));
@@ -45,7 +48,6 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
     }
 
     if (ec) {
-
         if (ec != net::error::connection_reset && 
             ec != net::error::eof && 
             ec != beast::error::timeout) {
@@ -54,18 +56,22 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
         return;
     }
 
-            Request blaze_req;
-            blaze_req.method = {req_.method_string().data(), req_.method_string().size()};
-            blaze_req.set_target({req_.target().data(), req_.target().size()});
-            blaze_req.body = req_.body();
-            blaze_req.set_fields(req_.base());
+    // Extract the request from the parser
+    auto req = parser_->release();
+
+    Request blaze_req;
+    blaze_req.method = {req.method_string().data(), req.method_string().size()};
+    blaze_req.set_target({req.target().data(), req.target().size()});
+    blaze_req.body = req.body();
+    blaze_req.set_fields(req.base());
 
     const std::string client_ip = stream_.socket().remote_endpoint().address().to_string();
+    bool keep_alive = req.keep_alive();
     
     // Spawn async handler
     boost::asio::co_spawn(
         stream_.get_executor(),
-        [self = shared_from_this(), req = std::move(blaze_req), client_ip, keep_alive = req_.keep_alive()]() mutable -> boost::asio::awaitable<void> {
+        [self = shared_from_this(), req = std::move(blaze_req), client_ip, keep_alive]() mutable -> boost::asio::awaitable<void> {
             try {
                 std::string response_str = co_await self->app_.handle_request(req, client_ip, keep_alive);
                 
@@ -199,11 +205,14 @@ void SslSession::on_handshake(beast::error_code ec) {
 }
 
 void SslSession::do_read() {
-    req_ = {};
+    parser_.emplace();
+    parser_->body_limit(app_.get_config().max_body_size);
 
-    beast::get_lowest_layer(stream_).expires_after(std::chrono::seconds(30));
+    beast::get_lowest_layer(stream_).expires_after(
+        std::chrono::seconds(app_.get_config().timeout_seconds)
+    );
 
-    http::async_read(stream_, buffer_, req_,
+    http::async_read(stream_, buffer_, *parser_,
         beast::bind_front_handler(
             &SslSession::on_read,
             shared_from_this()));
@@ -220,25 +229,28 @@ void SslSession::on_read(beast::error_code ec, std::size_t bytes_transferred) {
     if(ec) {
         if (ec != net::error::connection_reset && 
             ec != net::error::eof && 
-            ec != ssl::error::stream_truncated &&
+            ec != ssl::error::stream_truncated && 
             ec != beast::error::timeout) {
             std::cerr << "SSL read error: " << ec.message() << std::endl;
         }
         return;
     }
 
-            Request blaze_req;
-            blaze_req.method = {req_.method_string().data(), req_.method_string().size()};
-            blaze_req.set_target({req_.target().data(), req_.target().size()});
-            blaze_req.body = req_.body();
-            blaze_req.set_fields(req_.base());
+    auto req = parser_->release();
+
+    Request blaze_req;
+    blaze_req.method = {req.method_string().data(), req.method_string().size()};
+    blaze_req.set_target({req.target().data(), req.target().size()});
+    blaze_req.body = req.body();
+    blaze_req.set_fields(req.base());
 
     const std::string client_ip = beast::get_lowest_layer(stream_).socket().remote_endpoint().address().to_string();
+    bool keep_alive = req.keep_alive();
     
     // Spawn async handler
     boost::asio::co_spawn(
         stream_.get_executor(),
-        [self = shared_from_this(), req = std::move(blaze_req), client_ip, keep_alive = req_.keep_alive()]() mutable -> boost::asio::awaitable<void> {
+        [self = shared_from_this(), req = std::move(blaze_req), client_ip, keep_alive]() mutable -> boost::asio::awaitable<void> {
             try {
                 std::string response_str = co_await self->app_.handle_request(req, client_ip, keep_alive);
                 
