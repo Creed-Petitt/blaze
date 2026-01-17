@@ -6,6 +6,7 @@
 #include <openssl/buffer.h>
 #include <openssl/kdf.h>
 #include <openssl/params.h>
+#include <openssl/crypto.h>
 #include <iomanip>
 #include <sstream>
 
@@ -221,9 +222,9 @@ namespace blaze::crypto {
         EVP_KDF_free(kdf);
 
         if (!success) return false;
-        
-        // Constant-time comparison
-        return std::string_view((char*)out, 32) == expected_hash;
+
+        if (expected_hash.size() != 32) return false;
+        return CRYPTO_memcmp(out, expected_hash.data(), 32) == 0;
     }
 
 } // namespace blaze::crypto
