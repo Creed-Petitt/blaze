@@ -1,149 +1,128 @@
-# High-Performance C++ HTTP Framework
+# Blaze 
 
-A lightweight HTTP/1.1 framework built from scratch in C++ featuring multi-reactor event loops, Express-style routing, and middleware support. Built using edge-triggered epoll and POSIX sockets, achieving **70,000+ req/s** sustained throughput.
+![Platform](https://img.shields.io/badge/os-linux%20%7C%20macos-blue)
+![C++](https://img.shields.io/badge/c%2B%2B-20-blue)
+![Status](https://img.shields.io/badge/status-beta-yellow)
 
-## About
+**Blaze** is a high-performance, zero-config C++20 web framework built for extreme and developer simplicity. It combines an internalized, non-blocking engine with an elegant API to build the fastest backends on the planet.
 
-Combines the simplicity of Express.js with the performance of low-level systems programming. Built entirely from scratch without external dependencies (except JSON parsing), it demonstrates modern C++ techniques for high-concurrency network servers.
+## Requirements
 
-**Key Architecture:**
-- **Multi-reactor pattern**: 8 independent event loops (one per CPU core) using `SO_REUSEPORT` for load balancing
-- **Edge-triggered epoll**: Non-blocking I/O with efficient kernel event notification
-- **Bounded thread pool**: Request handlers execute off the event loop with backpressure control
-- **HTTP/1.1 keep-alive**: Connection reuse and request pipelining for maximum throughput
+Blaze **brings its own engine** (Boost 1.85.0). You only need the following system libraries:
 
-## Performance
+*   **CMake** (3.20+)
+*   **G++ / Clang** (C++20 support)
+*   **OpenSSL** (`libssl-dev`)
+*   **libpq** (`libpq-dev`) - *Optional (Required only for the PostgreSQL driver)*
+*   **libmysqlclient** (`libmysqlclient-dev`) - *Optional (Required only for MySQL)*
 
-Benchmarked with [wrk](https://github.com/wg/wrk) on 8-core system:
-
-```bash
-wrk -t8 -c200 -d120s http://localhost:8080/
-```
-
-**Results:**
-- **50-70k requests/sec** sustained
-- **5 million requests** in 90 seconds
-- **<5ms average latency** under load
-- **HTTP keep-alive** with pipelined requests
 
 ## Features
 
-- **Express.js-style API**: Familiar routing with `app.get()`, `app.post()`, `app.put()`, `app.del()`
-- **Route Parameters**: Dynamic paths like `/users/:id` with automatic extraction
-- **Route Grouping**: Organize endpoints with shared prefixes (`/api/v1`)
-- **Middleware Pipeline**: Composable request/response interceptors
-- **JSON Support**: Built-in parsing and serialization
-- **Static File Serving**: Middleware for serving HTML, CSS, JS with proper MIME types
-- **CORS Support**: Pre-built middleware for cross-origin requests
-- **Graceful Shutdown**: Clean termination with signal handling
+*   **Internalized Engine**: Zero system dependencies. Blaze builds its own IO and Threading backends.
+*   **Blazing Fast**: Handles **53,000+ req/sec** (plaintext) and **45,000+ req/sec** (JSON).
+*   **Async-First**: Built on C++20 Coroutines (`co_await`).
+*   **Multi-Driver Support**: Native, non-blocking drivers for **PostgreSQL**, **Redis**, and **MySQL**.
+*   **Modern TUI**: A beautiful interface for builds and scaffolding.
+*   **Modular Docker**: Built-in commands to manage app containers and background databases.
 
-## Quick Example
+## Installation
+
+Install the **Blaze CLI** to scaffold and run projects with zero configuration.
+
+### Option 1: Quick Install (Recommended)
+```bash
+curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh | bash
+```
+
+### Option 2: Build from Source
+```bash
+git clone https://github.com/Creed-Petitt/blaze.git
+cd blaze
+./install.sh
+```
+
+### Usage
+Once installed, create and run your first project:
+```bash
+# Create a new project
+blaze init my-api
+
+# Build and Run with TUI
+cd my-api
+blaze run
+```
+
+## Modular Docker CLI
+Blaze manages your development environment for you.
+
+```bash
+blaze docker psql     # Start background Postgres
+blaze docker redis    # Start background Redis
+blaze docker mysql    # Start background MySQL
+blaze docker logs     # View database logs
+blaze docker build    # Build app image
+blaze docker run      # Run app in container
+blaze docker stop     # Cleanup all containers
+```
+
+## Quick Start
+
+Write an API in just 10 lines of code.
 
 ```cpp
-#include "framework/app.h"
+#include <blaze/app.h>
+using namespace blaze;
 
 int main() {
     App app;
 
-    // Simple route
-    app.get("/", [](Request& req, Response& res) {
-        res.json({{"status", "ok"}});
+    // Hello World
+    app.get("/hello", [](Request& req, Response& res) -> Task {
+        res.json({
+            {"message", "Hello from Blaze!"},
+            {"timestamp", std::time(nullptr)}
+        });
+        co_return;
     });
 
-    // Route with parameters
-    app.get("/users/:id", [](Request& req, Response& res) {
-        auto id = req.get_param_int("id");
-        res.json({{"user_id", id.value_or(0)}});
-    });
-
-    // Route grouping
-    auto api = app.group("/api/v1");
-    api.get("/health", [](Request& req, Response& res) {
-        res.status(200).send("healthy\n");
-    });
-
-    app.listen(8080);  // Starts 8 event loops automatically
+    app.listen(8080);
     return 0;
 }
 ```
 
-## How It Works
+## Performance Metrics
 
-Uses **multi-reactor architecture** for high concurrency:
+Blaze is engineered for maximum throughput on modern hardware.
 
-1. **Multiple Event Loops**: Each CPU core runs its own independent `epoll` event loop in a dedicated thread
-2. **Load Balancing**: The kernel distributes incoming connections across event loops using `SO_REUSEPORT`
-3. **Non-blocking I/O**: Edge-triggered epoll with `EPOLLET` minimizes syscalls and maximizes throughput
-4. **Async Request Handling**: Each event loop dispatches requests to a shared thread pool for handler execution
-5. **Lock-free Design**: Each event loop owns its connections map with no mutex contention
+| Metric | Performance          |
+| :--- |:---------------------|
+| **Plaintext Throughput** | **53,821 req/sec**   |
+| **JSON Serialization** | **45,794 req/sec**   |
+| **PostgreSQL Latency** | **21,376 trans/sec** |
+| **MySQL Latency** | **14,200 trans/sec** |
+| **Redis IOPS** | **50,000+ ops/sec**  |
 
-This design scales linearly with CPU cores while maintaining sub-millisecond latency.
+*Hardware: Intel Core i7-1165G7 @ 4.70GHz, 12GB RAM, Ubuntu 22.04. Benchmark: `wrk -t8 -c100 -d10s`.*
 
-## API Overview
+## Roadmap to v1.0
 
-| Component | Purpose |
-|-----------|---------|
-| `App` | Main application class for routes and middleware |
-| `Request` | HTTP request with headers, params, query strings, and JSON body |
-| `Response` | Chainable response builder (`status()`, `header()`, `send()`, `json()`) |
-| `Router` | Pattern matching for routes with parameter extraction |
-| `RouteGroup` | Organize routes under shared prefixes |
-| `middleware::` | Pre-built CORS, static files, and body size limits |
+Blaze is currently in **Beta (v0.3.0)**.
 
-<details>
-<summary><b>Build Instructions</b></summary>
+- [x] **Core**: High-performance Async Server & Router.
+- [x] **CLI**: Modern TUI with progress tracking and "Ignite" effects.
+- [x] **Engine**: Internalized Boost 1.85.0 dependency model.
+- [x] **Drivers**: Non-blocking PostgreSQL, Redis, and MySQL.
+- [ ] **Step 8**: WebSockets Support (Real-time communication).
+- [ ] **Step 9**: App & Beast Engine Tuning (io_uring, Threading).
+- [ ] **Step 10**: Secure Hashing Polish (Timing-attack resistance).
+- [ ] **Step 11**: Environment & Secret Manager (.env support).
+- [ ] **Step 12**: Recovery & Logging Middleware.
+- [ ] **Step 13**: Testing Framework & HTTP/2 Support.
+- [ ] **Step 14**: Dependency Injection Manager (IoC).
+- [ ] **Step 15**: Cloud Infra & SDKs (AWS/GCP/Terraform).
+- [ ] **Step 16**: **Blaze ORM** (v2.0 Flagship).
 
-### Prerequisites
-- C++17 or later
-- CMake 3.10+
-- Linux/Unix (uses `epoll` and POSIX sockets)
+## License
 
-### Build
-```bash
-mkdir build && cd build
-cmake ..
-make
-```
-
-### Run
-```bash
-./http_server
-```
-
-Server starts on `http://localhost:8080`
-
-</details>
-
-<details>
-<summary><b>Docker Setup</b></summary>
-
-### Using Docker Compose
-```bash
-docker-compose up --build
-```
-
-### Manual Docker Build
-```bash
-docker build -t http-server .
-docker run -p 8080:8080 http-server
-```
-
-</details>
-
-## Project Structure
-
-```
-http_server/
-├── framework/
-│   ├── app.h/.cpp           # Application, routing, middleware
-│   ├── HttpServer.h/.cpp    # Multi-reactor event loops (epoll)
-│   ├── router.h/.cpp        # Route matching and parameters
-│   ├── request.h/.cpp       # HTTP request parsing
-│   ├── response.h/.cpp      # HTTP response building
-│   ├── middleware.h         # CORS, static files, body limits
-│   └── logger.h             # Access and error logging
-├── thread_pool.h            # Bounded thread pool with backpressure
-├── main.cpp                 # Example server with routes
-├── json.hpp                 # JSON library (nlohmann/json)
-└── CMakeLists.txt
-```
+[MIT](LICENSE)
