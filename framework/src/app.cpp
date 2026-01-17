@@ -31,6 +31,18 @@ void App::del(const std::string& path, const Handler &handler) {
     router_.add_route("DELETE", path, handler);
 }
 
+void App::ws(const std::string& path, WebSocketHandlers handlers) {
+    ws_routes_[path] = handlers;
+}
+
+const WebSocketHandlers* App::get_ws_handler(const std::string& path) const {
+    auto it = ws_routes_.find(path);
+    if (it != ws_routes_.end()) {
+        return &it->second;
+    }
+    return nullptr;
+}
+
 Router &App::get_router() {
     return router_;
 }
