@@ -16,7 +16,14 @@ is_installed_apt() {
 
 install_dependencies() {
     echo -e "${YELLOW}[?] Do you want to check and install system dependencies (OpenSSL, Drivers)? [y/N]${NC}"
-    read -r response
+    
+    # Read from /dev/tty to handle 'curl | bash' scenarios
+    if [ -t 0 ]; then
+        read -r response
+    else
+        read -r response < /dev/tty
+    fi
+
     if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
         return
     fi
