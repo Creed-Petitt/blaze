@@ -1,114 +1,91 @@
-#define BOOST_MYSQL_SEPARATE_COMPILATION
-#define BOOST_CHARCONV_NO_QUADMATH
-#include <blaze/mysql.h>
+#include <blaze/mysql_pool.h>
 #include <blaze/app.h>
-#include <boost/mysql/src.hpp>
-#include <boost/mysql.hpp>
-#include <boost/charconv/from_chars.hpp>
-#include <boost/charconv/to_chars.hpp>
-#include <libs/charconv/src/from_chars.cpp>
-#include <libs/charconv/src/to_chars.cpp>
-#include <boost/asio/strand.hpp>
-#include <boost/asio/steady_timer.hpp>
+#include <boost/asio/use_awaitable.hpp>
 #include <regex>
-#include <queue>
-#include <mutex>
 
 namespace blaze {
 
-struct MySql::Impl {
-    boost::asio::io_context& ioc;
-    std::string url;
-    int pool_size;
-    std::vector<std::unique_ptr<boost::mysql::any_connection>> pool;
-    std::queue<boost::mysql::any_connection*> available;
-    std::mutex mtx;
+MySqlPool::MySqlPool(boost::asio::io_context& ctx, std::string url, int size)
+    : ctx_(ctx), url_(std::move(url)), size_(size) {
+    parse_url();
+}
 
-    Impl(boost::asio::io_context& ctx, std::string u, int sz)
-        : ioc(ctx), url(std::move(u)), pool_size(sz) {}
+MySqlPool::MySqlPool(App& app, std::string url, int size)
+    : MySqlPool(app.engine(), std::move(url), size) {}
 
-    // Helper to parse URL
-    boost::mysql::connect_params parse_url() {
-        std::regex url_regex("mysql://([^:]+):([^@]+)@([^:/]+)(?::([0-9]+))?/(.+)");
-        std::smatch matches;
-        boost::mysql::connect_params params;
-        if (std::regex_search(url, matches, url_regex)) {
-            params.username = matches[1].str();
-            params.password = matches[2].str();
-            std::string host = matches[3].str();
-            int port = matches[4].matched ? std::stoi(matches[4].str()) : 3306;
-            params.database = matches[5].str();
-            params.server_address.emplace_host_and_port(host, (unsigned short)port);
-        }
-        return params;
-    }
-};
-
-MySql::MySql(App& app, std::string url, int pool_size)
-    : impl_(std::make_unique<Impl>(app.engine(), std::move(url), pool_size)) {}
-
-MySql::~MySql() = default;
-
-void MySql::connect() {
-    auto params = impl_->parse_url();
-    for (int i = 0; i < impl_->pool_size; ++i) {
-        auto conn = std::make_unique<boost::mysql::any_connection>(boost::asio::make_strand(impl_->ioc));
-        boost::asio::co_spawn(conn->get_executor(), [this, c = conn.get(), params]() -> boost::asio::awaitable<void> {
-            try {
-                co_await c->async_connect(params, boost::asio::use_awaitable);
-                std::lock_guard<std::mutex> lock(impl_->mtx);
-                impl_->available.push(c);
-            } catch (...) {}
-        }, boost::asio::detached);
-        impl_->pool.push_back(std::move(conn));
+void MySqlPool::parse_url() {
+    std::regex url_regex("mysql://([^:]+):([^@]+)@([^:/]+)(?::([0-9]+))?/(.+)");
+    std::smatch matches;
+    if (std::regex_search(url_, matches, url_regex)) {
+        config_.user = matches[1].str();
+        config_.pass = matches[2].str();
+        config_.host = matches[3].str();
+        config_.port = matches[4].matched ? (unsigned int)std::stoi(matches[4].str()) : 3306;
+        config_.db = matches[5].str();
     }
 }
 
-boost::asio::awaitable<blaze::Json> MySql::query(std::string_view sql) {
-    boost::mysql::any_connection* conn = nullptr;
-    while (true) {
-        {
-            std::lock_guard<std::mutex> lock(impl_->mtx);
-            if (!impl_->available.empty()) {
-                conn = impl_->available.front();
-                impl_->available.pop();
-                break;
-            }
+void MySqlPool::connect() {
+    boost::asio::co_spawn(ctx_, [this]() -> boost::asio::awaitable<void> {
+        try {
+            co_await start();
+        } catch (const std::exception& e) {
+            fprintf(stderr, "[MySqlPool] Connection Error: %s\n", e.what());
         }
-        boost::asio::steady_timer timer(impl_->ioc, std::chrono::milliseconds(1));
-        co_await timer.async_wait(boost::asio::use_awaitable);
-    }
+    }, boost::asio::detached);
+}
 
-    try {
-        boost::mysql::results res;
-        co_await conn->async_execute(sql, res, boost::asio::use_awaitable);
+boost::asio::awaitable<void> MySqlPool::start() {
+    for (int i = 0; i < size_; ++i) {
+        auto conn = std::make_unique<MySqlConnection>(ctx_);
+        co_await conn->connect(config_.host, config_.user, config_.pass, config_.db, config_.port);
         
-        boost::json::array rows;
-        for (auto row : res.rows()) {
-            boost::json::object json_row;
-            auto meta = res.meta();
-            for (std::size_t i = 0; i < row.size(); ++i) {
-                // Try column_name() first, then original_column_name()
-                std::string col_name = std::string(meta[i].column_name());
-                if (col_name.empty()) col_name = std::string(meta[i].original_column_name());
-                
-                // Final fallback to index
-                if (col_name.empty()) col_name = std::to_string(i);
+        std::lock_guard<std::mutex> lock(mutex_);
+        available_.push(conn.get());
+        pool_.push_back(std::move(conn));
+    }
+    co_return;
+}
 
-                std::stringstream ss;
-                ss << row[i];
-                json_row[col_name] = ss.str(); 
+boost::asio::awaitable<MySqlConnection*> MySqlPool::acquire() {
+    while (true) {
+        std::shared_ptr<boost::asio::steady_timer> timer;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!available_.empty()) {
+                auto* conn = available_.front();
+                available_.pop();
+                co_return conn;
             }
-            rows.push_back(std::move(json_row));
+            timer = std::make_shared<boost::asio::steady_timer>(ctx_, std::chrono::steady_clock::time_point::max());
+            waiters_.push(timer);
         }
+        try {
+            co_await timer->async_wait(boost::asio::use_awaitable);
+        } catch (...) {}
+    }
+}
 
-        std::lock_guard<std::mutex> lock(impl_->mtx);
-        impl_->available.push(conn);
-        co_return blaze::Json(std::move(rows));
+void MySqlPool::release(MySqlConnection* conn) {
+    if (!conn) return;
+    std::lock_guard<std::mutex> lock(mutex_);
+    available_.push(conn);
+    if (!waiters_.empty()) {
+        auto timer = waiters_.front();
+        waiters_.pop();
+        timer->cancel();
+    }
+}
+
+boost::asio::awaitable<MySqlResult> MySqlPool::query(const std::string& sql) {
+    auto* conn = co_await acquire();
+    try {
+        auto res = co_await conn->query(sql);
+        release(conn);
+        co_return res;
     } catch (...) {
-        std::lock_guard<std::mutex> lock(impl_->mtx);
-        impl_->available.push(conn);
-        co_return blaze::Json(boost::json::array());
+        release(conn);
+        throw;
     }
 }
 
