@@ -3,13 +3,19 @@
 
 #include <boost/beast/core.hpp>         // buffer, tcp_stream
 #include <boost/beast/http.hpp>         // request, response, parsing
+#include <boost/beast/websocket.hpp>    // websocket
+#include <boost/beast/websocket/ssl.hpp> // SSL websocket support
 #include <boost/asio/ip/tcp.hpp>        // sockets, acceptor
 #include <boost/asio.hpp>               // io_context
 #include <boost/asio/ssl.hpp>           // ssl
 #include <memory>
+#include <queue>
+#include <mutex>
+#include <blaze/websocket.h>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
+namespace websocket = beast::websocket;
 namespace net = boost::asio;
 namespace ssl = boost::asio::ssl;
 using tcp = boost::asio::ip::tcp;
@@ -17,6 +23,34 @@ using tcp = boost::asio::ip::tcp;
 namespace blaze {
 
 class App;
+
+// Handles a WebSocket connection
+template<class Stream>
+class WebSocketSession : public WebSocket, public std::enable_shared_from_this<WebSocketSession<Stream>> {
+    websocket::stream<Stream> ws_;
+    beast::flat_buffer buffer_;
+    const WebSocketHandlers& handlers_;
+
+    std::queue<std::string> write_queue_;
+    std::mutex queue_mutex_;
+
+public:
+    // Resolver for Stream type (TCP vs SSL)
+    explicit WebSocketSession(Stream&& stream, const WebSocketHandlers& handlers);
+
+    void run(http::request<http::string_body> req);
+
+    void on_accept(beast::error_code ec);
+    void do_read();
+    void on_read(beast::error_code ec, std::size_t bytes_transferred);
+    
+    // WebSocket Interface overrides
+    void send(std::string message) override;
+    void close() override;
+
+    void do_write();
+    void on_write(beast::error_code ec, std::size_t bytes_transferred);
+};
 
 // Handles HTTP server connection
 class Session : public std::enable_shared_from_this<Session> {
@@ -76,10 +110,9 @@ public:
     SslListener(net::io_context& ioc, ssl::context& ctx, const tcp::endpoint &endpoint, App& app);
     void run();
     void do_accept();
-        void on_accept(beast::error_code ec, tcp::socket socket);
-    };
-    
-    } // namespace blaze
-    
-    #endif
-    
+    void on_accept(beast::error_code ec, tcp::socket socket);
+};
+
+} // namespace blaze
+
+#endif
