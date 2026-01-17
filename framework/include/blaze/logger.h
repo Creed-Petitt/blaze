@@ -13,13 +13,14 @@
 #include <queue>
 #include <condition_variable>
 #include <atomic>
+#include <filesystem>
 
 namespace blaze {
 
 class Logger {
 private:
-    std::ofstream access_log;
-    std::ofstream error_log;
+    std::ofstream file_stream_;
+    bool use_stdout_{false};
     
     // Async Queue
     std::queue<std::string> queue_;
@@ -39,13 +40,6 @@ private:
         return ss.str();
     }
 
-    static void ensure_logs_directory() {
-        struct stat st{};
-        if (stat("../logs", &st) == -1) {
-            mkdir("../logs", 0755);
-        }
-    }
-
     void process_queue() {
         while (running_) {
             std::unique_lock<std::mutex> lock(queue_mutex_);
@@ -58,10 +52,18 @@ private:
                 // Unlock during I/O
                 lock.unlock();
 
-                if (msg.starts_with("ERROR:")) {
-                    if (error_log.is_open()) error_log << "[" << get_timestamp() << "] " << msg << "\n";
-                } else {
-                    if (access_log.is_open()) access_log << "[" << get_timestamp() << "] " << msg << "\n";
+                std::stringstream output;
+                output << "[" << get_timestamp() << "] " << msg << "\n";
+
+                if (use_stdout_) {
+                    if (msg.starts_with("ERROR:")) {
+                        std::cerr << output.str();
+                    } else {
+                        std::cout << output.str();
+                    }
+                } else if (file_stream_.is_open()) {
+                    file_stream_ << output.str();
+                    file_stream_.flush();
                 }
                 
                 lock.lock();
@@ -71,11 +73,28 @@ private:
 
 public:
     Logger() {
-        ensure_logs_directory();
-        access_log.open("../logs/access.log", std::ios::out | std::ios::app);
-        error_log.open("../logs/error.log", std::ios::out | std::ios::app);
-
+        // Start the worker immediately
         worker_ = std::thread(&Logger::process_queue, this);
+    }
+
+    // Called when Server Starts
+    void configure(const std::string& path) {
+        if (path == "stdout" || path.empty()) {
+            use_stdout_ = true;
+            return;
+        }
+
+        use_stdout_ = false;
+        
+        // Ensure directory exists
+        std::filesystem::path p(path);
+        if (p.has_parent_path()) {
+            std::filesystem::create_directories(p.parent_path());
+        }
+
+        // Open file (Append Mode)
+        if (file_stream_.is_open()) file_stream_.close();
+        file_stream_.open(path, std::ios::out | std::ios::app);
     }
 
     void log_access(std::string_view client_ip,
@@ -85,6 +104,7 @@ public:
                    long long response_time_ms) {
         
         std::stringstream ss;
+        // GREEN/RESET ANSI codes could go here if stdout
         ss << client_ip << " " << method << " " << path << " " 
            << status_code << " " << response_time_ms << "ms";
         
@@ -106,9 +126,7 @@ public:
         if (worker_.joinable()) {
             worker_.join();
         }
-        
-        if (access_log.is_open()) access_log.close();
-        if (error_log.is_open()) error_log.close();
+        if (file_stream_.is_open()) file_stream_.close();
     }
 };
 

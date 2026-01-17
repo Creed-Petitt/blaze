@@ -16,6 +16,7 @@ namespace blaze {
 struct AppConfig {
     size_t max_body_size = 10 * 1024 * 1024; // 10MB default
     int timeout_seconds = 30;                // 30s timeout
+    std::string log_path = "stdout";         // Logging destination
 };
 
 class App {

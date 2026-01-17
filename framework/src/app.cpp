@@ -98,6 +98,8 @@ boost::asio::awaitable<std::string> App::handle_request(Request& req, const std:
 }
 
 void App::listen(const int port, int num_threads) {
+    logger_.configure(config_.log_path);
+
     if (num_threads <= 0) {
         num_threads = 4;
     }
@@ -130,6 +132,8 @@ void App::listen(const int port, int num_threads) {
 }
 
 void App::listen_ssl(const int port, const std::string& cert_path, const std::string& key_path, int num_threads) {
+    logger_.configure(config_.log_path);
+
     if (num_threads <= 0) {
         num_threads = 4;
     }
