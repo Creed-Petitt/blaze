@@ -9,6 +9,7 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <blaze/json.h>
+#include <blaze/db_common.h>
 #include "pg_connection.h"
 
 namespace blaze {
@@ -32,6 +33,7 @@ namespace blaze {
         std::queue<PgConnection*> available_;
         std::queue<std::shared_ptr<boost::asio::steady_timer>> waiters_;
         std::mutex mutex_;
+        CircuitBreaker breaker_;
 
         boost::asio::awaitable<PgConnection*> acquire();
         void release(PgConnection* conn);

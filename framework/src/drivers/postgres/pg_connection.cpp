@@ -32,6 +32,16 @@ namespace blaze {
     }
 
     boost::asio::awaitable<void> PgConnection::connect(const std::string& conn_str) {
+        if (socket_.is_open()) {
+            boost::system::error_code ec;
+            socket_.close(ec);
+        }
+
+        if (conn_) {
+            PQfinish(conn_);
+            conn_ = nullptr;
+        }
+
         // Initiate non-blocking connection
         conn_ = PQconnectStart(conn_str.c_str());
         if (!conn_) {
@@ -93,14 +103,26 @@ namespace blaze {
         }
 
         if (!res) {
-             throw std::runtime_error("Query returned null result");
+             throw std::runtime_error("Query returned null result: " + std::string(PQerrorMessage(conn_)));
+        }
+
+        auto status = PQresultStatus(res);
+        if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
+            std::string err = PQresultErrorMessage(res);
+            PQclear(res);
+            throw std::runtime_error("PostgreSQL Query Error: " + err);
         }
 
         co_return PgResult(res);
     }
 
     bool PgConnection::is_connected() const {
-        return conn_ && PQstatus(conn_) == CONNECTION_OK;
+        if (!conn_ || PQstatus(conn_) != CONNECTION_OK) return false;
+        
+        // Force libpq to check the socket for closures
+        if (PQconsumeInput(conn_) == 0) return false;
+        
+        return PQstatus(conn_) == CONNECTION_OK;
     }
 
     boost::asio::awaitable<void> PgConnection::wait_for_socket(int poll_status) {

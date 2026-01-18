@@ -7,7 +7,6 @@ namespace blaze {
     PgPool::PgPool(boost::asio::io_context& ctx, std::string conn_str, int size)
         : ctx_(ctx), conn_str_(std::move(conn_str)), size_(size) {}
 
-    // Delegating constructor
     PgPool::PgPool(App& app, std::string conn_str, const int size)
         : PgPool(app.engine(), std::move(conn_str), size) {}
 
@@ -15,17 +14,16 @@ namespace blaze {
         boost::asio::co_spawn(ctx_, [this]() -> boost::asio::awaitable<void> {
             try {
                 co_await start();
-            } catch (const std::exception& e) {
-                // Use logger in production
-                fprintf(stderr, "[PgPool] Connection Error: %s\n", e.what());
-            }
+            } catch (...) {}
         }, boost::asio::detached);
     }
 
     boost::asio::awaitable<void> PgPool::start() {
         for (int i = 0; i < size_; ++i) {
             auto conn = std::make_unique<PgConnection>(ctx_);
-            co_await conn->connect(conn_str_);
+            try {
+                co_await conn->connect(conn_str_);
+            } catch (...) {}
             
             std::lock_guard<std::mutex> lock(mutex_);
             available_.push(conn.get());
@@ -35,56 +33,75 @@ namespace blaze {
     }
 
     boost::asio::awaitable<PgConnection*> PgPool::acquire() {
-        std::shared_ptr<boost::asio::steady_timer> timer;
-        
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (!available_.empty()) {
-                PgConnection* conn = available_.front();
-                available_.pop();
-                co_return conn;
+        auto start_time = std::chrono::steady_clock::now();
+        while (true) {
+            std::shared_ptr<boost::asio::steady_timer> timer;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (!available_.empty()) {
+                    PgConnection* conn = available_.front();
+                    available_.pop();
+                    co_return conn;
+                }
+
+                if (std::chrono::steady_clock::now() - start_time > std::chrono::seconds(5)) {
+                    throw std::runtime_error("Timeout acquiring Postgres connection");
+                }
+
+                timer = std::make_shared<boost::asio::steady_timer>(ctx_, std::chrono::seconds(5));
+                waiters_.push(timer);
             }
-
-            // Pool exhausted, must wait
-            timer = std::make_shared<boost::asio::steady_timer>(
-                ctx_, std::chrono::steady_clock::time_point::max()
-            );
-            waiters_.push(timer);
+            try {
+                co_await timer->async_wait(boost::asio::use_awaitable);
+            } catch (...) {}
         }
-
-        try {
-            co_await timer->async_wait(boost::asio::use_awaitable);
-        } catch (const boost::system::system_error& e) {
-            if (e.code() != boost::asio::error::operation_aborted) {
-                throw;
-            }
-        }
-
-        // Woken up by release(), try again
-        co_return co_await acquire();
     }
 
     void PgPool::release(PgConnection* conn) {
+        if (!conn) return;
         std::lock_guard<std::mutex> lock(mutex_);
         available_.push(conn);
-        
         if (!waiters_.empty()) {
             auto timer = waiters_.front();
             waiters_.pop();
-            timer->cancel(); // Wake up the next waiter
+            timer->cancel();
         }
     }
 
     boost::asio::awaitable<Json> PgPool::query(const std::string& sql) {
-        PgConnection* conn = co_await acquire();
-        try {
-            PgResult res = co_await conn->query(sql);
-            release(conn);
-            co_return Json(std::make_shared<PgResult>(std::move(res)));
-        } catch (...) {
-            release(conn);
-            throw;
+        if (!breaker_.allow_request()) {
+            throw std::runtime_error("Postgres Circuit Open: Too many recent failures");
         }
+
+        PgConnection* conn = co_await acquire();
+
+        for (int attempt = 1; attempt <= 2; ++attempt) {
+            try {
+                if (!conn->is_open()) {
+                    co_await conn->connect(conn_str_);
+                }
+
+                PgResult res = co_await conn->query(sql);
+
+                release(conn);
+                breaker_.record_success();
+                co_return Json(std::make_shared<PgResult>(std::move(res)));
+
+            } catch (const std::exception& e) {
+                conn->force_close();
+
+                // If this was the last attempt, fail and trip the breaker
+                if (attempt == 2) {
+                    release(conn);
+                    breaker_.record_failure();
+                    throw;
+                }
+            }
+        }
+        
+        // Should be unreachable
+        release(conn);
+        throw std::runtime_error("Postgres Query Failed");
     }
 
 } // namespace blaze

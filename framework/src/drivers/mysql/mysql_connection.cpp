@@ -32,6 +32,17 @@ boost::asio::awaitable<void> MySqlConnection::connect(const std::string& host,
                                                    const std::string& pass, 
                                                    const std::string& db, 
                                                    unsigned int port) {
+    if (socket_.is_open()) {
+        boost::system::error_code ec;
+        socket_.close(ec);
+    }
+
+    if (conn_) {
+        mysql_close(conn_);
+    }
+    conn_ = mysql_init(nullptr);
+    if (!conn_) throw std::runtime_error("Failed to re-initialize MySQL object");
+
     mysql_options(conn_, MYSQL_OPT_NONBLOCK, 0);
 
     MYSQL* res;

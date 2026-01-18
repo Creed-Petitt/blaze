@@ -19,20 +19,22 @@ public:
     MySqlConnection(MySqlConnection&& other) noexcept;
     MySqlConnection& operator=(MySqlConnection&& other) noexcept;
 
-    boost::asio::awaitable<void> connect(const std::string& host, 
-                                       const std::string& user, 
-                                       const std::string& pass, 
-                                       const std::string& db, 
-                                       unsigned int port);
-    
+    boost::asio::awaitable<void> connect(
+        const std::string& host,
+        const std::string& user,
+        const std::string& pass,
+        const std::string& db,
+        unsigned int port);
+
     boost::asio::awaitable<MySqlResult> query(const std::string& sql);
     bool is_connected() const;
+    bool is_open() const { return socket_.is_open(); }
+    void force_close() { if (socket_.is_open()) { boost::system::error_code ec; socket_.close(ec); } }
 
 private:
     boost::asio::io_context& ctx_;
     MYSQL* conn_;
     boost::asio::posix::stream_descriptor socket_;
-
     boost::asio::awaitable<void> wait_for_socket(int status);
 };
 

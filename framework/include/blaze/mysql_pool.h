@@ -9,6 +9,7 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <blaze/json.h>
+#include <blaze/db_common.h>
 #include <blaze/mysql_connection.h>
 
 namespace blaze {
@@ -37,6 +38,7 @@ private:
     std::queue<MySqlConnection*> available_;
     std::queue<std::shared_ptr<boost::asio::steady_timer>> waiters_;
     std::mutex mutex_;
+    CircuitBreaker breaker_;
 
     void parse_url();
     boost::asio::awaitable<MySqlConnection*> acquire();

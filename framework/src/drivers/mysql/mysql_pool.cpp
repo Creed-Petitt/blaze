@@ -29,16 +29,16 @@ void MySqlPool::connect() {
     boost::asio::co_spawn(ctx_, [this]() -> boost::asio::awaitable<void> {
         try {
             co_await start();
-        } catch (const std::exception& e) {
-            fprintf(stderr, "[MySqlPool] Connection Error: %s\n", e.what());
-        }
+        } catch (...) {}
     }, boost::asio::detached);
 }
 
 boost::asio::awaitable<void> MySqlPool::start() {
     for (int i = 0; i < size_; ++i) {
         auto conn = std::make_unique<MySqlConnection>(ctx_);
-        co_await conn->connect(config_.host, config_.user, config_.pass, config_.db, config_.port);
+        try {
+            co_await conn->connect(config_.host, config_.user, config_.pass, config_.db, config_.port);
+        } catch (...) {}
         
         std::lock_guard<std::mutex> lock(mutex_);
         available_.push(conn.get());
@@ -48,6 +48,7 @@ boost::asio::awaitable<void> MySqlPool::start() {
 }
 
 boost::asio::awaitable<MySqlConnection*> MySqlPool::acquire() {
+    auto start_time = std::chrono::steady_clock::now();
     while (true) {
         std::shared_ptr<boost::asio::steady_timer> timer;
         {
@@ -57,7 +58,12 @@ boost::asio::awaitable<MySqlConnection*> MySqlPool::acquire() {
                 available_.pop();
                 co_return conn;
             }
-            timer = std::make_shared<boost::asio::steady_timer>(ctx_, std::chrono::steady_clock::time_point::max());
+            
+            if (std::chrono::steady_clock::now() - start_time > std::chrono::seconds(5)) {
+                throw std::runtime_error("Timeout acquiring MySQL connection");
+            }
+
+            timer = std::make_shared<boost::asio::steady_timer>(ctx_, std::chrono::seconds(5));
             waiters_.push(timer);
         }
         try {
@@ -78,15 +84,36 @@ void MySqlPool::release(MySqlConnection* conn) {
 }
 
 boost::asio::awaitable<Json> MySqlPool::query(const std::string& sql) {
-    auto* conn = co_await acquire();
-    try {
-        auto res = co_await conn->query(sql);
-        release(conn);
-        co_return Json(std::make_shared<MySqlResult>(std::move(res)));
-    } catch (...) {
-        release(conn);
-        throw;
+    if (!breaker_.allow_request()) {
+        throw std::runtime_error("MySQL Circuit Open: Too many recent failures");
     }
+
+    auto* conn = co_await acquire();
+
+    for (int attempt = 1; attempt <= 2; ++attempt) {
+        try {
+            if (!conn->is_open()) {
+                co_await conn->connect(config_.host, config_.user, config_.pass, config_.db, config_.port);
+            }
+
+            auto res = co_await conn->query(sql);
+
+            release(conn);
+            breaker_.record_success();
+            co_return Json(std::make_shared<MySqlResult>(std::move(res)));
+
+        } catch (const std::exception& e) {
+            conn->force_close();
+            if (attempt == 2) {
+                release(conn);
+                breaker_.record_failure();
+                throw;
+            }
+        }
+    }
+
+    release(conn);
+    throw std::runtime_error("MySQL Query Failed");
 }
 
 } // namespace blaze

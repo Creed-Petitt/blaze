@@ -26,6 +26,8 @@ namespace blaze {
         [[nodiscard]] boost::asio::awaitable<PgResult> query(const std::string& sql);
 
         [[nodiscard]] bool is_connected() const;
+        [[nodiscard]] bool is_open() const { return socket_.is_open(); }
+        void force_close() { if (socket_.is_open()) { boost::system::error_code ec; socket_.close(ec); } }
 
     private:
         boost::asio::io_context& ctx_;
