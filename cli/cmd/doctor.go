@@ -104,8 +104,13 @@ func runDoctor() {
 		}
 	}
 	
-	if !checkLib("mysqlclient", "MySQL Libs") {
-		fmt.Println(subTextStyle.Render("      -> Optional. Needed for MySQL driver."))
+	if !checkLib("libmariadb", "MariaDB Connector (Async)") {
+		fmt.Println(subTextStyle.Render("      -> Required for MySQL async driver."))
+		if runtime.GOOS == "linux" {
+			fmt.Println(subTextStyle.Render("      -> Try: sudo apt install libmariadb-dev"))
+		} else if runtime.GOOS == "darwin" {
+			fmt.Println(subTextStyle.Render("      -> Try: brew install mariadb-connector-c"))
+		}
 	}
 
 	fmt.Println("")

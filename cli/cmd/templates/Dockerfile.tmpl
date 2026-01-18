@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     git \
     libssl-dev \
     libpq-dev \
+    libmariadb-dev \
     libboost-all-dev
 
 WORKDIR /app
@@ -27,6 +28,7 @@ RUN apt-get update && apt-get install -y \
     libboost-system-dev \
     libboost-thread-dev \
     libpq5 \
+    libmariadb3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
