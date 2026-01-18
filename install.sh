@@ -15,28 +15,17 @@ is_installed_apt() {
 }
 
 install_dependencies() {
-    echo -e "${YELLOW}[?] Do you want to check and install system dependencies (OpenSSL, Drivers)? [y/N]${NC}"
-    
-    # Read from /dev/tty to handle 'curl | bash' scenarios
-    if [ -t 0 ]; then
-        read -r response
-    else
-        read -r response < /dev/tty
-    fi
-
-    if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-        return
-    fi
+    echo -e "${YELLOW}[+] Checking system dependencies (OpenSSL, Postgres, MySQL)...${NC}"
 
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         if [ -f /etc/debian_version ]; then
             # Debian/Ubuntu
-            echo "[+] Detected Debian/Ubuntu..."
             MISSING=""
             if ! is_installed_apt cmake; then MISSING="$MISSING cmake"; fi
             if ! is_installed_apt libssl-dev; then MISSING="$MISSING libssl-dev"; fi
             if ! is_installed_apt libpq-dev; then MISSING="$MISSING libpq-dev"; fi
             if ! is_installed_apt libmariadb-dev; then MISSING="$MISSING libmariadb-dev"; fi
+            # Optional but recommended
             if ! is_installed_apt libhiredis-dev; then MISSING="$MISSING libhiredis-dev"; fi
 
             if [ -n "$MISSING" ]; then
@@ -48,26 +37,26 @@ install_dependencies() {
 
         elif [ -f /etc/redhat-release ]; then
             # Fedora / RHEL
-            echo "[+] Detected Fedora/RHEL..."
+            echo "[+] Detected Fedora/RHEL... Installing dependencies..."
             sudo dnf install -y cmake openssl-devel libpq-devel mariadb-devel hiredis-devel
         
         elif [ -f /etc/arch-release ]; then
             # Arch Linux
-            echo "[+] Detected Arch Linux..."
+            echo "[+] Detected Arch Linux... Installing dependencies..."
             sudo pacman -S --needed cmake openssl postgresql-libs libmariadbclient hiredis
         fi
     elif [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS
         if command -v brew &> /dev/null; then
-            echo "[+] Detected macOS (Homebrew)..."
+            echo "[+] Detected macOS (Homebrew)... Installing dependencies..."
             brew install cmake openssl libpq mariadb-connector-c hiredis
         else
-            echo -e "${RED}[!] Homebrew not found. Skipping dependency check.${NC}"
+            echo -e "${RED}[!] Homebrew not found. Cannot install dependencies automatically.${NC}"
         fi
     fi
 }
 
-# Dependency Check (Optional)
+# Always install dependencies
 install_dependencies
 
 # Check for Go (Required for CLI build)
