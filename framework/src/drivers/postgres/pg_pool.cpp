@@ -25,9 +25,17 @@ namespace blaze {
                 co_await conn->connect(conn_str_);
             } catch (...) {}
             
-            std::lock_guard<std::mutex> lock(mutex_);
-            available_.push(conn.get());
-            pool_.push_back(std::move(conn));
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                available_.push(conn.get());
+                pool_.push_back(std::move(conn));
+                
+                if (!waiters_.empty()) {
+                    auto timer = waiters_.front();
+                    waiters_.pop();
+                    timer->cancel(); // Wake up the waiter
+                }
+            }
         }
         co_return;
     }

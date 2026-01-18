@@ -40,9 +40,17 @@ boost::asio::awaitable<void> MySqlPool::start() {
             co_await conn->connect(config_.host, config_.user, config_.pass, config_.db, config_.port);
         } catch (...) {}
         
-        std::lock_guard<std::mutex> lock(mutex_);
-        available_.push(conn.get());
-        pool_.push_back(std::move(conn));
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            available_.push(conn.get());
+            pool_.push_back(std::move(conn));
+
+            if (!waiters_.empty()) {
+                auto timer = waiters_.front();
+                waiters_.pop();
+                timer->cancel();
+            }
+        }
     }
     co_return;
 }
