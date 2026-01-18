@@ -44,6 +44,12 @@ namespace {
                 self->do_read();
             }
 
+        } catch (const boost::system::system_error& e) {
+            // Silence common noise
+            if (e.code() != boost::asio::error::bad_descriptor && 
+                e.code() != boost::asio::error::operation_aborted) {
+                std::cerr << "Async Handler Error: " << e.what() << "\n";
+            }
         } catch (const std::exception& e) {
             std::cerr << "Async Handler Error: " << e.what() << "\n";
             try {
@@ -224,7 +230,11 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
 
     auto beast_req = parser_->release();
     bool keep_alive = beast_req.keep_alive();
-    std::string client_ip = stream_.socket().remote_endpoint().address().to_string();
+    
+    std::string client_ip = "unknown";
+    try {
+        client_ip = stream_.socket().remote_endpoint().address().to_string();
+    } catch (...) {}
 
     boost::asio::co_spawn(
         stream_.get_executor(),
@@ -319,7 +329,11 @@ void SslSession::on_read(beast::error_code ec, std::size_t bytes_transferred) {
 
     auto beast_req = parser_->release();
     bool keep_alive = beast_req.keep_alive();
-    std::string client_ip = beast::get_lowest_layer(stream_).socket().remote_endpoint().address().to_string();
+    
+    std::string client_ip = "unknown";
+    try {
+        client_ip = beast::get_lowest_layer(stream_).socket().remote_endpoint().address().to_string();
+    } catch (...) {}
 
     boost::asio::co_spawn(
         stream_.get_executor(),
