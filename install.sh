@@ -36,7 +36,8 @@ install_dependencies() {
             if ! is_installed_apt cmake; then MISSING="$MISSING cmake"; fi
             if ! is_installed_apt libssl-dev; then MISSING="$MISSING libssl-dev"; fi
             if ! is_installed_apt libpq-dev; then MISSING="$MISSING libpq-dev"; fi
-            if ! is_installed_apt libmysqlclient-dev; then MISSING="$MISSING libmysqlclient-dev"; fi
+            if ! is_installed_apt libmariadb-dev; then MISSING="$MISSING libmariadb-dev"; fi
+            if ! is_installed_apt libhiredis-dev; then MISSING="$MISSING libhiredis-dev"; fi
 
             if [ -n "$MISSING" ]; then
                 echo -e "${YELLOW}[+] Installing missing packages: $MISSING${NC}"
@@ -48,18 +49,18 @@ install_dependencies() {
         elif [ -f /etc/redhat-release ]; then
             # Fedora / RHEL
             echo "[+] Detected Fedora/RHEL..."
-            sudo dnf install -y cmake openssl-devel libpq-devel mysql-devel
+            sudo dnf install -y cmake openssl-devel libpq-devel mariadb-devel hiredis-devel
         
         elif [ -f /etc/arch-release ]; then
             # Arch Linux
             echo "[+] Detected Arch Linux..."
-            sudo pacman -S --needed cmake openssl postgresql-libs libmariadbclient
+            sudo pacman -S --needed cmake openssl postgresql-libs libmariadbclient hiredis
         fi
     elif [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS
         if command -v brew &> /dev/null; then
             echo "[+] Detected macOS (Homebrew)..."
-            brew install cmake openssl libpq mysql-client
+            brew install cmake openssl libpq mariadb-connector-c hiredis
         else
             echo -e "${RED}[!] Homebrew not found. Skipping dependency check.${NC}"
         fi

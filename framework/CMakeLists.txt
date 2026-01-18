@@ -1,3 +1,9 @@
+cmake_minimum_required(VERSION 3.15)
+project(blaze_framework)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 include(FetchContent)
 
 # 1. Fetch modern Boost 1.85.0 (The entire engine)
@@ -15,6 +21,8 @@ FetchContent_MakeAvailable(boost_all)
 
 find_package(OpenSSL REQUIRED)
 find_package(PostgreSQL)
+# Try finding MariaDB under standard names
+find_library(MARIADB_LIB NAMES mariadb mariadbclient)
 
 # Core Library
 add_library(blaze_core STATIC
@@ -25,12 +33,15 @@ add_library(blaze_core STATIC
     src/server.cpp
     src/crypto.cpp
     src/environment.cpp
+    src/json.cpp
 )
 add_library(blaze::core ALIAS blaze_core)
 
 target_include_directories(blaze_core BEFORE PUBLIC 
     $<BUILD_INTERFACE:${boost_all_SOURCE_DIR}>
     include
+    ${PostgreSQL_INCLUDE_DIRS}
+    ${MARIADB_INCLUDE_DIR}
 )
 target_include_directories(blaze_core PRIVATE src)
 
@@ -43,27 +54,18 @@ target_link_libraries(blaze_core PUBLIC
     OpenSSL::Crypto
 )
 
-# Redis Driver (Self-contained via Source Injection)
-add_library(blaze_redis STATIC
-    src/drivers/redis/redis_pool.cpp
-)
-add_library(blaze::redis ALIAS blaze_redis)
-target_include_directories(blaze_redis BEFORE PUBLIC 
-    $<BUILD_INTERFACE:${boost_all_SOURCE_DIR}>
-    include
-)
-target_link_libraries(blaze_redis PUBLIC blaze::core)
-
 # MySQL Driver (Self-contained via Source Injection)
 add_library(blaze_mysql STATIC
+    src/drivers/mysql/mysql_connection.cpp
     src/drivers/mysql/mysql_pool.cpp
+    src/drivers/mysql/mysql_result.cpp
 )
 add_library(blaze::mysql ALIAS blaze_mysql)
 target_include_directories(blaze_mysql BEFORE PUBLIC 
     $<BUILD_INTERFACE:${boost_all_SOURCE_DIR}>
     include
 )
-target_link_libraries(blaze_mysql PUBLIC blaze::core)
+target_link_libraries(blaze_mysql PUBLIC blaze::core ${MARIADB_LIB})
 
 # Postgres Driver (Optional)
 if(PostgreSQL_FOUND)
