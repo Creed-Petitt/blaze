@@ -21,6 +21,5 @@ add_executable({{ .ProjectName }} src/main.cpp)
 target_link_libraries({{ .ProjectName }} PRIVATE 
     blaze::core 
     blaze::postgres
-    blaze::redis
     blaze::mysql
 )
