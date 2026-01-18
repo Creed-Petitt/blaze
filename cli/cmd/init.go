@@ -41,7 +41,7 @@ func createProject(name string) {
 		titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF4C4C")) // Blaze Red/Orange
 		checkStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))            // Success Green
 		textStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#E0E0E0"))            // White-ish
-		commandStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C"))            // Blaze Red
+		commandStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF"))            // Cyan
 	)
 
 	fmt.Println(titleStyle.Render(fmt.Sprintf("\n  Scaffolding project '%s'...", name)))
@@ -93,9 +93,9 @@ func createProject(name string) {
 	}
 
 	fmt.Println("")
-	fmt.Println(checkStyle.Render("  [v] Project structure created"))
-	fmt.Println(checkStyle.Render("  [v] Config files generated"))
-	fmt.Println(checkStyle.Render("  [v] Docker environment ready"))
+	fmt.Println(checkStyle.Render("  [+] Project structure created"))
+	fmt.Println(checkStyle.Render("  [+] Config files generated"))
+	fmt.Println(checkStyle.Render("  [+] Docker environment ready"))
 	fmt.Println("")
 	
 	fmt.Println(textStyle.Render("  Project ready! To get started:"))

@@ -42,10 +42,10 @@ func runDoctor() {
 	checkCommand := func(name string, display string) bool {
 		path, err := exec.LookPath(name)
 		if err == nil {
-			fmt.Printf("  %s %s (%s)\n", successStyle.Render("[v]"), sectionStyle.Render(display), path)
+			fmt.Printf("  %s %s (%s)\n", successStyle.Render("[+]"), sectionStyle.Render(display), path)
 			return true
 		}
-		fmt.Printf("  %s %s (Not found)\n", failStyle.Render("[x]"), sectionStyle.Render(display))
+		fmt.Printf("  %s %s (Not found)\n", failStyle.Render("[!]"), sectionStyle.Render(display))
 		return false
 	}
 
@@ -56,12 +56,12 @@ func runDoctor() {
 		// Try pkg-config first
 		cmd := exec.Command("pkg-config", "--exists", pkgName)
 		if err := cmd.Run(); err == nil {
-			fmt.Printf("  %s %s (Found via pkg-config)\n", successStyle.Render("[v]"), sectionStyle.Render(display))
+			fmt.Printf("  %s %s (Found via pkg-config)\n", successStyle.Render("[+]"), sectionStyle.Render(display))
 			return true
 		}
 		// Fallback: This is hard to detect reliably across all OSs without compiling.
 		// We will mark it as Warning/Fail
-		fmt.Printf("  %s %s (Not found)\n", failStyle.Render("[x]"), sectionStyle.Render(display))
+		fmt.Printf("  %s %s (Not found)\n", failStyle.Render("[!]"), sectionStyle.Render(display))
 		return false
 	}
 
@@ -115,7 +115,7 @@ func runDoctor() {
 
 	fmt.Println("")
 	if allGood {
-		fmt.Println(successStyle.Render("  [v] System Ready. You are good to go!"))
+		fmt.Println(successStyle.Render("  [+] System Ready. You are good to go!"))
 	} else {
 		fmt.Println(warnStyle.Render("  [!] Some requirements are missing."))
 		fmt.Println(subTextStyle.Render("      Run the suggested commands to fix them."))

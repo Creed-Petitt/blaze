@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -255,6 +256,8 @@ func runCmdWithParsing(p *tea.Program, command string, args []string, startRange
 	cmd.Stdout = pw
 	cmd.Stderr = pw
 	
+	var outputLog strings.Builder
+
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -265,6 +268,8 @@ func runCmdWithParsing(p *tea.Program, command string, args []string, startRange
 		
 		for scanner.Scan() {
 			line := scanner.Text()
+			outputLog.WriteString(line + "\n") // Capture output
+
 			if matches := rePercent.FindStringSubmatch(line); len(matches) > 1 {
 				val, _ := strconv.Atoi(matches[1])
 				progress := startRange + (float64(val)/100.0)*(endRange-startRange)
@@ -275,5 +280,9 @@ func runCmdWithParsing(p *tea.Program, command string, args []string, startRange
 
 	err := cmd.Wait()
 	pw.Close()
-	return err
+	
+	if err != nil {
+		return fmt.Errorf("%w\n\n=== Build Output ===\n%s", err, outputLog.String())
+	}
+	return nil
 }
