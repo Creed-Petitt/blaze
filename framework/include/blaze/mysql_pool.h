@@ -10,19 +10,20 @@
 #include <boost/asio/steady_timer.hpp>
 #include <blaze/json.h>
 #include <blaze/db_common.h>
+#include <blaze/database.h>
 #include <blaze/mysql_connection.h>
 
 namespace blaze {
 
 class App;
 
-class MySqlPool {
+class MySqlPool : public Database {
 public:
     explicit MySqlPool(boost::asio::io_context& ctx, std::string url, int size = 10);
     explicit MySqlPool(App& app, std::string url, int size = 10);
 
     void connect();
-    boost::asio::awaitable<Json> query(const std::string& sql);
+    boost::asio::awaitable<Json> query(const std::string& sql) override;
 
 private:
     boost::asio::io_context& ctx_;

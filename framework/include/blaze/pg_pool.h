@@ -10,19 +10,20 @@
 #include <boost/asio/steady_timer.hpp>
 #include <blaze/json.h>
 #include <blaze/db_common.h>
+#include <blaze/database.h>
 #include "pg_connection.h"
 
 namespace blaze {
 
     class App;
 
-    class PgPool {
+    class PgPool : public Database {
     public:
         explicit PgPool(boost::asio::io_context& ctx, std::string conn_str, int size = 10);
         explicit PgPool(App& app, std::string conn_str, int size = 10);
 
         void connect();
-        boost::asio::awaitable<Json> query(const std::string& sql);
+        boost::asio::awaitable<Json> query(const std::string& sql) override;
 
     private:
         boost::asio::io_context& ctx_;
