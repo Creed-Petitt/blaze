@@ -26,15 +26,19 @@ public:
         const std::string& db,
         unsigned int port);
 
-    boost::asio::awaitable<MySqlResult> query(const std::string& sql);
-    bool is_connected() const;
-    bool is_open() const { return socket_.is_open(); }
+    boost::asio::awaitable<MySqlResult> query(const std::string& sql, const std::vector<std::string>& params = {});
+
+    [[nodiscard]] bool is_connected() const;
+    [[nodiscard]] bool is_open() const { return socket_.is_open(); }
     void force_close() { if (socket_.is_open()) { boost::system::error_code ec; socket_.close(ec); } }
 
 private:
     boost::asio::io_context& ctx_;
     MYSQL* conn_;
     boost::asio::posix::stream_descriptor socket_;
+    
+    std::string format_query(const std::string& sql, const std::vector<std::string>& params);
+
     boost::asio::awaitable<void> wait_for_socket(int status);
 };
 

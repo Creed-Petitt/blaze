@@ -72,9 +72,17 @@ boost::asio::awaitable<void> MySqlConnection::connect(const std::string& host,
     }
 }
 
-boost::asio::awaitable<MySqlResult> MySqlConnection::query(const std::string& sql) {
+boost::asio::awaitable<MySqlResult> MySqlConnection::query(const std::string& sql, const std::vector<std::string>& params) {
+    std::string final_sql;
+    
+    if (params.empty()) {
+        final_sql = sql;
+    } else {
+        final_sql = format_query(sql, params);
+    }
+
     int err;
-    int status = mysql_real_query_start(&err, conn_, sql.c_str(), sql.length());
+    int status = mysql_real_query_start(&err, conn_, final_sql.c_str(), final_sql.length());
 
     while (status) {
         co_await wait_for_socket(status);
@@ -91,6 +99,42 @@ boost::asio::awaitable<MySqlResult> MySqlConnection::query(const std::string& sq
     }
 
     co_return MySqlResult(conn_, res_ptr);
+}
+
+std::string MySqlConnection::format_query(const std::string& sql, const std::vector<std::string>& params) {
+    std::string result;
+
+    result.reserve(sql.length() + params.size() * 10);
+    
+    size_t param_idx = 0;
+    for (size_t i = 0; i < sql.length(); ++i) {
+        if (sql[i] == '?') {
+            if (param_idx >= params.size()) {
+                throw std::runtime_error("Not enough parameters provided for SQL query");
+            }
+
+            const std::string& val = params[param_idx++];
+            
+            // Allocate buffer for escaped string (2x+1 is the safe max required by mysql)
+            std::vector<char> buffer(val.length() * 2 + 1);
+            
+            // This is non-blocking (pure CPU string op)
+            unsigned long escaped_len = mysql_real_escape_string(conn_, buffer.data(), val.c_str(), val.length());
+            
+            result += "'";
+            result.append(buffer.data(), escaped_len);
+            result += "'";
+        } else {
+            result += sql[i];
+        }
+    }
+
+    if (param_idx < params.size()) {
+        // Optional: warn about unused parameters, or just ignore them.
+        // For strictness, let's allow it (maybe user conditional logic) but it's good practice to match.
+    }
+
+    return result;
 }
 
 bool MySqlConnection::is_connected() const {
