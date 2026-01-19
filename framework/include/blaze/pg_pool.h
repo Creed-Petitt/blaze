@@ -23,7 +23,7 @@ namespace blaze {
         explicit PgPool(App& app, std::string conn_str, int size = 10);
 
         void connect();
-        boost::asio::awaitable<Json> query(const std::string& sql) override;
+        boost::asio::awaitable<Json> query(const std::string& sql, const std::vector<std::string>& params = {}) override;
 
     private:
         boost::asio::io_context& ctx_;

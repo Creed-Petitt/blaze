@@ -75,9 +75,23 @@ namespace blaze {
         }
     }
 
-    boost::asio::awaitable<PgResult> PgConnection::query(const std::string& sql) {
+    boost::asio::awaitable<PgResult> PgConnection::query(const std::string& sql, const std::vector<std::string>& params) {
         // Send query to buffer
-        if (!PQsendQuery(conn_, sql.c_str())) {
+        int nParams = static_cast<int>(params.size());
+        int sent = 0;
+
+        if (nParams == 0) {
+            sent = PQsendQueryParams(conn_, sql.c_str(), 0, nullptr, nullptr, nullptr, nullptr, 0);
+        } else {
+            std::vector<const char*> paramValues;
+            paramValues.reserve(nParams);
+            for (const auto& p : params) {
+                paramValues.push_back(p.c_str());
+            }
+            sent = PQsendQueryParams(conn_, sql.c_str(), nParams, nullptr, paramValues.data(), nullptr, nullptr, 0);
+        }
+
+        if (!sent) {
             throw std::runtime_error("Failed to send query: " + std::string(PQerrorMessage(conn_)));
         }
 

@@ -5,6 +5,7 @@
 #include <boost/asio.hpp>
 #include <boost/asio/awaitable.hpp>
 #include <string>
+#include <vector>
 #include <blaze/pg_result.h>
 
 namespace blaze {
@@ -23,7 +24,7 @@ namespace blaze {
         // Async Operations
         boost::asio::awaitable<void> connect(const std::string& conn_str);
         
-        [[nodiscard]] boost::asio::awaitable<PgResult> query(const std::string& sql);
+        [[nodiscard]] boost::asio::awaitable<PgResult> query(const std::string& sql, const std::vector<std::string>& params = {});
 
         [[nodiscard]] bool is_connected() const;
         [[nodiscard]] bool is_open() const { return socket_.is_open(); }

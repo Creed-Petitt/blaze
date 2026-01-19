@@ -11,7 +11,7 @@ class Database {
 public:
     virtual ~Database() = default;
 
-    virtual boost::asio::awaitable<Json> query(const std::string& sql) = 0;
+    virtual boost::asio::awaitable<Json> query(const std::string& sql, const std::vector<std::string>& params = {}) = 0;
 };
 
 } // namespace blaze
