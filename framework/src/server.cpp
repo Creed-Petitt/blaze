@@ -10,10 +10,10 @@ namespace {
 
     Request from_beast(http::request<http::string_body>&& req) {
         Request blaze_req;
-        blaze_req.method = {req.method_string().data(), req.method_string().size()};
-        blaze_req.set_target({req.target().data(), req.target().size()});
+        blaze_req.method = std::string(req.method_string());
+        blaze_req.set_target(std::string_view(req.target().data(), req.target().size()));
         blaze_req.body = std::move(req.body());
-        blaze_req.set_fields(req.base());
+        blaze_req.set_fields(std::move(req.base()));
         return blaze_req;
     }
 
@@ -26,46 +26,47 @@ namespace {
         std::string client_ip,
         bool keep_alive
     ) {
+        std::string response_str;
+        bool error_occurred = false;
+
         try {
-            std::string response_str = co_await app.handle_request(req, client_ip, keep_alive);
-            
-            co_await boost::asio::async_write(
-                stream,
-                boost::asio::buffer(response_str),
-                boost::asio::use_awaitable
-            );
-
-            if (!keep_alive) {
-                beast::error_code ec;
-                if constexpr (std::is_same_v<Stream, beast::tcp_stream>) {
-                    stream.socket().shutdown(tcp::socket::shutdown_send, ec);
-                }
-            } else {
-                self->do_read();
-            }
-
+            response_str = co_await app.handle_request(req, client_ip, keep_alive);
         } catch (const boost::system::system_error& e) {
-            // Silence common noise
             if (e.code() != boost::asio::error::bad_descriptor && 
                 e.code() != boost::asio::error::operation_aborted) {
                 std::cerr << "Async Handler Error: " << e.what() << "\n";
             }
+            error_occurred = true;
         } catch (const std::exception& e) {
             std::cerr << "Async Handler Error: " << e.what() << "\n";
+            response_str = 
+                "HTTP/1.1 500 Internal Server Error\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: 21\r\n"
+                "Connection: close\r\n\r\n"
+                "Internal Server Error";
+            keep_alive = false;
+        }
+
+        if (!response_str.empty()) {
             try {
-                static const std::string ERROR_500 = 
-                    "HTTP/1.1 500 Internal Server Error\r\n"
-                    "Content-Type: text/plain\r\n"
-                    "Content-Length: 21\r\n"
-                    "Connection: close\r\n\r\n"
-                    "Internal Server Error";
-                    
                 co_await boost::asio::async_write(
                     stream,
-                    boost::asio::buffer(ERROR_500),
+                    boost::asio::buffer(response_str),
                     boost::asio::use_awaitable
                 );
-            } catch (...) {}
+            } catch (...) {
+                error_occurred = true;
+            }
+        }
+
+        if (error_occurred || !keep_alive) {
+            beast::error_code ec;
+            if constexpr (std::is_same_v<Stream, beast::tcp_stream>) {
+                stream.socket().shutdown(tcp::socket::shutdown_send, ec);
+            }
+        } else {
+            self->do_read();
         }
     }
 }

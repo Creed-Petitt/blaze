@@ -33,8 +33,8 @@ void Request::set_target(std::string_view target) {
     }
 }
 
-void Request::set_fields(const boost::beast::http::header<true, boost::beast::http::fields>& fields) {
-    fields_ = &fields;
+void Request::set_fields(boost::beast::http::fields&& fields) {
+    headers = std::move(fields);
 }
 
 blaze::Json Request::json() const {
@@ -66,17 +66,15 @@ int Request::get_query_int(const std::string& key, const int default_val) const 
 }
 
 std::string_view Request::get_header(std::string_view key) const {
-    if (!fields_) return "";
     boost::beast::string_view beast_key(key.data(), key.size());
-    auto it = fields_->find(beast_key);
-    if (it == fields_->end()) return "";
+    auto it = headers.find(beast_key);
+    if (it == headers.end()) return "";
     return std::string_view(it->value().data(), it->value().size());
 }
 
 bool Request::has_header(std::string_view key) const {
-    if (!fields_) return false;
     boost::beast::string_view beast_key(key.data(), key.size());
-    return fields_->find(beast_key) != fields_->end();
+    return headers.find(beast_key) != headers.end();
 }
 
 std::optional<int> Request::get_param_int(const std::string& key) const {

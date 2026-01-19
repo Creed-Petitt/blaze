@@ -13,17 +13,17 @@
 namespace blaze {
 
 struct Request {
-    std::string_view method;
-    std::string_view path;
-    std::string_view body;
+    std::string method;
+    std::string path;
+    std::string body;
     std::unordered_map<std::string, std::string> params;
     std::unordered_map<std::string, std::string> query;
 
-    // Zero-copy reference to Beast headers
-    const boost::beast::http::header<true, boost::beast::http::fields>* fields_ = nullptr;
+    // Owned copy of Beast headers
+    boost::beast::http::fields headers;
 
     void set_target(std::string_view target);
-    void set_fields(const boost::beast::http::header<true, boost::beast::http::fields>& fields);
+    void set_fields(boost::beast::http::fields&& fields);
 
     // Returns parsed JSON body wrapper
     blaze::Json json() const;
