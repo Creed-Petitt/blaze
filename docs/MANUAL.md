@@ -23,41 +23,78 @@ The CLI is your primary tool for development.
 - `blaze run`: Builds and runs the project with a progress TUI.
 - `blaze docker <service>`: Manages background databases (e.g., `blaze docker psql`).
 
-## 3. Database Drivers
+## 3. Dependency Injection (IoC)
 
-Blaze provides three native, non-blocking drivers with built-in connection pooling.
+Blaze features a robust, thread-safe Dependency Injection container built-in.
 
-### PostgreSQL
+### Registering Services
+In `main()`, you can register services before starting the app:
+
 ```cpp
-#include <blaze/postgres.h>
-Postgres db(app, "postgres://user:pass@host/db", 10);
-auto res = co_await db.query("SELECT * FROM users");
+// Singleton: Created once, shared everywhere
+app.provide<Database>(my_pg_pool);
 
-for (auto row : res) {
-    std::cout << row["name"].as<std::string>() << "\n";
-}
+// Factory Singleton: Created lazily when first needed
+app.provide<Config>([](ServiceProvider& sp) {
+    return std::make_shared<Config>("config.json");
+});
+
+// Transient: Created new every time
+app.provide_transient<Logger>();
 ```
 
-### Redis
+### Auto-Wiring (`BLAZE_DEPS`)
+You can define dependencies directly in your class using the `BLAZE_DEPS` macro. Blaze will automatically resolve and inject them into the constructor.
+
 ```cpp
-#include <blaze/redis.h>
-Redis redis(app, "localhost", 6379);
-co_await redis.set("key", "value");
-std::string val = co_await redis.get("key");
+class UserService {
+public:
+    // "I need a Database and a Config"
+    BLAZE_DEPS(Database, Config)
+
+    UserService(std::shared_ptr<Database> db, std::shared_ptr<Config> cfg) 
+        : db_(db), cfg_(cfg) {}
+    
+    // ...
+};
 ```
 
-### MySQL
-```cpp
-#include <blaze/mysql.h>
-MySql mysql(app, "mysql://user:pass@host:3306/db", 10);
-auto res = co_await mysql.query("SELECT * FROM table");
+### Route Injection
+Blaze supports "Magic Injection" in route handlers. You can request any registered service as an argument.
 
-for (auto row : res) {
-    std::cout << row["name"].as<std::string>() << "\n";
-}
+```cpp
+app.get("/users", [](Response& res, UserService& user) -> Task {
+    co_await user.get_all(res);
+});
 ```
 
-## 4. JSON Handling
+## 4. Database Drivers
+
+Blaze provides native drivers and a unified `Database` interface.
+
+### The `Database` Interface
+We recommend coding against the `blaze::Database` interface to keep your code portable.
+
+```cpp
+// Works with BOTH Postgres and MySQL
+auto res = co_await db->query("SELECT * FROM users");
+```
+
+### Setup (Postgres)
+```cpp
+auto pg = std::make_shared<PgPool>(app.engine(), "postgres://user:pass@host/db", 10);
+pg->connect();
+app.provide<Database>(pg);
+```
+
+### Setup (MySQL)
+```cpp
+auto mysql = std::make_shared<MySqlPool>(app.engine(), "mysql://user:pass@host:3306/db", 10);
+mysql->connect();
+app.provide<Database>(mysql);
+```
+
+## 5. JSON Handling
 
 Blaze uses **Boost.JSON** for maximum performance.
 
@@ -83,22 +120,32 @@ app.post("/api/data", [](Request& req, Response& res) -> Task {
 });
 ```
 
-## 5. Middleware
+## 7. WebSockets
 
-Middleware functions are fully asynchronous (`Task`). They can modify the request/response or halt execution.
+Blaze includes a high-performance, thread-safe WebSocket server built on Beast.
+
+### Basic Usage
+Register a WebSocket route using `app.ws()`. You can handle Open, Message, and Close events.
 
 ```cpp
-Middleware logger = [](Request& req, Response& res, auto next) -> Task {
-    auto start = std::chrono::steady_clock::now();
-    co_await next();
-    auto end = std::chrono::steady_clock::now();
-    // Log duration...
-};
-
-app.use(logger);
+app.ws("/chat", {
+    .on_open = [](std::shared_ptr<WebSocket> ws) {
+        std::cout << "Client connected!" << std::endl;
+    },
+    .on_message = [](std::shared_ptr<WebSocket> ws, std::string msg) {
+        // Echo the message back
+        ws->send("You said: " + msg);
+    },
+    .on_close = [](std::shared_ptr<WebSocket> ws) {
+        std::cout << "Client disconnected." << std::endl;
+    }
+});
 ```
 
-## 6. Docker & Deployment
+### Thread Safety
+The `ws->send()` method is thread-safe. You can call it from any thread or async callback (e.g., from a database query result or a game loop).
+
+## 8. Docker & Deployment
 
 Blaze supports modular deployment through the CLI.
 
@@ -116,6 +163,3 @@ Run the entire stack in isolated containers:
 # Builds the app and starts all dependencies
 docker compose up --build
 ```
-
-### Production Build
-Blaze uses multi-stage builds to create tiny, high-performance images (~40MB) that contain only the static binary and minimal runtime libraries.
