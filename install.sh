@@ -22,6 +22,8 @@ install_dependencies() {
             # Debian/Ubuntu
             MISSING=""
             if ! is_installed_apt cmake; then MISSING="$MISSING cmake"; fi
+            if ! is_installed_apt g++; then MISSING="$MISSING g++"; fi
+            if ! is_installed_apt build-essential; then MISSING="$MISSING build-essential"; fi
             if ! is_installed_apt libssl-dev; then MISSING="$MISSING libssl-dev"; fi
             if ! is_installed_apt libpq-dev; then MISSING="$MISSING libpq-dev"; fi
             if ! is_installed_apt libmariadb-dev; then MISSING="$MISSING libmariadb-dev"; fi
