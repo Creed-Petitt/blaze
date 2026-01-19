@@ -6,24 +6,62 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
-# 1. Fetch modern Boost 1.85.0
-message(STATUS "Blaze: Fetching modern Boost 1.85.0 engine. The first build will take ~3-5 minutes...")
-FetchContent_Declare(
-    boost_all
-    URL https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.gz
-)
+# Fetch modern Boost 1.85.0 (Source Only)
+message(STATUS "Blaze: Fetching modern Boost 1.85.0 engine...")
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+    FetchContent_Declare(
+        boost_all
+        URL https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.gz
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE 
+    )
+else()
+    FetchContent_Declare(
+        boost_all
+        URL https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.gz
+    )
+endif()
 
-set(BOOST_ENABLE_CMAKE ON CACHE BOOL "")
-set(BOOST_INCLUDE_LIBRARIES system thread charconv CACHE STRING "")
+FetchContent_GetProperties(boost_all)
+if(NOT boost_all_POPULATED)
+    FetchContent_Populate(boost_all)
+endif()
 
-FetchContent_MakeAvailable(boost_all)
+# boost_system
+if(NOT TARGET boost_system)
+    add_library(boost_system STATIC
+        ${boost_all_SOURCE_DIR}/libs/system/src/error_code.cpp
+    )
+    target_include_directories(boost_system PUBLIC ${boost_all_SOURCE_DIR})
+    add_library(Boost::system ALIAS boost_system)
+endif()
 
-# --- DETECT SYSTEM LIBRARIES (MANDATORY) ---
+# boost_thread
+if(NOT TARGET boost_thread)
+    # Thread requires pthread on Linux
+    find_package(Threads REQUIRED)
+    
+    file(GLOB BOOST_THREAD_SOURCES 
+        "${boost_all_SOURCE_DIR}/libs/thread/src/pthread/thread.cpp"
+        "${boost_all_SOURCE_DIR}/libs/thread/src/pthread/once.cpp"
+    )
+    
+    # Fallback if specific files change, just grab the src/pthread content mostly
+    if(NOT BOOST_THREAD_SOURCES)
+         file(GLOB_RECURSE BOOST_THREAD_SOURCES "${boost_all_SOURCE_DIR}/libs/thread/src/pthread/*.cpp")
+    endif()
+
+    add_library(boost_thread STATIC ${BOOST_THREAD_SOURCES})
+    target_include_directories(boost_thread PUBLIC ${boost_all_SOURCE_DIR})
+    target_link_libraries(boost_thread PUBLIC Threads::Threads)
+    add_library(Boost::thread ALIAS boost_thread)
+endif()
+
+
+# --- DETECT SYSTEM LIBRARIES ---
 find_package(OpenSSL REQUIRED)
 find_package(PostgreSQL REQUIRED)
 find_library(MARIADB_LIB NAMES mariadb mariadbclient REQUIRED)
 
-# --- THE MONOLITHIC BLAZE LIBRARY ---
 set(BLAZE_SOURCES
     src/app.cpp
     src/request.cpp
@@ -46,6 +84,12 @@ set(BLAZE_SOURCES
 add_library(blaze_framework STATIC ${BLAZE_SOURCES})
 add_library(blaze::framework ALIAS blaze_framework)
 
+if(BLAZE_ENABLE_SANITIZERS)
+    message(STATUS "Blaze: Enabling ASan and UBSan...")
+    target_compile_options(blaze_framework PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(blaze_framework PUBLIC -fsanitize=address,undefined)
+endif()
+
 # Legacy aliases
 add_library(blaze::core ALIAS blaze_framework)
 add_library(blaze::mysql ALIAS blaze_framework)
@@ -65,8 +109,8 @@ target_include_directories(blaze_framework PRIVATE
 )
 
 target_link_libraries(blaze_framework PUBLIC 
-    boost_system 
-    boost_thread 
+    Boost::system 
+    Boost::thread 
     OpenSSL::SSL 
     OpenSSL::Crypto
     ${MARIADB_LIB}
