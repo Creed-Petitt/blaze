@@ -34,6 +34,10 @@ void Router::add_route(const std::string& method, const std::string& path,
 }
 
 std::optional<RouteMatch> Router::match(std::string_view method, std::string_view path) const {
+    if (path.size() > 1 && path.back() == '/') {
+        path.remove_suffix(1);
+    }
+
     const std::vector<std::string_view> request_segments = split_view(path);
 
     for (const auto& route : routes_) {
