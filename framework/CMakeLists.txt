@@ -58,9 +58,11 @@ endif()
 
 
 # --- DETECT SYSTEM LIBRARIES ---
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MARIADB REQUIRED libmariadb)
+
 find_package(OpenSSL REQUIRED)
 find_package(PostgreSQL REQUIRED)
-find_library(MARIADB_LIB NAMES mariadb mariadbclient REQUIRED)
 
 set(BLAZE_SOURCES
     src/app.cpp
@@ -99,7 +101,7 @@ target_include_directories(blaze_framework BEFORE PUBLIC
     $<BUILD_INTERFACE:${boost_all_SOURCE_DIR}>
     include
     ${PostgreSQL_INCLUDE_DIRS}
-    ${MARIADB_INCLUDE_DIR}
+    ${MARIADB_INCLUDE_DIRS}
 )
 
 target_include_directories(blaze_framework PRIVATE 
@@ -113,6 +115,6 @@ target_link_libraries(blaze_framework PUBLIC
     Boost::thread 
     OpenSSL::SSL 
     OpenSSL::Crypto
-    ${MARIADB_LIB}
+    ${MARIADB_LIBRARIES}
     PostgreSQL::PostgreSQL
 )

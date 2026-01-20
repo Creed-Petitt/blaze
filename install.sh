@@ -7,7 +7,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}--- Blaze CLI Installer ---${NC}"
+echo -e "Blaze v0.1.0 by Creed Petitt"
 
 # Helper to check if a package is installed (Debian/Ubuntu)
 is_installed_apt() {
@@ -38,9 +38,19 @@ install_dependencies() {
             fi
 
         elif [ -f /etc/redhat-release ]; then
-            # Fedora / RHEL
-            echo "[+] Detected Fedora/RHEL... Installing dependencies..."
-            sudo dnf install -y cmake openssl-devel libpq-devel mariadb-devel hiredis-devel
+            # Fedora / RHEL / Rocky / Alma
+            echo "[+] Detected Red Hat family... Ensuring repositories are ready..."
+            
+            # For Rocky/Alma/RHEL, we need EPEL and CRB for certain -devel libs
+            if grep -qE "Rocky|Alma|CentOS" /etc/redhat-release; then
+                echo "[+] Enabling EPEL and CRB repositories..."
+                sudo dnf install -y epel-release
+                sudo dnf install -y 'dnf-command(config-manager)'
+                sudo dnf config-manager --set-enabled crb
+            fi
+
+            echo "[+] Installing dependencies..."
+            sudo dnf install -y gcc-c++ make cmake openssl-devel libpq-devel mariadb-devel hiredis-devel
         
         elif [ -f /etc/arch-release ]; then
             # Arch Linux
