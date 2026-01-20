@@ -1,6 +1,6 @@
 # Blaze CLI Reference
 
-The Blaze CLI (`blaze`) is your all-in-one tool for scaffolding, building, and managing C++ web applications.
+The Blaze CLI (`blaze`) is your all-in-one tool for scaffolding, building, and managing high-performance C++ web applications.
 
 ## Global Usage
 
@@ -14,22 +14,43 @@ blaze [command]
 Scaffolds a new Blaze project with a standardized directory structure.
 
 ```bash
-blaze init <project-name>
+blaze init <project-name> [--fullstack]
 ```
+**Flags:**
+*   `--fullstack`, `-f`: (Optional) Prompts you to select a frontend framework (React, Vue, Svelte, Solid, or Vanilla) and scaffolds a Vite-based project in the `/frontend` directory.
+
 **Creates:**
 *   `src/main.cpp`: Entry point.
-*   `CMakeLists.txt`: Build configuration (fetches Blaze automatically).
-*   `Dockerfile`: Multi-stage build for production.
-*   `docker-compose.yml`: Development environment (Postgres/Redis/MySQL).
+*   `CMakeLists.txt`: Build configuration.
+*   `Dockerfile`: Multi-stage production build.
+*   `frontend/`: (If fullstack) Complete Vite project.
 
-### `run`
-Builds and runs the project locally using the TUI builder.
+### `dev`
+Starts the fullstack development environment. 
 
 ```bash
-cd <project-name>
+blaze dev
+```
+*   Compiles the C++ backend with a visual TUI.
+*   Starts the Vite frontend development server.
+*   **Unified Logging**: Merges C++ and Vite logs into a single stream, automatically filtering noise while highlighting the local URLs.
+
+### `add`
+Adds features to an existing Blaze project.
+
+```bash
+blaze add frontend
+```
+*   Injects a Vite-based frontend into a project that was originally created as backend-only.
+*   Follows the same interactive framework selection as `blaze init --fullstack`.
+
+### `run`
+Builds and runs the backend project locally using the TUI builder.
+
+```bash
 blaze run
 ```
-*   Compiles using `cmake` (RelWithDebInfo by default).
+*   Compiles using `cmake`.
 *   Shows a visual progress bar.
 *   Launches the binary upon success.
 
