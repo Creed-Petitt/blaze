@@ -23,22 +23,18 @@ func init() {
 }
 
 func runDoctor() {
-	// Styles
 	var (
 		titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF4C4C")) // Blaze Red
-		sectionStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#E0E0E0")) // White
+		sectionStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")) // White
 		successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))            // Green
 		failStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C"))            // Red
-		warnStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00"))            // Yellow
-		subTextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#808080"))            // Grey
 	)
 
 	fmt.Println(titleStyle.Render("\n  Blaze System Check"))
-	fmt.Println(subTextStyle.Render("  ------------------ "))
+	fmt.Println(sectionStyle.Render("  ------------------ "))
 
 	allGood := true
 
-	// Helper to check command existence
 	checkCommand := func(name string, display string) bool {
 		path, err := exec.LookPath(name)
 		if err == nil {
@@ -72,16 +68,15 @@ func runDoctor() {
 	hasClang := checkCommand("clang++", "Clang++ Compiler")
 	if !hasGcc && !hasClang {
 		allGood = false
-		fmt.Println(subTextStyle.Render("      -> You need a C++20 compiler (g++ or clang++)"))
+		fmt.Println(sectionStyle.Render("      -> You need a C++20 compiler (g++ or clang++)"))
 	}
 
 	if !checkCommand("cmake", "CMake Build System") {
 		allGood = false
-		fmt.Println(subTextStyle.Render("      -> Required to build projects"))
+		fmt.Println(sectionStyle.Render("      -> Required to build projects"))
 	}
 
 	checkCommand("docker", "Docker Engine") 
-	// Docker is optional for running local, but needed for 'blaze docker' commands
 
 	fmt.Println("")
 	fmt.Println(sectionStyle.Render("  Libraries"))
@@ -90,26 +85,26 @@ func runDoctor() {
 	if !checkLib("openssl", "OpenSSL Dev Libs") {
 		allGood = false
 		if runtime.GOOS == "linux" {
-			fmt.Println(subTextStyle.Render("      -> Try: sudo apt install libssl-dev"))
+			fmt.Println(sectionStyle.Render("      -> Try: sudo apt install libssl-dev"))
 		} else if runtime.GOOS == "darwin" {
-			fmt.Println(subTextStyle.Render("      -> Try: brew install openssl"))
+			fmt.Println(sectionStyle.Render("      -> Try: brew install openssl"))
 		}
 	}
 
 	if !checkLib("libpq", "PostgreSQL Libs") {
 		// Not strictly fatal if they don't use Postgres, but we warn
-		fmt.Println(subTextStyle.Render("      -> Optional. Needed for Postgres driver."))
+		fmt.Println(sectionStyle.Render("      -> Optional. Needed for Postgres driver."))
 		if runtime.GOOS == "linux" {
-			fmt.Println(subTextStyle.Render("      -> Try: sudo apt install libpq-dev"))
+			fmt.Println(sectionStyle.Render("      -> Try: sudo apt install libpq-dev"))
 		}
 	}
 	
 	if !checkLib("libmariadb", "MariaDB Connector (Async)") {
-		fmt.Println(subTextStyle.Render("      -> Required for MySQL async driver."))
+		fmt.Println(sectionStyle.Render("      -> Required for MySQL async driver."))
 		if runtime.GOOS == "linux" {
-			fmt.Println(subTextStyle.Render("      -> Try: sudo apt install libmariadb-dev"))
+			fmt.Println(sectionStyle.Render("      -> Try: sudo apt install libmariadb-dev"))
 		} else if runtime.GOOS == "darwin" {
-			fmt.Println(subTextStyle.Render("      -> Try: brew install mariadb-connector-c"))
+			fmt.Println(sectionStyle.Render("      -> Try: brew install mariadb-connector-c"))
 		}
 	}
 
@@ -117,8 +112,8 @@ func runDoctor() {
 	if allGood {
 		fmt.Println(successStyle.Render("  [+] System Ready. You are good to go!"))
 	} else {
-		fmt.Println(warnStyle.Render("  [!] Some requirements are missing."))
-		fmt.Println(subTextStyle.Render("      Run the suggested commands to fix them."))
+		fmt.Println(failStyle.Render("  [!] Some requirements are missing."))
+		fmt.Println(sectionStyle.Render("      Run the suggested commands to fix them."))
 	}
 	fmt.Println("")
 }

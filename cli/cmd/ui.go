@@ -108,7 +108,7 @@ type model struct {
 
 func initialModel() model {
 	s := spinner.New()
-	s.Spinner = spinner.Line
+	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(colorB)
 
 	return model{
@@ -155,7 +155,6 @@ func (m model) View() string {
 
 	done := m.percent >= 1.0
 
-	// Stable ignition thresholds
 	glowB := m.percent >= 0.05
 	glowL := m.percent >= 0.25
 	glowA := m.percent >= 0.45
@@ -186,7 +185,6 @@ func (m model) View() string {
 		pct := int(m.percent * 100)
 		s += fmt.Sprintf("%s %s %s\n", m.spinner.View(), percentStyle.Render(fmt.Sprintf("%d%%", pct)), m.funnyMsg)
 	} else if !m.quitting {
-		// Clear the spinner/messages
 		s += "\n"
 	}
 
@@ -268,7 +266,7 @@ func runCmdWithParsing(p *tea.Program, command string, args []string, startRange
 		
 		for scanner.Scan() {
 			line := scanner.Text()
-			outputLog.WriteString(line + "\n") // Capture output
+			outputLog.WriteString(line + "\n")
 
 			if matches := rePercent.FindStringSubmatch(line); len(matches) > 1 {
 				val, _ := strconv.Atoi(matches[1])
