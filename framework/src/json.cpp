@@ -1,7 +1,7 @@
 #include <blaze/json.h>
 #include <blaze/pg_result.h>
 #include <blaze/mysql_result.h>
-#include <mariadb/mysql.h>
+#include <mysql.h>
 
 namespace blaze {
 
