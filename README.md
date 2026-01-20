@@ -85,6 +85,7 @@ using namespace blaze;
 
 int main() {
     App app;
+    app.log_to("server.log");
 
     // JSON Response
     app.get("/", [](Response& res) {

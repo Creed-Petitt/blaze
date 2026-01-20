@@ -82,16 +82,12 @@ auto res = co_await db->query("SELECT * FROM users");
 
 ### Setup (Postgres)
 ```cpp
-auto pg = std::make_shared<PgPool>(app.engine(), "postgres://user:pass@host/db", 10);
-pg->connect();
-app.provide<Database>(pg);
+app.provide<Database>(Postgres::open(app, "postgres://user:pass@host/db", 10));
 ```
 
 ### Setup (MySQL)
 ```cpp
-auto mysql = std::make_shared<MySqlPool>(app.engine(), "mysql://user:pass@host:3306/db", 10);
-mysql->connect();
-app.provide<Database>(mysql);
+app.provide<Database>(MySql::open(app, "mysql://user:pass@host:3306/db", 10));
 ```
 
 ## 5. JSON Handling
