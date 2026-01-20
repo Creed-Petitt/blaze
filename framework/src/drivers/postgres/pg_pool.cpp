@@ -11,7 +11,8 @@ namespace blaze {
         : PgPool(app.engine(), std::move(conn_str), size) {}
 
     void PgPool::connect() {
-        boost::asio::co_spawn(ctx_, [this]() -> boost::asio::awaitable<void> {
+        auto self = shared_from_this();
+        boost::asio::co_spawn(ctx_, [this, self]() -> boost::asio::awaitable<void> {
             try {
                 co_await start();
             } catch (...) {}

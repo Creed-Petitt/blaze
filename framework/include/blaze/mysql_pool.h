@@ -17,10 +17,16 @@ namespace blaze {
 
 class App;
 
-class MySqlPool : public Database {
+class MySqlPool : public Database, public std::enable_shared_from_this<MySqlPool> {
 public:
     explicit MySqlPool(boost::asio::io_context& ctx, std::string url, int size = 10);
     explicit MySqlPool(App& app, std::string url, int size = 10);
+
+    static std::shared_ptr<MySqlPool> open(App& app, std::string url, int size = 10) {
+        auto pool = std::make_shared<MySqlPool>(app, std::move(url), size);
+        pool->connect();
+        return pool;
+    }
 
     void connect();
     boost::asio::awaitable<Json> query(const std::string& sql, const std::vector<std::string>& params = {}) override;

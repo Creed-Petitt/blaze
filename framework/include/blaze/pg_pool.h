@@ -17,10 +17,16 @@ namespace blaze {
 
     class App;
 
-    class PgPool : public Database {
+    class PgPool : public Database, public std::enable_shared_from_this<PgPool> {
     public:
         explicit PgPool(boost::asio::io_context& ctx, std::string conn_str, int size = 10);
         explicit PgPool(App& app, std::string conn_str, int size = 10);
+
+        static std::shared_ptr<PgPool> open(App& app, std::string conn_str, int size = 10) {
+            auto pool = std::make_shared<PgPool>(app, std::move(conn_str), size);
+            pool->connect();
+            return pool;
+        }
 
         void connect();
         boost::asio::awaitable<Json> query(const std::string& sql, const std::vector<std::string>& params = {}) override;
