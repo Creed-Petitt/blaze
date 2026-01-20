@@ -1,14 +1,13 @@
 FROM ubuntu:22.04 AS builder
 
-# Install Build Tools
+# Install Build Tools (No Boost, we fetch it via CMake)
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     git \
     libssl-dev \
     libpq-dev \
-    libmariadb-dev \
-    libboost-all-dev
+    libmariadb-dev
 
 WORKDIR /app
 
@@ -23,10 +22,10 @@ RUN cmake --build build --parallel
 # Run
 FROM ubuntu:22.04
 
-# Install Runtime Dependencies (Boost Libraries)
+# Install Runtime Dependencies
+# (We need libssl/pq/mariadb, but NO Boost libs because we static link the parts we need)
 RUN apt-get update && apt-get install -y \
-    libboost-system-dev \
-    libboost-thread-dev \
+    libssl3 \
     libpq5 \
     libmariadb3 \
     && rm -rf /var/lib/apt/lists/*
