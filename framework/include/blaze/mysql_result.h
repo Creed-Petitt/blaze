@@ -1,7 +1,7 @@
 #ifndef BLAZE_MYSQL_RESULT_H
 #define BLAZE_MYSQL_RESULT_H
 
-#include <mariadb/mysql.h>
+#include <mysql.h>
 #include <string>
 #include <vector>
 
