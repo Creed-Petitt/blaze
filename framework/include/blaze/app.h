@@ -23,6 +23,12 @@ struct AppConfig {
     std::string log_path = "stdout";         // Logging destination
 };
 
+/**
+ * @brief The primary entry point for a Blaze application.
+ * 
+ * The App class manages the internal Boost.Asio engine, dependency injection via ServiceProvider,
+ * and HTTP routing. It supports 'magic' dependency injection directly into route handlers.
+ */
 class App {
 private:
     Router router_;
@@ -38,72 +44,120 @@ public:
     App();
     ~App();
 
+    /**
+     * @brief Access the application configuration.
+     */
     AppConfig& config() { return config_; }
     const AppConfig& get_config() const { return config_; }
 
+    App& log_to(const std::string& path) { config_.log_path = path; return *this; }
+    App& max_body_size(size_t bytes) { config_.max_body_size = bytes; return *this; }
 
+    /**
+     * @brief Access the internal ServiceProvider for registering dependencies.
+     */
     ServiceProvider& services() { return services_; }
 
-    // Register a Singleton (Shared instance)
-    // app.provide<MyService>();
+    /**
+     * @brief Registers an auto-wired singleton service in the DI container.
+     */
     template<typename T>
     void provide() {
         services_.provide<T>();
     }
 
-    // Register a Singleton with Factory
-    // app.provide<MyService>([](auto& sp){ return ... });
+    /**
+     * @brief Registers a singleton service with a custom factory.
+     */
     template<typename T>
     void provide(std::function<std::shared_ptr<T>(ServiceProvider&)> factory) {
         services_.provide<T>(factory);
     }
 
-    // Register an Existing Instance
-    // app.provide(my_ptr);
+    /**
+     * @brief Registers an existing instance as a singleton.
+     */
     template<typename T>
     void provide(std::shared_ptr<T> instance) {
         services_.provide<T>(instance);
     }
 
-    // Register a Transient (New instance per injection)
-    // app.provide_transient<MyService>();
+    /**
+     * @brief Registers an auto-wired transient service (new instance every time).
+     */
     template<typename T>
     void provide_transient() {
         services_.provide_transient<T>();
     }
 
-    
+    /**
+     * @brief Registers a GET route.
+     * 
+     * The handler function supports injection. You can request any registered
+     * service, as well as 'Request&' or 'Response&', as arguments.
+     * 
+     * @param path The URL path (e.g., "/users/:id").
+     * @param handler The callback function or lambda.
+     */
     template<typename Func>
     void get(const std::string& path, Func handler) {
         router_.add_route("GET", path, wrap_handler(handler));
     }
 
+    /** @brief Registers a POST route with magic injection. */
     template<typename Func>
     void post(const std::string& path, Func handler) {
         router_.add_route("POST", path, wrap_handler(handler));
     }
 
+    /** @brief Registers a PUT route with magic injection. */
     template<typename Func>
     void put(const std::string& path, Func handler) {
         router_.add_route("PUT", path, wrap_handler(handler));
     }
 
+    /** @brief Registers a DELETE route with magic injection. */
     template<typename Func>
     void del(const std::string& path, Func handler) {
         router_.add_route("DELETE", path, wrap_handler(handler));
     }
 
+    /**
+     * @brief Registers a WebSocket route.
+     */
     void ws(const std::string& path, WebSocketHandlers handlers);
 
+    /**
+     * @brief Starts the HTTP server on the specified port.
+     * 
+     * @param port The port to listen on.
+     * @param num_threads Number of threads for the event loop (0 = auto-detect).
+     */
     void listen(int port, int num_threads = 0);
+
+    /**
+     * @brief Starts the HTTPS (SSL) server.
+     */
     void listen_ssl(int port, const std::string& cert_path, const std::string& key_path, int num_threads = 0);
 
+    /**
+     * @brief Registers global middleware.
+     */
     void use(const Middleware &mw);
 
+    /** @brief Creates a route group with a common prefix. */
     RouteGroup group(const std::string& prefix);
+
+    /** @brief Access the internal router. */
     Router& get_router();
+
+    /** @brief Get WebSocket handlers for a specific path. */
     const WebSocketHandlers* get_ws_handler(const std::string& path) const;
+
+    /** @brief Access the application logger. */
     Logger& get_logger();
+
+    /** @brief Returns the internal io_context engine. */
     net::io_context& engine() { return ioc_; }
     boost::asio::awaitable<std::string> handle_request(Request& req, const std::string& client_ip, bool keep_alive);
 

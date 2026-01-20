@@ -24,7 +24,9 @@ struct RouteMatch {
 
 class Router;
 
-// Route grouping for organizing routes with common prefixes
+/**
+ * @brief A helper class for grouping routes under a common path prefix.
+ */
 class RouteGroup {
 private:
     Router& router_;
@@ -33,12 +35,23 @@ private:
 public:
     RouteGroup(Router& router, const std::string& prefix);
 
+    /** @brief Registers a GET route within this group. */
     void get(const std::string& path, const Handler &handler) const;
+    
+    /** @brief Registers a POST route within this group. */
     void post(const std::string& path, const Handler &handler) const;
+    
+    /** @brief Registers a PUT route within this group. */
     void put(const std::string& path, const Handler &handler) const;
+    
+    /** @brief Registers a DELETE route within this group. */
     void del(const std::string& path, const Handler &handler) const;
 
-    // Allow nested groups
+    /**
+     * @brief Creates a nested route group.
+     * 
+     * @param subpath The prefix to append to the current group's prefix.
+     */
     RouteGroup group(const std::string& subpath) const;
 };
 
