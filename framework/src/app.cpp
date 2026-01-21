@@ -1,4 +1,5 @@
 #include <blaze/app.h>
+#include <blaze/exceptions.h>
 #include <chrono>
 #include <memory>
 #include <vector>
@@ -70,6 +71,12 @@ boost::asio::awaitable<std::string> App::handle_request(Request& req, const std:
 
         status_code = res.get_status();
 
+    } catch (const HttpError& e) {
+        res.status(e.status()).json({
+            {"error", "HTTP Error"},
+            {"message", e.what()}
+        });
+        status_code = e.status();
     } catch (const std::exception& e) {
         res.status(500).json({
             {"error", "Internal Server Error"},
