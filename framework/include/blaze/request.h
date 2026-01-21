@@ -9,6 +9,7 @@
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
 #include <blaze/json.h>
+#include <blaze/exceptions.h>
 
 namespace blaze {
 
@@ -27,6 +28,19 @@ struct Request {
 
     // Returns parsed JSON body wrapper
     blaze::Json json() const;
+
+
+    // Typed JSON Extraction
+    // Automatically converts request body to T (std::vector, std::map, etc.)
+    template<typename T>
+    T json() const {
+        try {
+            auto val = boost::json::parse(body);
+            return boost::json::value_to<T>(val);
+        } catch (const std::exception& e) {
+            throw BadRequest(std::string("Invalid JSON body: ") + e.what());
+        }
+    }
 
     // Helper methods for safe parameter and header access
     std::string get_query(const std::string& key, const std::string& default_val = "") const;

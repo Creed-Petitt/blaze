@@ -20,10 +20,24 @@ public:
 
     Response& status(int code);
     Response& header(const std::string& key, const std::string& value);
+
+    Response& headers(std::initializer_list<std::pair<std::string, std::string>> headers) {
+        for (const auto& [key, value] : headers) {
+            header(key, value);
+        }
+        return *this;
+    }
+
     Response& send(const std::string& text);
     
     // Boost.JSON overload
     Response& json(const boost::json::value& data);
+
+    // Generic JSON Serializer
+    template<typename T>
+    Response& json(const T& data) {
+        return json(boost::json::value_from(data));
+    }
     
     // Raw JSON string
     Response& json_raw(std::string_view body);
