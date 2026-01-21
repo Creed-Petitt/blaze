@@ -1,0 +1,31 @@
+include(FetchContent)
+
+FetchContent_Declare(
+  Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG        v3.4.0
+)
+FetchContent_MakeAvailable(Catch2)
+
+add_executable(blaze_tests 
+    test_main.cpp
+    test_router.cpp
+    test_di.cpp
+    test_json.cpp
+    test_server.cpp
+    test_crypto.cpp
+    test_environment.cpp
+    test_middleware.cpp
+    test_websocket.cpp
+)
+
+target_link_libraries(blaze_tests 
+    PRIVATE 
+    blaze::framework
+    Catch2::Catch2WithMain
+)
+
+include(Catch)
+catch_discover_tests(blaze_tests)
+
+add_subdirectory(integration_app)

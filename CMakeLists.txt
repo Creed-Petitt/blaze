@@ -4,3 +4,8 @@ project(blaze)
 set(CMAKE_CXX_STANDARD 20)
 
 add_subdirectory(framework)
+
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
