@@ -1,5 +1,6 @@
 cmake-build-*/
 build/
+build_asan
 *.o
 *.exe
 
@@ -14,3 +15,4 @@ logs/
 .DS_Store
 Thumbs.db
 /json.hpp
+*.pem
