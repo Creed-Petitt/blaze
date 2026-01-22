@@ -4,6 +4,8 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
 #include <thread>
+#include <atomic>
+#include <mutex>
 
 using namespace blaze;
 namespace net = boost::asio;
@@ -13,13 +15,15 @@ using tcp = net::ip::tcp;
 TEST_CASE("WebSocket: Connection and Echo", "[websocket]") {
     App app;
     std::string received_msg;
-    bool connected = false;
+    std::mutex msg_mutex;
+    std::atomic<bool> connected{false};
 
     app.ws("/chat", {
         .on_open = [&](std::shared_ptr<WebSocket> ws) {
             connected = true;
         },
         .on_message = [&](std::shared_ptr<WebSocket> ws, std::string msg) {
+            std::lock_guard<std::mutex> lock(msg_mutex);
             received_msg = msg;
             ws->send("Echo: " + msg);
         }
@@ -45,7 +49,7 @@ TEST_CASE("WebSocket: Connection and Echo", "[websocket]") {
         // Give the server a moment to execute the on_open callback
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         
-        CHECK(connected == true);
+        CHECK(connected.load() == true);
 
         ws.write(net::buffer(std::string("Hello Blaze")));
 
@@ -53,7 +57,10 @@ TEST_CASE("WebSocket: Connection and Echo", "[websocket]") {
         ws.read(buffer);
 
         CHECK(boost::beast::buffers_to_string(buffer.data()) == "Echo: Hello Blaze");
-        CHECK(received_msg == "Hello Blaze");
+        {
+            std::lock_guard<std::mutex> lock(msg_mutex);
+            CHECK(received_msg == "Hello Blaze");
+        }
 
         ws.close(websocket::close_code::normal);
     }
