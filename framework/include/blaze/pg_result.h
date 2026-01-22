@@ -3,50 +3,22 @@
 
 #include <libpq-fe.h>
 #include <string>
+#include <blaze/db_result.h>
 
 namespace blaze {
 
     class PgResult;
 
-    // PgField represents a view into a single cell
-    class PgField {
-    public:
-        PgField(const char* data, int len);
-
-        [[nodiscard]] bool is_null() const;
-
-        // Conversion logic
-        template<typename T>
-        [[nodiscard]] T as() const;
-
-    private:
-        const char* data_;
-        int len_;
-    };
-
-
     // PgRow represents a view into a single row
-    class PgRow {
+    class PgRow : public RowImpl {
     public:
         PgRow(PGresult* res, int row_idx);
 
-        // Accessors
-        PgField operator[](int col_idx) const;
-        PgField operator[](const char* col_name) const;
-
-    private:
-        PGresult* res_;
-        int row_idx_;
-    };
-
-
-    class PgRowIterator {
-    public:
-        PgRowIterator(PGresult* res, int row_idx);
-
-        [[nodiscard]] PgRow operator*() const;
-        PgRowIterator& operator++();
-        [[nodiscard]] bool operator!=(const PgRowIterator& other) const;
+        // Implementation
+        std::string_view get_column(size_t index) const override;
+        std::string_view get_column(std::string_view name) const override;
+        bool is_null(size_t index) const override;
+        bool is_null(std::string_view name) const override;
 
     private:
         PGresult* res_;
@@ -54,7 +26,7 @@ namespace blaze {
     };
 
     // PgResult represents the owner of the dataset
-    class PgResult {
+    class PgResult : public ResultImpl {
     public:
         explicit PgResult(PGresult* res);
         ~PgResult();
@@ -66,30 +38,23 @@ namespace blaze {
         PgResult& operator=(const PgResult&) = delete;
 
         // Data Access
-        size_t size() const;
-        bool empty() const;
-        PgRow operator[](size_t row_idx) const;
-
-        [[nodiscard]] PgRowIterator begin() const;
-        [[nodiscard]] PgRowIterator end() const;
-
+        size_t size() const override;
+        
+        // Returns Row Implementation
+        std::shared_ptr<RowImpl> get_row(size_t row_idx) const override;
 
         // Metadata
         [[nodiscard]] int affected_rows() const;
 
         // Check if query succeeded
-        [[nodiscard]] bool is_ok() const;
-        [[nodiscard]] std::string error_message() const;
+        bool is_ok() const override;
+        std::string error_message() const override;
 
         [[nodiscard]] PGresult* get_raw() const { return res_; }
 
     private:
         PGresult* res_;
     };
-
-    // Template specializations
-    template<> std::string PgField::as<std::string>() const;
-    template<> int PgField::as<int>() const;
 
 } // namespace blaze
 

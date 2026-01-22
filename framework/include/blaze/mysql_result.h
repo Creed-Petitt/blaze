@@ -4,29 +4,21 @@
 #include <mysql.h>
 #include <string>
 #include <vector>
+#include <blaze/db_result.h>
 
 namespace blaze {
 
     class MySqlResult;
 
-    class MySqlField {
-    public:
-        MySqlField(const char* data, unsigned long len);
-        [[nodiscard]] bool is_null() const;
-
-        template<typename T>
-        [[nodiscard]] T as() const;
-
-    private:
-        const char* data_;
-        unsigned long len_;
-    };
-
-    class MySqlRow {
+    class MySqlRow : public RowImpl {
     public:
         MySqlRow(MYSQL_RES* res, MYSQL_ROW row, unsigned long* lengths);
-        MySqlField operator[](int col_idx) const;
-        MySqlField operator[](const char* col_name) const;
+        
+        // Implementation
+        std::string_view get_column(size_t index) const override;
+        std::string_view get_column(std::string_view name) const override;
+        bool is_null(size_t index) const override;
+        bool is_null(std::string_view name) const override;
 
     private:
         MYSQL_RES* res_;
@@ -34,19 +26,7 @@ namespace blaze {
         unsigned long* lengths_;
     };
 
-    class MySqlRowIterator {
-    public:
-        MySqlRowIterator(MySqlResult* parent, int row_idx);
-        [[nodiscard]] MySqlRow operator*() const;
-        MySqlRowIterator& operator++();
-        [[nodiscard]] bool operator!=(const MySqlRowIterator& other) const;
-
-    private:
-        MySqlResult* parent_;
-        int row_idx_;
-    };
-
-    class MySqlResult {
+    class MySqlResult : public ResultImpl {
     public:
         explicit MySqlResult(MYSQL* conn, MYSQL_RES* res);
         ~MySqlResult();
@@ -57,19 +37,17 @@ namespace blaze {
         MySqlResult& operator=(MySqlResult&& other) noexcept;
         MySqlResult& operator=(const MySqlResult&) = delete;
 
-        size_t size() const;
-        bool empty() const;
-        MySqlRow operator[](size_t row_idx) const;
-
-        MySqlRowIterator begin();
-        MySqlRowIterator end();
+        size_t size() const override;
+        
+        // Factory
+        std::shared_ptr<RowImpl> get_row(size_t row_idx) const override;
 
         [[nodiscard]] MYSQL_RES* get_raw() const { return res_; }
         [[nodiscard]] MYSQL_ROW get_row_raw(size_t idx) const { return rows_[idx]; }
         [[nodiscard]] unsigned long* get_lengths_raw(size_t idx) const { return lengths_[idx]; }
 
-        [[nodiscard]] bool is_ok() const { return ok_; }
-        [[nodiscard]] std::string error_message() const { return error_; }
+        bool is_ok() const override { return ok_; }
+        std::string error_message() const override { return error_; }
 
     private:
         MYSQL* conn_ = nullptr;
@@ -79,9 +57,6 @@ namespace blaze {
         bool ok_ = true;
         std::string error_;
     };
-
-    template<> std::string MySqlField::as<std::string>() const;
-    template<> int MySqlField::as<int>() const;
 
 } // namespace blaze
 

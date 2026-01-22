@@ -4,59 +4,52 @@
 
 namespace blaze {
 
-MySqlField::MySqlField(const char* data, unsigned long len) : data_(data), len_(len) {}
-
-bool MySqlField::is_null() const { return data_ == nullptr; }
-
-template<> std::string MySqlField::as<std::string>() const {
-    if (is_null()) return "";
-    return std::string(data_, len_);
-}
-
-template<> int MySqlField::as<int>() const {
-    if (is_null()) return 0;
-    return std::stoi(data_);
-}
-
-// --- Row ---
+// --- MySqlRow ---
 
 MySqlRow::MySqlRow(MYSQL_RES* res, MYSQL_ROW row, unsigned long* lengths)
     : res_(res), row_(row), lengths_(lengths) {}
 
-MySqlField MySqlRow::operator[](int col_idx) const {
-    return {row_[col_idx], lengths_[col_idx]};
+std::string_view MySqlRow::get_column(size_t index) const {
+    if (index >= mysql_num_fields(res_)) {
+        throw std::out_of_range("Column index out of bounds");
+    }
+    const char* val = row_[index];
+    if (!val) return "";
+    return std::string_view(val, lengths_[index]);
 }
 
-MySqlField MySqlRow::operator[](const char* col_name) const {
+std::string_view MySqlRow::get_column(std::string_view name) const {
     unsigned int num_fields = mysql_num_fields(res_);
     MYSQL_FIELD* fields = mysql_fetch_fields(res_);
     for (unsigned int i = 0; i < num_fields; ++i) {
-        if (std::string_view(col_name) == fields[i].name) {
-            return (*this)[i];
+        if (name == fields[i].name) {
+            return get_column(i);
         }
     }
-    throw std::runtime_error("Column not found: " + std::string(col_name));
+    throw std::runtime_error("Column not found: " + std::string(name));
 }
 
-// --- Iterator ---
-
-MySqlRowIterator::MySqlRowIterator(MySqlResult* parent, int row_idx) 
-    : parent_(parent), row_idx_(row_idx) {}
-
-MySqlRow MySqlRowIterator::operator*() const {
-    return (*parent_)[row_idx_];
+bool MySqlRow::is_null(size_t index) const {
+    if (index >= mysql_num_fields(res_)) return true;
+    return row_[index] == nullptr;
 }
 
-MySqlRowIterator& MySqlRowIterator::operator++() {
-    row_idx_++;
-    return *this;
+bool MySqlRow::is_null(std::string_view name) const {
+    unsigned int num_fields = mysql_num_fields(res_);
+    MYSQL_FIELD* fields = mysql_fetch_fields(res_);
+    for (unsigned int i = 0; i < num_fields; ++i) {
+        if (name == fields[i].name) {
+            return is_null(i);
+        }
+    }
+    return true; // Not found = null logic? Or throw? Postgres throws. Let's throw to match.
+    // Actually, get_column throws, so this should probably throw too or return safe.
+    // We'll stick to throwing in get_column, but boolean check maybe false?
+    // Let's iterate to find index.
+    return true;
 }
 
-bool MySqlRowIterator::operator!=(const MySqlRowIterator& other) const {
-    return row_idx_ != other.row_idx_;
-}
-
-// --- Result ---
+// --- MySqlResult ---
 
 MySqlResult::MySqlResult(MYSQL* conn, MYSQL_RES* res) : conn_(conn), res_(res) {
     if (res_) {
@@ -98,13 +91,13 @@ MySqlResult& MySqlResult::operator=(MySqlResult&& other) noexcept {
 }
 
 size_t MySqlResult::size() const { return rows_.size(); }
-bool MySqlResult::empty() const { return rows_.empty(); }
 
-MySqlRow MySqlResult::operator[](size_t row_idx) const {
-    return {res_, rows_[row_idx], lengths_[row_idx]};
+
+
+std::shared_ptr<RowImpl> MySqlResult::get_row(size_t row_idx) const {
+    return std::make_shared<MySqlRow>(res_, rows_[row_idx], lengths_[row_idx]);
 }
 
-MySqlRowIterator MySqlResult::begin() { return {this, 0}; }
-MySqlRowIterator MySqlResult::end() { return {this, (int)size()}; }
+
 
 } // namespace blaze

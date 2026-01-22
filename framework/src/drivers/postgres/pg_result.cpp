@@ -4,84 +4,35 @@
 
 namespace blaze {
 
-    PgField::PgField(const char* data, const int len) : data_(data), len_(len) {}
-
-    bool PgField::is_null() const {
-        return data_ == nullptr;
-    }
-
-    template<> std::string PgField::as<std::string>() const {
-        if (is_null()) return "";
-        return std::string(data_, len_);
-    }
-
-    template<> int PgField::as<int>() const {
-        if (is_null()) return 0;
-        return std::stoi(data_);
-    }
-
-    template<> float PgField::as<float>() const {
-        if (is_null()) return 0.0f;
-        return std::stof(data_);
-    }
-
-    template<> double PgField::as<double>() const {
-        if (is_null()) return 0.0;
-        return std::stod(data_);
-    }
-
-    template<> bool PgField::as<bool>() const {
-        if (is_null()) return false;
-        // Postgres returns 't' for true, 'f' for false
-        return data_[0] == 't';
-    }
-
-    // ------------------------------------------------------------------------------
-
     PgRow::PgRow(PGresult* res, const int row_idx)
         : res_(res), row_idx_(row_idx) {}
 
-    PgField PgRow::operator[](const int col_idx) const {
-        if (col_idx < 0 || col_idx >= PQnfields(res_)) {
+    std::string_view PgRow::get_column(size_t index) const {
+        if (index >= static_cast<size_t>(PQnfields(res_))) {
             throw std::out_of_range("Column index out of bounds");
         }
-
-        if (PQgetisnull(res_, row_idx_, col_idx)) {
-            return {nullptr, 0};
-        }
-
-        const char* val = PQgetvalue(res_, row_idx_, col_idx);
-        const int len = PQgetlength(res_, row_idx_, col_idx);
-        return {val, len};
+        const char* val = PQgetvalue(res_, row_idx_, static_cast<int>(index));
+        const int len = PQgetlength(res_, row_idx_, static_cast<int>(index));
+        return std::string_view(val, len);
     }
 
-    PgField PgRow::operator[](const char* col_name) const {
-        const int col_idx = PQfnumber(res_, col_name);
+    std::string_view PgRow::get_column(std::string_view name) const {
+        const int col_idx = PQfnumber(res_, std::string(name).c_str());
         if (col_idx == -1) {
-            throw std::runtime_error("Column not found: " + std::string(col_name));
+            throw std::runtime_error("Column not found: " + std::string(name));
         }
-        return (*this)[col_idx];
+        return get_column(col_idx);
     }
 
-    // ------------------------------------------------------------------------------
-
-    PgRowIterator::PgRowIterator(PGresult* res, int row_idx) 
-        : res_(res), row_idx_(row_idx) {}
-
-    PgRow PgRowIterator::operator*() const {
-        return {res_, row_idx_};
+    bool PgRow::is_null(size_t index) const {
+        return PQgetisnull(res_, row_idx_, static_cast<int>(index));
     }
 
-    PgRowIterator& PgRowIterator::operator++() {
-        ++row_idx_;
-        return *this;
+    bool PgRow::is_null(std::string_view name) const {
+        const int col_idx = PQfnumber(res_, std::string(name).c_str());
+        if (col_idx == -1) return true;
+        return is_null(col_idx);
     }
-
-    bool PgRowIterator::operator!=(const PgRowIterator& other) const {
-        return row_idx_ != other.row_idx_;
-    }
-
-    // ------------------------------------------------------------------------------
 
     PgResult::PgResult(PGresult* res) : res_(res) {}
 
@@ -113,10 +64,6 @@ namespace blaze {
         return res_ ? PQntuples(res_) : 0;
     }
 
-    bool PgResult::empty() const {
-        return size() == 0;
-    }
-
     bool PgResult::is_ok() const {
         if (!res_) return false;
         const ExecStatusType status = PQresultStatus(res_);
@@ -134,16 +81,7 @@ namespace blaze {
         return (val[0] == '\0') ? 0 : std::stoi(val);
     }
 
-    PgRow PgResult::operator[](const size_t row_idx) const {
-        return {res_, static_cast<int>(row_idx)};
+        std::shared_ptr<RowImpl> PgResult::get_row(const size_t row_idx) const {
+        return std::make_shared<PgRow>(res_, static_cast<int>(row_idx));
     }
-
-    PgRowIterator PgResult::begin() const {
-        return {res_, 0};
-    }
-
-    PgRowIterator PgResult::end() const {
-        return {res_, static_cast<int>(size())};
-    }
-
 } // namespace blaze

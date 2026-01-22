@@ -77,7 +77,7 @@ namespace blaze {
         }
     }
 
-    boost::asio::awaitable<Json> PgPool::query(const std::string& sql, const std::vector<std::string>& params) {
+    boost::asio::awaitable<DbResult> PgPool::query(const std::string& sql, const std::vector<std::string>& params) {
         if (!breaker_.allow_request()) {
             throw std::runtime_error("Postgres Circuit Open: Too many recent failures");
         }
@@ -94,7 +94,7 @@ namespace blaze {
 
                 release(conn);
                 breaker_.record_success();
-                co_return Json(std::make_shared<PgResult>(std::move(res)));
+                co_return DbResult(std::make_shared<PgResult>(std::move(res)));
 
             } catch (const std::exception& e) {
                 conn->force_close();

@@ -29,7 +29,7 @@ namespace blaze {
         }
 
         void connect();
-        boost::asio::awaitable<Json> query(const std::string& sql, const std::vector<std::string>& params = {}) override;
+        boost::asio::awaitable<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) override;
 
     private:
         boost::asio::io_context& ctx_;

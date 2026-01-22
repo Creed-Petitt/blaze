@@ -92,7 +92,7 @@ void MySqlPool::release(MySqlConnection* conn) {
     }
 }
 
-boost::asio::awaitable<Json> MySqlPool::query(const std::string& sql, const std::vector<std::string>& params) {
+boost::asio::awaitable<DbResult> MySqlPool::query(const std::string& sql, const std::vector<std::string>& params) {
     if (!breaker_.allow_request()) {
         throw std::runtime_error("MySQL Circuit Open: Too many recent failures");
     }
@@ -109,7 +109,7 @@ boost::asio::awaitable<Json> MySqlPool::query(const std::string& sql, const std:
 
             release(conn);
             breaker_.record_success();
-            co_return Json(std::make_shared<MySqlResult>(std::move(res)));
+            co_return DbResult(std::make_shared<MySqlResult>(std::move(res)));
 
         } catch (const std::exception& e) {
             conn->force_close();
