@@ -1,75 +1,71 @@
 # Testing & Security Guide
 
-Blaze is designed to be a "Zero-Crash" framework. We employ industry-standard tools to verify memory safety, stability under load, and resistance to malicious attacks.
+Blaze takes testing and backend safety extremely seriously. We verify every commit through a rigorous automated pipeline called the **CI Gauntlet**, ensuring memory safety, high performance, and protocol stability.
 
-## 1. AddressSanitizer (ASan) & LeakSanitizer (LSan)
+## 1. Automated CI/CD
 
-We use Google's AddressSanitizer to detect:
-*   Use-After-Free (UAF)
-*   Buffer Overflows
-*   Memory Leaks
-*   Stack Corruption
+Every push to Blaze triggers an automated suite of tests in GitHub Actions. The pipeline consists of three parallel jobs:
 
-### Running a Sanitized Build
-This build is 2-3x slower but strictly checks every memory access.
+### Job A: Unit Tests (Logic)
+*   **Platforms:** Ubuntu (GCC), macOS (Clang).
+*   **Verification:** Runs the **Catch2** suite to verify core logic (DI, Routing, JSON, Crypto, Environment).
+*   **Target:** `blaze_tests`.
+
+### Job B: Integration & Fuzzing (Reliability)
+*   **Database Integration:** Boots real **PostgreSQL** and **MySQL** instances in Docker.
+*   **SSL Verification:** Generates self-signed certificates on-the-fly.
+*   **Fuzz Attack:** Runs a Python-based protocol fuzzer to bombard the parser with malicious packets.
+*   **Performance Benchmark:** Runs `wrk` load tests against all core routes to ensure no performance regressions.
+
+### Job C: Memory Safety (ASan Auditor)
+*   **AddressSanitizer (ASan):** Compiles the framework with strict memory checking enabled.
+*   **Leak Detection:** Runs the full integration suite and sends a `SIGINT` signal to trigger a formal memory leak report.
+*   **UBSan:** Detects undefined behavior (integer overflows, null pointer dereferences).
+
+### Job D: Concurrency Safety (TSan Auditor)
+*   **ThreadSanitizer (TSan):** Compiles the framework with runtime data-race detection enabled.
+*   **Race Detection:** Exercises the coroutine scheduler and database connection pools under high load to ensure zero race conditions.
+*   **Deadlock Prevention:** Verifies that internal mutexes and circuit breakers are correctly synchronized across multi-threaded execution contexts.
+
+---
+
+## 2. Manual Testing & Debugging
+
+If you are developing locally, you can run these tools manually.
+
+
+### ASan/TSan Build
+Use this to find hidden memory and threading bugs during development.
 
 ```bash
-cd dev_test_dos/build
-# Enable Sanitizers
-cmake -DBLAZE_ENABLE_SANITIZERS=ON ..
+mkdir build_sanitizers && cd build_sanitizers
+cmake -DBLAZE_ENABLE_ASAN=ON .. 
+cmake -DBLAZE_ENABLE_TSAN=ON ..
 make -j$(nproc)
-
-# Run the Server
-./dev_test_dos
+./tests/blaze_tests
 ```
 
-If a memory error occurs, the server will crash immediately with a detailed stack trace.
 
-## 2. Fuzz Testing
-
-We use a custom Python fuzzer (`dev_test_dos/fuzz.py`) to bombard the server with malformed HTTP packets.
-
-### The Attack Suite
-*   **Huge Headers:** 10KB+ header fields.
-*   **Binary Garbage:** Random byte streams.
-*   **Slowloris:** Incomplete requests held open.
-*   **Method Overflow:** Invalid HTTP methods (e.g., AAAA...GET).
-*   **Negative Content-Length:** Integer overflow attacks.
-
-### Running the Fuzzer
-Ensure the server is running (preferably with ASan), then:
+### Manual Fuzzing
+Ensure your server is running (with ASan for best results), then launch the attack:
 
 ```bash
-python3 dev_test_dos/fuzz.py
+python3 tests/integration_app/fuzz.py
 ```
 
-**Pass Criteria:** The server must accept/reject the request without crashing or leaking memory.
-
-## 3. Endurance Testing (The 48-Hour Burn)
-
-Before any release, we recommend a long-running load test to verify connection pooling and file descriptor management.
-
-### Setup (DigitalOcean / AWS)
-1.  Provision a standard Linux VM (2 vCPU, 4GB RAM).
-2.  Install Blaze and build in `Release` mode.
-3.  Start the server.
-
-### The Attacker
-Run this command from a separate machine (e.g., a cheap cloud VM) to bombard the server:
+### Performance Stress Test
+We use `wrk` for high-concurrency benchmarks.
 
 ```bash
-# -t2: 2 Threads
-# -c50: 50 Concurrent Connections
-# -d48h: Run for 48 hours
-wrk -t2 -c50 -d48h -s db_test.lua http://<SERVER_IP>:8080/abstract
+# Simple GET benchmark
+wrk -t4 -c100 -d10s http://localhost:8080/health
+
+# POST with JSON payload (using Lua script)
+wrk -t4 -c100 -d10s -s tests/integration_app/post.lua http://localhost:8080/modern-api
 ```
 
-**Note:** Ensure `db_test.lua` is configured to hit a database-connected endpoint.
-
-### Monitoring
-Check the server's RAM usage periodically. It should remain flat.
-
-```bash
-# Monitor memory usage of the process
-watch -n 1 "ps aux | grep dev_test_dos | grep -v grep"
-```
+## 3. Security Philosophy
+*   **Concurrency Resilience:** Blaze guarantees that internal state (like Circuit Breakers and Connection Pools) is thread-safe, preventing crashes caused by high-concurrency race conditions.
+*   **Non-Blocking Timeouts:** Blaze implements mandatory socket timeouts (default 30s) to prevent **Slowloris** attacks from exhausting file descriptors.
+*   **Sanitized Headers:** Incoming headers are parsed via Boost.Beast with strict size limits (`max_body_size`) to prevent buffer overflows.
+*   **Safe DB Access:** Our `Database` API uses parameterized queries by default, making SQL injection impossible.

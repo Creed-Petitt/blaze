@@ -26,12 +26,12 @@ You only need the following system libraries:
 
 ## Features
 
-*   **Extremely Fast**: Handles **176,000+ req/sec** (plaintext) and **140,000+ req/sec** (JSON).
+*   **Extremely Fast**: Handles **150,000+ req/sec** (plaintext) and **130,000+ req/sec** (JSON) with  < 10 Mb/s latency.
 *   **Dependency Injection (IoC)**: First-class support for Singletons, Transients, and Auto-Wiring (`BLAZE_DEPS`).
 *   **Async-First**: Built on C++20 Coroutines (`co_await`).
-*   **Real-Time WebSockets**: Built-in support for high-performance WebSocket connections.
-*   **Database Agnostic**: Switch between Postgres and MySQL with **zero code changes** using the `Database` interface.
-*   **Fullstack Ready**: Scaffold React, Vue, or Svelte frontends instantly with Vite integration (`blaze init --fullstack`).
+*   **Real-Time WebSockets**: Support for high-performance WebSocket connections.
+*   **Database Ready**: Asynchronous PostgreSQL and MySQL drivers accessed via the `Database` interface.
+*   **Fullstack Ready**: Create React, Vue, or Svelte frontends instantly with Vite integration (`blaze init --fullstack`).
 *   **Modern TUI**: A beautiful interface for builds and scaffolding.
 *   **All-in-One**: Built-in commands to manage app containers and background databases.
 
@@ -108,25 +108,16 @@ Blaze comes with a powerful CLI to manage your entire development lifecycle. See
 | `docker` | Manage Postgres, MySQL, and Redis containers. |
 
 
-## Proven Reliability
+## Testing and Security
 
-Blaze is engineered for stability under extreme conditions. See our **[Testing & Security Guide](docs/TESTING.md)** for details on our verification process.
+Every commit is audited via an automated **CI pipeline** in GitHub Actions. Feel free to view **[Full Testing Pipeline](docs/TESTING.md)** for more info.
 
-*   **Battle-Tested:** Survives **48-hour continuous stress tests** at 100% CPU saturation with **zero memory leaks**.
-*   **Memory Safe:** Verified clean by **Google AddressSanitizer (ASan)** and **LeakSanitizer (LSan)**.
+*   **Logic Integrity:** Comprehensive **Catch2** unit tests for every core component (Routing, DI, JSON).
+*   **Memory Safety:** Automatic memory audit via **AddressSanitizer (ASan)** and **UBSan** on every push.
+*   **Concurrency Safety:** Race condition and deadlock detection via **ThreadSanitizer (TSan)** on every push.
 *   **Fuzz Tested:** Resilient against malformed packets and malicious payloads.
-*   **Crash-Proof:** Native circuit breakers handle database failures instantly.
+*   **Compatability:** Verified builds and tests on **Ubuntu Linux** and **macOS**.
 
-## Performance Benchmarks
-
-Benchmarks run on a standard laptop (Localhost, 8 threads, 1000 connections).
-
-| Framework | Lang | JSON Req/Sec | Latency |
-|-----------|------|-------------:|--------:|
-| **Blaze** | **C++20** |  **176,000** | **2.34ms** |
-| Gin | Go |     ~140,000 | 8ms |
-| Node.js | JS |      ~35,000 | 15ms |
-| FastAPI | Python |      ~15,000 | 25ms |
 
 ## License
 
