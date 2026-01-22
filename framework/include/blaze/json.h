@@ -26,8 +26,9 @@ public:
     template<typename T>
     T as() const;
 
-    operator std::string() const;
-    operator int() const;
+    explicit operator std::string() const;
+    explicit operator int() const;
+
     operator boost::json::value() const;
 
     size_t size() const;
