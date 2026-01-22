@@ -139,3 +139,50 @@ jobs:
         python3 tests/integration_app/fuzz.py
         kill -SIGINT $(cat app.pid)
         sleep 2
+
+  thread-safety:
+    name: Thread Safety (TSan)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: blaze_secret
+        ports: [5432:5432]
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: blaze_secret
+          MYSQL_DATABASE: blaze
+        ports: [3306:3306]
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ libssl-dev libpq-dev libmariadb-dev pkg-config python3
+
+    - name: Generate SSL Certs
+      run: |
+        mkdir -p tests/integration_app/certs
+        openssl req -x509 -newkey rsa:4096 -keyout tests/integration_app/certs/key.pem -out tests/integration_app/certs/cert.pem -days 365 -nodes -subj "/CN=localhost"
+
+    - name: Build with TSan
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBLAZE_ENABLE_TSAN=ON
+        cmake --build build -j$(nproc)
+
+    - name: Run TSan Unit Tests
+      run: ./build/tests/blaze_tests
+
+    - name: Run TSan Integration App
+      run: ./build/tests/integration_app/blaze_integration_app &
+
+    - name: Fuzzing Attack (TSan)
+      run: |
+        sleep 15
+        python3 tests/integration_app/fuzz.py

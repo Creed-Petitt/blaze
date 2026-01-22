@@ -92,6 +92,12 @@ if(BLAZE_ENABLE_SANITIZERS)
     target_link_options(blaze_framework PUBLIC -fsanitize=address,undefined)
 endif()
 
+if(BLAZE_ENABLE_TSAN)
+    message(STATUS "Blaze: Enabling ThreadSanitizer (TSan)...")
+    target_compile_options(blaze_framework PUBLIC -fsanitize=thread)
+    target_link_options(blaze_framework PUBLIC -fsanitize=thread)
+endif()
+
 # Legacy aliases
 add_library(blaze::core ALIAS blaze_framework)
 add_library(blaze::mysql ALIAS blaze_framework)
