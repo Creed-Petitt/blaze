@@ -104,6 +104,9 @@ target_include_directories(blaze_framework BEFORE PUBLIC
     ${MARIADB_INCLUDE_DIRS}
 )
 
+# Fix for macOS/Linux MariaDB linking
+target_link_directories(blaze_framework PUBLIC ${MARIADB_LIBRARY_DIRS})
+
 target_include_directories(blaze_framework PRIVATE 
     src
     src/drivers/mysql

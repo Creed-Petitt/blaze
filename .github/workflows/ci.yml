@@ -1,0 +1,141 @@
+name: Blaze CI
+
+on:
+  push:
+    branches: [ main, ci-pipeline, feature/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  unit-tests:
+    name: Unit Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ libssl-dev libpq-dev libmariadb-dev pkg-config
+
+    - name: Install Dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install cmake openssl libpq mariadb-connector-c pkg-config
+        echo "CMAKE_PREFIX_PATH=$(brew --prefix openssl):$(brew --prefix libpq):$(brew --prefix mariadb-connector-c)" >> $GITHUB_ENV
+
+    - name: Build
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release
+        cmake --build build --target blaze_tests -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+
+    - name: Run Catch2 Suite
+      run: ./build/tests/blaze_tests
+
+  integration-and-fuzz:
+    name: Integration & Fuzzing (Ubuntu)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: blaze_secret
+        ports: [5432:5432]
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: blaze_secret
+          MYSQL_DATABASE: blaze
+        ports: [3306:3306]
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ libssl-dev libpq-dev libmariadb-dev pkg-config python3 wrk
+
+    - name: Generate SSL Certs
+      run: |
+        mkdir -p tests/integration_app/certs
+        openssl req -x509 -newkey rsa:4096 -keyout tests/integration_app/certs/key.pem -out tests/integration_app/certs/cert.pem -days 365 -nodes -subj "/CN=localhost"
+
+    - name: Build
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release
+        cmake --build build -j$(nproc)
+
+    - name: Run Integration Server
+      run: ./build/tests/integration_app/blaze_integration_app & echo $! > app.pid
+
+    - name: Fuzzing Attack
+      run: |
+        sleep 15
+        python3 tests/integration_app/fuzz.py
+
+    - name: Load Test (wrk)
+      run: |
+        wrk -t4 -c100 -d5s http://127.0.0.1:8080/health
+        wrk -t4 -c100 -d5s http://127.0.0.1:8080/abstract
+        wrk -t4 -c100 -d5s http://127.0.0.1:8080/direct
+        wrk -t4 -c100 -d5s http://127.0.0.1:8080/mysql-safe
+        wrk -t4 -c100 -d5s http://127.0.0.1:8080/safe-query
+        wrk -t4 -c100 -d5s -s tests/integration_app/post.lua http://127.0.0.1:8080/modern-api
+
+  sanitizer-pass:
+    name: Memory Safety (ASan/UBSan)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: blaze_secret
+        ports: [5432:5432]
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: blaze_secret
+          MYSQL_DATABASE: blaze
+        ports: [3306:3306]
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ libssl-dev libpq-dev libmariadb-dev pkg-config python3
+
+    - name: Generate SSL Certs
+      run: |
+        mkdir -p tests/integration_app/certs
+        openssl req -x509 -newkey rsa:4096 -keyout tests/integration_app/certs/key.pem -out tests/integration_app/certs/cert.pem -days 365 -nodes -subj "/CN=localhost"
+
+    - name: Build with Sanitizers
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBLAZE_ENABLE_SANITIZERS=ON
+        cmake --build build -j$(nproc)
+
+    - name: Run Sanitized Unit Tests
+      run: ./build/tests/blaze_tests
+
+    - name: Run Sanitized Integration App
+      run: ./build/tests/integration_app/blaze_integration_app & echo $! > app.pid
+
+    - name: Fuzzing Attack (ASan)
+      run: |
+        sleep 15
+        python3 tests/integration_app/fuzz.py
+        kill -SIGINT $(cat app.pid)
+        sleep 2
