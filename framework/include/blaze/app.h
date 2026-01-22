@@ -45,6 +45,42 @@ public:
     ~App();
 
     /**
+     * @brief Helper class for fluent service registration.
+     */
+    template<typename T>
+    class ServiceRegistration {
+    private:
+        App& app_;
+        std::shared_ptr<T> instance_;
+
+    public:
+        ServiceRegistration(App& app, std::shared_ptr<T> instance)
+            : app_(app), instance_(instance) {
+            // Auto-register as concrete type
+            app_.provide<T>(instance_);
+        }
+
+        // Register as additional interface(s)
+        template<typename Interface>
+        ServiceRegistration& as() {
+            app_.provide<Interface>(instance_);
+            return *this;
+        }
+
+        // Allow access to underlying instance if needed
+        std::shared_ptr<T> get() const { return instance_; }
+    };
+
+    /**
+     * @brief Registers a service instance with fluent syntax.
+     * usage: app.service(Postgres::open(...)).as<Database>();
+     */
+    template<typename T>
+    ServiceRegistration<T> service(std::shared_ptr<T> instance) {
+        return ServiceRegistration<T>(*this, instance);
+    }
+
+    /**
      * @brief Access the application configuration.
      */
     AppConfig& config() { return config_; }
