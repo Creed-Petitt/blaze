@@ -17,6 +17,7 @@ add_executable(blaze_tests
     test_environment.cpp
     test_middleware.cpp
     test_websocket.cpp
+    test_timeout.cpp
 )
 
 target_link_libraries(blaze_tests 
