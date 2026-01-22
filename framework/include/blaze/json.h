@@ -8,26 +8,15 @@
 
 namespace blaze {
 
-class PgResult;
-class MySqlResult;
-
 class Json {
 public:
     enum class Type { 
         NONE, 
-        BOOST_VAL, 
-        PG_RESULT, 
-        MYSQL_RESULT,
-        PG_ROW,
-        MYSQL_ROW,
-        FIELD_PG,
-        FIELD_MYSQL
+        BOOST_VAL
     };
 
     Json();
     Json(boost::json::value v);
-    Json(std::shared_ptr<PgResult> res);
-    Json(std::shared_ptr<MySqlResult> res);
 
     Json operator[](size_t idx) const;
     Json operator[](int idx) const { return (*this)[static_cast<size_t>(idx)]; }
@@ -49,10 +38,6 @@ private:
     struct Internal {
         Type type = Type::NONE;
         std::shared_ptr<boost::json::value> boost_ptr;
-        std::shared_ptr<PgResult> pg_ptr;
-        std::shared_ptr<MySqlResult> mysql_ptr;
-        int row = -1;
-        int col = -1;
     };
 
     Internal data_;
