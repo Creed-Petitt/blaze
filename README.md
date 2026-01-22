@@ -26,7 +26,7 @@ You only need the following system libraries:
 
 ## Features
 
-*   **Blazing Fast**: Handles **176,000+ req/sec** (plaintext) and **140,000+ req/sec** (JSON).
+*   **Extremely Fast**: Handles **176,000+ req/sec** (plaintext) and **140,000+ req/sec** (JSON).
 *   **Dependency Injection (IoC)**: First-class support for Singletons, Transients, and Auto-Wiring (`BLAZE_DEPS`).
 *   **Async-First**: Built on C++20 Coroutines (`co_await`).
 *   **Real-Time WebSockets**: Built-in support for high-performance WebSocket connections.
@@ -63,6 +63,38 @@ cd frontend && npm install && cd ..
 blaze dev
 ```
 
+## Quick Start
+
+Create a high-performance API in less than 15 lines.
+
+```cpp
+#include <blaze/app.h>
+#include <blaze/model.h>
+using namespace blaze;
+
+struct User { 
+    int id; 
+    std::string name; 
+};
+BLAZE_MODEL(User, id, name)
+
+int main() {
+    App app;
+
+    // JSON Input & Output with Automatic Serialization
+    app.post("/users", [](Request& req, Response& res) {
+        auto user = req.json<User>(); // Auto-parse
+        if (user.id < 0) throw BadRequest("Invalid ID"); // Auto-400
+        
+        res.json(user); // Auto-serialize
+    });
+
+    app.listen(8080);
+}
+```
+
+For a deep dive into the API, Dependency Injection, and WebSockets, see the **[Full Framework Manual](docs/MANUAL.md)**.
+
 ## CLI Reference
 
 Blaze comes with a powerful CLI to manage your entire development lifecycle. See the **[Full CLI Reference](docs/CLI.md)** for more details.
@@ -75,33 +107,6 @@ Blaze comes with a powerful CLI to manage your entire development lifecycle. See
 | `doctor` | Verify your system requirements. |
 | `docker` | Manage Postgres, MySQL, and Redis containers. |
 
-## Quick Start
-
-Create a high-performance API in less than 15 lines.
-
-```cpp
-#include <blaze/app.h>
-using namespace blaze;
-
-int main() {
-    App app;
-    app.log_to("server.log");
-
-    // JSON Response
-    app.get("/", [](Response& res) {
-        res.json({{"message", "Blaze is fast!"}});
-    });
-
-    // Path Parameters
-    app.get("/hello/:name", [](Request& req, Response& res) {
-        res.send("Hello, " + req.params["name"]);
-    });
-
-    app.listen(8080);
-}
-```
-
-For a deep dive into the API, Dependency Injection, and WebSockets, see the **[Full Framework Manual](docs/MANUAL.md)**.
 
 ## Proven Reliability
 
