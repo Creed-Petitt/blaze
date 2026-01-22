@@ -70,10 +70,10 @@ set(BLAZE_SOURCES
     src/response.cpp
     src/router.cpp
     src/server.cpp
-    src/crypto.cpp
     src/environment.cpp
     src/json.cpp
-    # MySQL Driver
+    src/crypto.cpp
+    src/client.cpp
     src/drivers/mysql/mysql_connection.cpp
     src/drivers/mysql/mysql_pool.cpp
     src/drivers/mysql/mysql_result.cpp
