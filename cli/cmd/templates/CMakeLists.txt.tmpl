@@ -17,9 +17,11 @@ FetchContent_MakeAvailable(blaze)
 add_executable({{ .ProjectName }} src/main.cpp)
 
 # Link Libraries
+
 # Blaze handles its own dependencies (Boost, OpenSSL, etc.)
+
 target_link_libraries({{ .ProjectName }} PRIVATE 
-    blaze::core 
-    blaze::postgres
-    blaze::mysql
+
+    blaze::framework
+
 )

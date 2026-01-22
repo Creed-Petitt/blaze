@@ -5,7 +5,6 @@
  * DATABASE DRIVERS:
  * To use databases, uncomment the following:
  * #include <blaze/postgres.h>
- * #include <blaze/redis.h>
  * #include <blaze/mysql.h>
  */
 
@@ -15,7 +14,7 @@ int main() {
     App app;
 
     // Health check route
-    app.get("/", [](Request& req, Response& res) -> Task {
+    app.get("/", [](Response& res) -> Task {
         res.json({
             {"status", "ok"},
             {"message", "Welcome to Blaze!"}
