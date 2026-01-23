@@ -6,6 +6,7 @@
 #include <blaze/websocket.h>
 #include <blaze/di.h>
 #include <blaze/injector.h>
+#include <blaze/json.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <functional>
@@ -203,8 +204,20 @@ private:
     // Takes lambda and converts it into a standard (Request, Response) handler
     template<typename Func>
     Handler wrap_handler(Func handler) {
-        return [this, handler](Request& req, Response& res) -> boost::asio::awaitable<void> {
-            co_await inject_and_call(const_cast<Func&>(handler), services_, req, res);
+        using ReturnType = typename function_traits<Func>::return_type;
+
+        return [this, handler](Request& req, Response& res) -> Task {
+            if constexpr (std::is_same_v<ReturnType, Async<Json>>) {
+                Json result = co_await inject_and_call(const_cast<Func&>(handler), services_, req, res);
+                res.json(static_cast<boost::json::value>(result));
+            }
+            else if constexpr (std::is_same_v<ReturnType, Async<std::string>>) {
+                std::string result = co_await inject_and_call(const_cast<Func&>(handler), services_, req, res);
+                res.send(result);
+            }
+            else {
+                co_await inject_and_call(const_cast<Func&>(handler), services_, req, res);
+            }
         };
     }
 };

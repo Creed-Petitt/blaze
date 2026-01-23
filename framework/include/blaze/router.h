@@ -12,7 +12,11 @@
 
 namespace blaze {
 
-using Task = boost::asio::awaitable<void>;
+template <typename T = void>
+using Async = boost::asio::awaitable<T>;
+
+using Task = Async<void>;
+
 using Next = std::function<Task()>;
 using Middleware = std::function<Task(Request&, Response&, Next)>;
 using Handler = std::function<Task(Request&, Response&)>;

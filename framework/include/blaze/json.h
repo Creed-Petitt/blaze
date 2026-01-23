@@ -18,6 +18,9 @@ public:
     Json();
     Json(boost::json::value v);
 
+    // Allow Json{{"key", "val"}, {"k2", 123}}
+    Json(std::initializer_list<std::pair<std::string_view, boost::json::value>> list);
+
     Json operator[](size_t idx) const;
     Json operator[](int idx) const { return (*this)[static_cast<size_t>(idx)]; }
     Json operator[](std::string_view key) const;
