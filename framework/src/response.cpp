@@ -13,7 +13,7 @@ Response& Response::status(int code) {
 }
 
 Response& Response::header(const std::string& key, const std::string& value) {
-    headers_[key] = value;
+    headers_.set(key, value);
     return *this;
 }
 
@@ -38,8 +38,8 @@ std::string Response::build_response() const {
     std::ostringstream oss;
     oss << "HTTP/1.1 " << status_code_ << " " << get_status_text(status_code_) << "\r\n";
     
-    for (const auto& [name, value] : headers_) {
-        oss << name << ": " << value << "\r\n";
+    for (const auto& field : headers_) {
+        oss << field.name_string() << ": " << field.value() << "\r\n";
     }
 
     if (headers_.find("Content-Length") == headers_.end()) {

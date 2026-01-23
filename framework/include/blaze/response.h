@@ -3,7 +3,7 @@
 
 #include <string>
 #include <string_view>
-#include <unordered_map>
+#include <boost/beast/http/fields.hpp>
 #include <boost/json.hpp>
 
 namespace blaze {
@@ -11,7 +11,7 @@ namespace blaze {
 class Response {
 private:
     int status_code_ = 0;
-    std::unordered_map<std::string, std::string> headers_;
+    boost::beast::http::fields headers_;
     std::string body_;
     static std::string get_status_text(int code);
 

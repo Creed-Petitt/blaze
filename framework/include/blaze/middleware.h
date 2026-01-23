@@ -8,10 +8,16 @@
 #include <fstream>
 #include <sys/stat.h>
 #include <sstream>
+#include <mutex>
+#include <shared_mutex>
+#include <unordered_map>
+#include <filesystem>
 
 namespace blaze {
 
 namespace middleware {
+
+    namespace fs = std::filesystem;
 
     inline bool ends_with(std::string_view str, std::string_view suffix) {
         if (suffix.length() > str.length()) return false;
@@ -41,6 +47,30 @@ namespace middleware {
             output.push_back(input[i]);
         }
         return output;
+    }
+
+    // Thread-safe cache structure for static files
+    struct FileCache {
+        std::shared_mutex mtx; // Reader-Writer Lock
+        std::unordered_map<std::string, std::string> content_map;
+        std::unordered_map<std::string, std::string> type_map;
+    };
+
+    inline std::string get_mime_type(const std::string& path) {
+        if (ends_with(path, ".html")) return "text/html";
+        if (ends_with(path, ".css")) return "text/css";
+        if (ends_with(path, ".js") || ends_with(path, ".mjs")) return "application/javascript";
+        if (ends_with(path, ".json")) return "application/json";
+        if (ends_with(path, ".png")) return "image/png";
+        if (ends_with(path, ".jpg") || ends_with(path, ".jpeg")) return "image/jpeg";
+        if (ends_with(path, ".gif")) return "image/gif";
+        if (ends_with(path, ".svg")) return "image/svg+xml";
+        if (ends_with(path, ".ico")) return "image/x-icon";
+        if (ends_with(path, ".webp")) return "image/webp";
+        if (ends_with(path, ".woff2")) return "font/woff2";
+        if (ends_with(path, ".woff")) return "font/woff";
+        if (ends_with(path, ".ttf")) return "font/ttf";
+        return "application/octet-stream"; // Safer default
     }
 
     inline Middleware cors() {
@@ -75,65 +105,99 @@ namespace middleware {
         };
     }
 
-    inline Middleware static_files(const std::string& directory, bool serve_index = true) {
-        return [directory, serve_index](Request& req, Response& res, auto next) -> Task {
+    inline Middleware static_files(const std::string& root_dir, bool serve_index = true) {
+        // Shared cache instance
+        auto cache = std::make_shared<FileCache>();
+        
+        // Resolve absolute path for security checks once
+        fs::path abs_root;
+        try {
+            abs_root = fs::canonical(root_dir);
+        } catch (...) {
+            abs_root = fs::absolute(root_dir);
+        }
+
+        return [abs_root, serve_index, cache](Request& req, Response& res, auto next) -> Task {
             if (req.method != "GET") {
                 co_await next();
                 co_return;
             }
 
             std::string decoded_path = url_decode(req.path);
+            
+            // 1. Check Cache First (Fast Path - No Syscalls)
+            // If it's in the cache, we already validated it was safe when we put it there.
+            {
+                std::shared_lock<std::shared_mutex> lock(cache->mtx);
+                auto it = cache->content_map.find(decoded_path);
+                if (it != cache->content_map.end()) {
+                    res.header("Content-Type", cache->type_map[decoded_path]);
+                    res.send(it->second);
+                    co_return;
+                }
+            }
 
-            if (decoded_path.find(".." ) != std::string::npos || decoded_path.find('\\') != std::string::npos) {
-                res.status(403).json({
-                    {"error", "Forbidden"},
-                    {"message", "Path traversal detected"}
-                });
+            // Construct full path
+            fs::path requested_path = abs_root / decoded_path.substr(1); // Remove leading slash
+
+            // Security: Canonicalize and ensure it starts with root
+            std::error_code ec;
+            fs::path canonical_path = fs::canonical(requested_path, ec);
+
+            if (ec) {
+                // File doesn't exist or other error, fallback to next middleware
+                co_await next();
                 co_return;
             }
 
-            std::string file_path = directory + decoded_path;
+            // Path Traversal Check: Ensure canonical path starts with abs_root
+            std::string p_str = canonical_path.string();
+            std::string r_str = abs_root.string();
+            if (p_str.compare(0, r_str.length(), r_str) != 0) {
+                 res.status(403).json({{"error", "Forbidden"}, {"message", "Access Denied"}});
+                 co_return;
+            }
 
-            struct stat stat_buf;
-            if (stat(file_path.c_str(), &stat_buf) != 0 || !S_ISREG(stat_buf.st_mode)) {
-                if (serve_index && stat(file_path.c_str(), &stat_buf) == 0 && S_ISDIR(stat_buf.st_mode)) {
-                    std::string index_path = file_path;
-                    if (!index_path.empty() && index_path.back() != '/') {
-                        index_path += '/';
-                    }
-                    index_path += "index.html";
-
-                    if (stat(index_path.c_str(), &stat_buf) == 0 && S_ISREG(stat_buf.st_mode)) {
-                        file_path = index_path;
-                    } else {
-                        co_await next();
-                        co_return;
-                    }
-                } else {
+            // Directory Handling (Index)
+            if (fs::is_directory(canonical_path, ec) && serve_index) {
+                canonical_path /= "index.html";
+                if (!fs::exists(canonical_path, ec)) {
                     co_await next();
                     co_return;
                 }
             }
 
-            std::ifstream file(file_path, std::ios::binary);
+            // 2. Read File (Optimized)
+            std::string file_real_path = canonical_path.string();
+            std::ifstream file(file_real_path, std::ios::binary | std::ios::ate);
             if (!file.is_open()) {
                 co_await next();
                 co_return;
             }
 
-            std::stringstream buffer;
-            buffer << file.rdbuf();
-            std::string content = buffer.str();
+            std::streamsize size = file.tellg();
+            file.seekg(0, std::ios::beg);
 
-            std::string content_type = "text/plain";
-            if (ends_with(file_path, ".html")) content_type = "text/html";
-            else if (ends_with(file_path, ".css")) content_type = "text/css";
-            else if (ends_with(file_path, ".js")) content_type = "application/javascript";
-            else if (ends_with(file_path, ".json")) content_type = "application/json";
-            else if (ends_with(file_path, ".png")) content_type = "image/png";
-            else if (ends_with(file_path, ".jpg") || ends_with(file_path, ".jpeg")) content_type = "image/jpeg";
-            else if (ends_with(file_path, ".gif")) content_type = "image/gif";
-            else if (ends_with(file_path, ".svg")) content_type = "image/svg+xml";
+            if (size <= 0) {
+                 res.send("");
+                 co_return;
+            }
+
+            std::string content;
+            content.resize(size);
+            if (!file.read(content.data(), size)) {
+                 co_await next();
+                 co_return;
+            }
+
+            std::string content_type = get_mime_type(file_real_path);
+
+            // 3. Write Cache (Exclusive Lock) - Use decoded_path as key to enable Fast Path next time
+            if (size < 10 * 1024 * 1024) { // 10MB limit
+                std::unique_lock<std::shared_mutex> lock(cache->mtx);
+                cache->content_map[decoded_path] = content;
+                cache->type_map[decoded_path] = content_type;
+            }
 
             res.header("Content-Type", content_type);
             res.send(content);

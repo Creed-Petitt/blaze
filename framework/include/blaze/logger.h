@@ -21,6 +21,7 @@ class Logger {
 private:
     std::ofstream file_stream_;
     bool use_stdout_{false};
+    bool enabled_{true}; // Default to true, but can be disabled
     
     // Async Queue
     std::queue<std::string> queue_;
@@ -79,6 +80,13 @@ public:
 
     // Called when Server Starts
     void configure(const std::string& path) {
+        if (path == "/dev/null") {
+            enabled_ = false;
+            return;
+        }
+
+        enabled_ = true;
+
         if (path == "stdout" || path.empty()) {
             use_stdout_ = true;
             return;
@@ -103,6 +111,8 @@ public:
                    int status_code,
                    long long response_time_ms) {
         
+        if (!enabled_) return;
+
         std::stringstream ss;
         // GREEN/RESET ANSI codes could go here if stdout
         ss << client_ip << " " << method << " " << path << " " 
@@ -114,6 +124,8 @@ public:
     }
 
     void log_error(const std::string& message) {
+        if (!enabled_) return;
+
         std::string msg = "ERROR: " + message;
         std::lock_guard<std::mutex> lock(queue_mutex_);
         queue_.push(std::move(msg));
