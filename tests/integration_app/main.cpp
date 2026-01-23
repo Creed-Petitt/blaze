@@ -5,6 +5,7 @@
 #include <blaze/exceptions.h>
 #include <blaze/model.h>
 #include <blaze/client.h>
+#include <blaze/middleware.h>
 #include <iostream>
 #include <vector>
 
@@ -154,7 +155,9 @@ int main() {
         }
     });
 
-    // Keeping /health as it's vital for the CI fuzzer
+    // ROUTE 7: Static File Cache Test
+    app.use(middleware::static_files("tests/integration_app/public"));
+
     app.get("/health", [](Response& res) -> Task {
         res.send("OK");
         co_return;
