@@ -69,6 +69,11 @@ jobs:
         mkdir -p tests/integration_app/certs
         openssl req -x509 -newkey rsa:4096 -keyout tests/integration_app/certs/key.pem -out tests/integration_app/certs/cert.pem -days 365 -nodes -subj "/CN=localhost"
 
+    - name: Generate Static Test Files
+      run: |
+        mkdir -p tests/integration_app/public
+        echo "<h1>Blaze Static Test</h1>" > tests/integration_app/public/index.html
+
     - name: Build
       run: |
         cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -90,6 +95,7 @@ jobs:
         wrk -t4 -c100 -d5s http://127.0.0.1:8080/mysql-safe
         wrk -t4 -c100 -d5s http://127.0.0.1:8080/safe-query
         wrk -t4 -c100 -d5s -s tests/integration_app/post.lua http://127.0.0.1:8080/modern-api
+        wrk -t4 -c100 -d5s http://127.0.0.1:8080/index.html
 
   sanitizer-pass:
     name: Memory Safety (ASan/UBSan)
@@ -137,6 +143,12 @@ jobs:
       run: |
         sleep 15
         python3 tests/integration_app/fuzz.py
+        # Stress test ALL routes to catch leaks in every subsystem
+        wrk -t2 -c20 -d5s http://127.0.0.1:8080/mysql-safe
+        wrk -t2 -c20 -d5s http://127.0.0.1:8080/safe-query
+        wrk -t2 -c20 -d5s -s tests/integration_app/post.lua http://127.0.0.1:8080/modern-api
+        wrk -t2 -c20 -d5s http://127.0.0.1:8080/fetch-test
+        wrk -t2 -c20 -d5s http://127.0.0.1:8080/index.html
         kill -SIGINT $(cat app.pid)
         sleep 2
 
@@ -186,3 +198,9 @@ jobs:
       run: |
         sleep 15
         python3 tests/integration_app/fuzz.py
+        # Stress test ALL routes to catch race conditions everywhere
+        wrk -t2 -c20 -d5s http://127.0.0.1:8080/mysql-safe
+        wrk -t2 -c20 -d5s http://127.0.0.1:8080/safe-query
+        wrk -t2 -c20 -d5s -s tests/integration_app/post.lua http://127.0.0.1:8080/modern-api
+        wrk -t2 -c20 -d5s http://127.0.0.1:8080/fetch-test
+        wrk -t2 -c20 -d5s http://127.0.0.1:8080/index.html
