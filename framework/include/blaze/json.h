@@ -18,6 +18,10 @@ public:
     Json();
     Json(boost::json::value v);
 
+    // Generic constructor to allow Json({ ... }) syntax universally
+    template<typename T>
+    Json(const T& value) : Json(boost::json::value_from(value)) {}
+
     // Allow Json{{"key", "val"}, {"k2", 123}}
     Json(std::initializer_list<std::pair<std::string_view, boost::json::value>> list);
 
