@@ -1,210 +1,45 @@
-# Blaze Framework Manual
+# Blaze v1.1 Documentation
 
-Welcome to **Blaze**, the high-performance C++20 web framework.
+Welcome to the official manual for the Blaze Framework.
 
-## 1. Project Structure
+## Detailed Guides
 
-A typical Blaze project (created via `blaze init`) is self-contained:
+To get the most out of Blaze, explore our detailed guides:
 
-```
-my-app/
-├── CMakeLists.txt       # Fetches Blaze and internal Boost engine
-├── Dockerfile           # Multi-stage production build
-├── docker-compose.yml   # Modular dev environment (Postgres/Redis/MySQL)
-└── src/
-    └── main.cpp         # Application entry point
-```
+1.  **[The CLI](CLI.md)**: Master the build system, `blaze add`, and `blaze doctor`.
+2.  **[Dependency Injection](DI.md)**: Learn how to use the IoC container and Magic Route Injection.
+3.  **[Database & ORM](DATABASE.md)**: Setting up drivers and using the `BLAZE_MODEL` macro.
+4.  **[WebSockets & Real-time](WEBSOCKETS.md)**: Scaling to thousands of connections with the Dream API.
+5.  **[Middleware & Security](MIDDLEWARE.md)**: JWT Authentication, Logging, and Static Files.
+6.  **[Advanced Features](ADVANCED.md)**: Route Groups, Environment variables, and Server configuration.
 
-## 2. The Blaze CLI
+---
 
-The CLI is your primary tool for development.
+## Quick Start (60 Seconds)
 
-- `blaze init <name>`: Scaffolds a new project.
-- `blaze run`: Builds and runs the project with a progress TUI.
-- `blaze docker <service>`: Manages background databases (e.g., `blaze docker psql`).
-
-## 3. Dependency Injection (IoC)
-
-Blaze features a robust, thread-safe Dependency Injection container built-in.
-
-### Registering Services (Fluent API)
-In `main()`, you can register services using the fluent `app.service()` syntax:
-
-```cpp
-// Register a specific service
-app.service(std::make_shared<EmailService>());
-
-// Register as an Interface (e.g., Postgres implementing Database)
-app.service(Postgres::open(app, "...", 10))
-   .as<Database>();
-
-// Transient: Created new every time (Use low-level API)
-app.provide_transient<Logger>();
-```
-
-### Auto-Wiring (`BLAZE_DEPS`)
-You can define dependencies directly in your class using the `BLAZE_DEPS` macro. Blaze will automatically resolve and inject them into the constructor.
-
-```cpp
-class UserService {
-public:
-    // "I need a Database and a Config"
-    BLAZE_DEPS(Database, Config)
-
-    UserService(std::shared_ptr<Database> db, std::shared_ptr<Config> cfg) 
-        : db_(db), cfg_(cfg) {}
-    
-    // ...
-};
-```
-
-### Route Injection
-Blaze supports "Magic Injection" in route handlers. You can request any registered service as an argument.
-
-```cpp
-app.get("/users", [](Response& res, UserService& user) -> Task {
-    co_await user.get_all(res);
-});
-```
-
-## 4. Database & Mini-ORM
-
-Blaze provides a unified `Database` interface with built-in Object Mapping (`BLAZE_MODEL`).
-
-### Defining Models
-Use the `BLAZE_MODEL` macro to auto-generate serialization code for your structs.
-
-```cpp
-struct User {
-    int id;
-    std::string name;
-    std::string email;
-};
-// Magic macro enabling JSON and DB conversion
-BLAZE_MODEL(User, id, name, email)
-```
-
-### Type-Safe Queries
-You can query the database and get strongly-typed objects back automatically.
-
-```cpp
-// Returns std::vector<User>
-auto users = co_await db->query<User>("SELECT * FROM users WHERE active = $1", {"true"});
-
-if (users.empty()) throw NotFound("User not found");
-
-res.json(users); // Automatically serialized to JSON array
-```
-
-### Dynamic Access (No Model)
-If you don't define a model, you can access columns dynamically using the clean Value Wrapper API.
-
-```cpp
-auto result = co_await db->query("SELECT count(*) as count FROM users");
-int count = result[0]["count"].as<int>();
-```
-
-### Setup (Postgres & MySQL)
-Blaze supports swapping drivers with zero code changes.
-
-```cpp
-// Use Postgres
-app.service(Postgres::open(app, "postgresql://...", 10))
-   .as<Database>();
-
-// OR Use MySQL
-app.service(MySql::open(app, "mysql://...", 10))
-   .as<Database>();
-```
-
-## 5. JSON & Modern Handlers
-
-Blaze supports both a manual, low-level API and a modern, high-level "Magic" syntax.
-
-### Modern Syntax (Recommended)
-You can write handlers that return `Async<T>` and accept Models as arguments. Blaze handles all serialization logic for you.
-
-```cpp
-// 1. Return JSON directly
-app.get("/api/status", []() -> Async<Json> {
-    co_return Json({ {"status", "ok"}, {"uptime", 100} });
-});
-
-// 2. Accept Body (Auto-Injection) & Return Model (Auto-Serialization)
-app.post("/users", [](User user) -> Async<User> {
-    // 'user' is parsed from the body automatically.
-    // If invalid, Blaze returns 400 Bad Request before this runs.
-    
-    user.id = 100; // Simulate saving
-    co_return user;
-});
-
-// 3. Return Lists
-app.get("/users", []() -> Async<std::vector<User>> {
-    co_return std::vector<User>{ {1, "Alice"}, {2, "Bob"} };
-});
-```
-
-### Manual Handling
-For full control (headers, status codes, raw bytes), use the `Request` and `Response` objects.
-
-#### Receiving JSON
-Use `req.json<T>()` to parse incoming bodies directly into your Models.
-This method **automatically throws** `BadRequest` if the JSON is malformed or types mismatch.
-
-```cpp
-app.post("/users", [](Request& req, Response& res) {
-    // If body is invalid, this throws 400 Bad Request immediately
-    auto user = req.json<User>();
-    
-    save_to_db(user);
-    
-    res.status(201).json(user);
-});
-```
-
-### Exceptions
-Blaze provides standard HTTP exceptions for clean control flow.
-
-```cpp
-if (id < 0) throw BadRequest("Invalid ID");
-if (!found) throw NotFound("Item not found");
-throw InternalServerError("Something went wrong");
-```
-
-## 6. WebSockets
-
-Blaze includes a high-performance, thread-safe WebSocket server built on Beast.
-
-### Basic Usage
-Register a WebSocket route using `app.ws()`.
-
-```cpp
-app.ws("/chat", {
-    .on_open = [](std::shared_ptr<WebSocket> ws) {
-        std::cout << "Client connected!" << std::endl;
-    },
-    .on_message = [](std::shared_ptr<WebSocket> ws, std::string msg) {
-        ws->send("You said: " + msg);
-    }
-});
-```
-
-## 7. Docker & Deployment
-
-Blaze supports modular deployment through the CLI.
-
-### Local Development with Docker
-Start only the databases you need:
+### 1. Create a Project
 ```bash
-blaze docker redis
-blaze docker psql
+blaze init my-app
+cd my-app
+```
+
+### 2. Define a Route
+In `src/main.cpp`:
+```cpp
+app.get("/", []() -> Async<Json> {
+    co_return Json({{"message", "Hello Blaze!"}});
+});
+```
+
+### 3. Run it
+```bash
 blaze run
 ```
 
-### Containerized Deployment
-Run the entire stack in isolated containers:
-```bash
-# Builds the app and starts all dependencies
-docker compose up --build
-```
+---
+
+## Framework Philosophy
+Blaze is built on three core pillars:
+1.  **Zero Manual Memory Management**: Use `shared_ptr` and `co_await`.
+2.  **Modular by Design**: Only link what you use.
+3.  **Modern C++20**: Leverage coroutines for simple, high-performance async logic.
