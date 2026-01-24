@@ -12,6 +12,7 @@
 #include <functional>
 #include <vector>
 #include <map>
+#include <mutex>
 
 namespace net = boost::asio;
 namespace ssl = boost::asio::ssl;
@@ -47,6 +48,13 @@ class App {
 private:
     Router router_;
     std::map<std::string, WebSocketHandlers> ws_routes_;
+
+    // Session tracking for path-based broadcasting
+    std::map<std::string, std::vector<std::weak_ptr<WebSocket>>> ws_sessions_;
+    std::mutex ws_mtx_;
+
+    void broadcast_raw(const std::string& path, const std::string& payload);
+
     Logger logger_;
     net::io_context ioc_;
     ssl::context ssl_ctx_{ssl::context::tlsv12};
@@ -172,12 +180,24 @@ public:
         router_.add_route("DELETE", path, wrap_handler(handler));
     }
 
-    /**
-     * @brief Registers a WebSocket route.
-     */
+    /** @brief Registers a WebSocket route. */
     void ws(const std::string& path, WebSocketHandlers handlers);
 
-    // Run a background task (coroutine)
+    /**
+     * @brief Broadcasts a message to all connected WebSockets on a specific path.
+     * Automatically handles serialization and dead connection pruning.
+     */
+    template<typename T>
+    void broadcast(const std::string& path, const T& data) {
+        broadcast_raw(path, Json(data).dump());
+    }
+
+    /**
+     * @brief Internal: WebSocket session management (used by server).
+     */
+    void _register_ws(const std::string& path, std::shared_ptr<WebSocket> ws);
+
+    /** @brief Starts a background task (coroutine) in the event loop. */
     void spawn(Task task);
 
     // Getters for internal state (used by drivers/handlers)
@@ -244,6 +264,12 @@ private:
         };
     }
 };
+
+    /**
+     * @brief Asynchronously waits for a specified duration.
+     * usage: co_await blaze::delay(std::chrono::milliseconds(1000));
+     */
+    boost::asio::awaitable<void> delay(std::chrono::milliseconds ms);
 
 } // namespace blaze
 

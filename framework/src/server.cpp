@@ -72,8 +72,8 @@ namespace {
 }
 
 template<class Stream>
-WebSocketSession<Stream>::WebSocketSession(Stream&& stream, const WebSocketHandlers& handlers)
-    : ws_(std::move(stream)), handlers_(handlers) {}
+WebSocketSession<Stream>::WebSocketSession(Stream&& stream, const WebSocketHandlers& handlers, App& app, std::string target)
+    : ws_(std::move(stream)), handlers_(handlers), app_(app), target_(std::move(target)) {}
 
 template<class Stream>
 void WebSocketSession<Stream>::run(http::request<http::string_body> req) {
@@ -91,6 +91,9 @@ void WebSocketSession<Stream>::on_accept(beast::error_code ec) {
         std::cerr << "WS Accept Error: " << ec.message() << "\n";
         return;
     }
+
+    // Register with App for automatic broadcasting
+    app_._register_ws(target_, this->shared_from_this());
 
     if (handlers_.on_open) {
         handlers_.on_open(std::static_pointer_cast<WebSocket>(this->shared_from_this()));
@@ -117,7 +120,10 @@ void WebSocketSession<Stream>::on_read(beast::error_code ec, std::size_t bytes_t
     }
 
     if(ec) {
-        std::cerr << "WS Read Error: " << ec.message() << "\n";
+        // Log real errors but don't spam for normal disconnects
+        if (ec != net::error::operation_aborted) {
+            std::cerr << "[WS] Session Error: " << ec.message() << "\n";
+        }
         return;
     }
 
@@ -223,7 +229,7 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
         
         if (handlers) {
             std::make_shared<WebSocketSession<beast::tcp_stream>>(
-                std::move(stream_), *handlers
+                std::move(stream_), *handlers, app_, target
             )->run(parser_->release());
             return;
         }
@@ -322,7 +328,7 @@ void SslSession::on_read(beast::error_code ec, std::size_t bytes_transferred) {
         
         if (handlers) {
             std::make_shared<WebSocketSession<ssl::stream<beast::tcp_stream>>>(
-                std::move(stream_), *handlers
+                std::move(stream_), *handlers, app_, target
             )->run(parser_->release());
             return;
         }
@@ -374,14 +380,17 @@ void SslSession::on_shutdown(beast::error_code ec) {
 Listener::Listener(net::io_context& ioc, const tcp::endpoint &endpoint, App& app)
     : ioc_(ioc), acceptor_(ioc), app_(app) {
     beast::error_code ec;
+    
     acceptor_.open(endpoint.protocol(), ec);
-    if(ec) { std::cerr << "Open error: " << ec.message() << std::endl; return; }
+    if(ec) throw std::runtime_error("Acceptor open failed: " + ec.message());
+
     acceptor_.set_option(net::socket_base::reuse_address(true), ec);
-    if(ec) { std::cerr << "Set option error: " << ec.message() << std::endl; return; }
+    
     acceptor_.bind(endpoint, ec);
-    if(ec) { std::cerr << "Bind error: " << ec.message() << std::endl; return; }
+    if(ec) throw std::runtime_error("Acceptor bind failed: " + ec.message());
+
     acceptor_.listen(net::socket_base::max_listen_connections, ec);
-    if(ec) { std::cerr << "Listen error: " << ec.message() << std::endl; return; }
+    if(ec) throw std::runtime_error("Acceptor listen failed: " + ec.message());
 }
 
 void Listener::run() { do_accept(); }

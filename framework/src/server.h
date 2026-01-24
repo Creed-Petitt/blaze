@@ -30,13 +30,15 @@ class WebSocketSession : public WebSocket, public std::enable_shared_from_this<W
     websocket::stream<Stream> ws_;
     beast::flat_buffer buffer_;
     const WebSocketHandlers& handlers_;
+    App& app_;
+    std::string target_;
 
     std::queue<std::string> write_queue_;
     std::mutex queue_mutex_;
 
 public:
     // Resolver for Stream type (TCP vs SSL)
-    explicit WebSocketSession(Stream&& stream, const WebSocketHandlers& handlers);
+    explicit WebSocketSession(Stream&& stream, const WebSocketHandlers& handlers, App& app, std::string target);
 
     void run(http::request<http::string_body> req);
 

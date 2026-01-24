@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 #include <iostream>
+#include <algorithm>
 #include "server.h"
 
 namespace blaze {
@@ -21,8 +22,41 @@ void App::ws(const std::string& path, WebSocketHandlers handlers) {
     ws_routes_[path] = std::move(handlers);
 }
 
+boost::asio::awaitable<void> delay(std::chrono::milliseconds ms) {
+    auto executor = co_await boost::asio::this_coro::executor;
+    boost::asio::steady_timer timer(executor, ms);
+    co_await timer.async_wait(boost::asio::use_awaitable);
+}
+
 void App::spawn(Task task) {
     boost::asio::co_spawn(ioc_.get_executor(), std::move(task), boost::asio::detached);
+}
+
+void App::_register_ws(const std::string& path, std::shared_ptr<WebSocket> ws) {
+    std::lock_guard<std::mutex> lock(ws_mtx_);
+    ws_sessions_[path].push_back(ws);
+}
+
+void App::broadcast_raw(const std::string& path, const std::string& payload) {
+    std::lock_guard<std::mutex> lock(ws_mtx_);
+    auto it = ws_sessions_.find(path);
+    if (it == ws_sessions_.end()) {
+        return;
+    }
+
+    auto& sessions = it->second;
+    for (auto sit = sessions.begin(); sit != sessions.end(); ) {
+        if (auto ws = sit->lock()) {
+            try {
+                ws->send(payload);
+                ++sit;
+            } catch (...) {
+                sit = sessions.erase(sit);
+            }
+        } else {
+            sit = sessions.erase(sit);
+        }
+    }
 }
 
 const WebSocketHandlers* App::get_ws_handler(const std::string& path) const {
@@ -115,8 +149,14 @@ void App::listen(const int port, int num_threads) {
     auto const address = net::ip::make_address("0.0.0.0");
     auto const endpoint = net::ip::tcp::endpoint{address, static_cast<unsigned short>(port)};
 
-    // Create and launch listening port
-    std::make_shared<Listener>(ioc_, endpoint, *this)->run();
+    try {
+        // Create and launch listening port
+        auto listener = std::make_shared<Listener>(ioc_, endpoint, *this);
+        listener->run();
+    } catch (const std::exception& e) {
+        std::cerr << "[Blaze] FATAL: Could not start listener: " << e.what() << std::endl;
+        throw; // Crash the process so blaze dev knows we failed
+    }
 
     // (Ctrl+C) to stop cleanly
     net::signal_set signals(ioc_, SIGINT, SIGTERM);
