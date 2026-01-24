@@ -16,6 +16,12 @@ struct DataModel {
 };
 BLAZE_MODEL(DataModel, val)
 
+struct User {
+    int id;
+    std::string name;
+};
+BLAZE_MODEL(User, id, name)
+
 class UserService {
 public:
     BLAZE_DEPS(Database)
@@ -157,6 +163,27 @@ int main() {
 
     // ROUTE 7: Static File Cache Test
     app.use(middleware::static_files("tests/integration_app/public"));
+
+    // ROUTE 8: New Async<Json> Return Type
+    app.get("/async-json", []() -> Async<Json> {
+        co_return Json({
+            {"message", "It works!"}, 
+            {"type", "Async<Json>"}
+        });
+    });
+
+    // ROUTE 9: New Async<std::string> Return Type
+    app.get("/async-text", []() -> Async<std::string> {
+        co_return "Hello from Async<std::string>";
+    });
+
+    // ROUTE 10: "The Future" - Auto-Injection & Auto-Serialization
+    app.post("/all-in-one", [](User user) -> Async<User> {
+        // Logic: 'user' is already parsed from JSON body.
+        // We modify it and return it (Auto-Serialized).
+        user.name += " (Verified)";
+        co_return user;
+    });
 
     app.get("/health", [](Response& res) -> Task {
         res.send("OK");

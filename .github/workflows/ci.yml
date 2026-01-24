@@ -95,6 +95,7 @@ jobs:
         wrk -t4 -c100 -d5s http://127.0.0.1:8080/mysql-safe
         wrk -t4 -c100 -d5s http://127.0.0.1:8080/safe-query
         wrk -t4 -c100 -d5s -s tests/integration_app/post.lua http://127.0.0.1:8080/modern-api
+        wrk -t4 -c100 -d5s -s tests/integration_app/user_post.lua http://127.0.0.1:8080/all-in-one
         wrk -t4 -c100 -d5s http://127.0.0.1:8080/index.html
 
   sanitizer-pass:
@@ -202,5 +203,6 @@ jobs:
         wrk -t2 -c20 -d5s http://127.0.0.1:8080/mysql-safe
         wrk -t2 -c20 -d5s http://127.0.0.1:8080/safe-query
         wrk -t2 -c20 -d5s -s tests/integration_app/post.lua http://127.0.0.1:8080/modern-api
+        wrk -t2 -c20 -d5s -s tests/integration_app/user_post.lua http://127.0.0.1:8080/all-in-one
         wrk -t2 -c20 -d5s http://127.0.0.1:8080/fetch-test
         wrk -t2 -c20 -d5s http://127.0.0.1:8080/index.html

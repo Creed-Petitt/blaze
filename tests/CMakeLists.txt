@@ -12,6 +12,7 @@ add_executable(blaze_tests
     test_router.cpp
     test_di.cpp
     test_json.cpp
+    test_model.cpp
     test_server.cpp
     test_crypto.cpp
     test_environment.cpp
