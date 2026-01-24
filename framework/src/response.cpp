@@ -61,6 +61,17 @@ Response& Response::redirect(const std::string& url, int code) {
     return *this;
 }
 
+Response& Response::set_cookie(const std::string& name, const std::string& value, int max_age_seconds, bool http_only, bool secure) {
+    std::string cookie = name + "=" + value;
+    if (max_age_seconds > 0) cookie += "; Max-Age=" + std::to_string(max_age_seconds);
+    if (http_only) cookie += "; HttpOnly";
+    if (secure) cookie += "; Secure";
+    cookie += "; Path=/";
+    
+    headers_.insert(boost::beast::http::field::set_cookie, cookie);
+    return *this;
+}
+
 Response& Response::no_content() {
     status(204);
     body_.clear();

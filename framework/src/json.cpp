@@ -9,10 +9,10 @@ Json::Json(boost::json::value v) {
     data_.boost_ptr = std::make_shared<boost::json::value>(std::move(v));
 }
 
-Json::Json(std::initializer_list<std::pair<std::string_view, boost::json::value>> list) {
+Json::Json(std::initializer_list<std::pair<std::string_view, boost::json::value_ref>> list) {
     boost::json::object obj;
     for (const auto& [key, value] : list) {
-        obj.emplace(key, value);
+        obj.emplace(key, boost::json::value(value));
     }
     data_.type = Type::BOOST_VAL;
     data_.boost_ptr = std::make_shared<boost::json::value>(std::move(obj));

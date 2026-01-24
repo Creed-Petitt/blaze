@@ -47,6 +47,8 @@ public:
 
     // Helper methods for common response patterns
     Response& redirect(const std::string& url, int code = 302);
+    Response& set_cookie(const std::string& name, const std::string& value, 
+                        int max_age_seconds = 0, bool http_only = true, bool secure = false);
     Response& no_content();
     Response& bad_request(const std::string& message);
     Response& unauthorized(const std::string& message = "Unauthorized");

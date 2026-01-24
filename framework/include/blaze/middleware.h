@@ -220,6 +220,33 @@ namespace middleware {
         };
     }
 
+    // usage: app.use(middleware::bearer_auth([](std::string_view token) {
+    //     return token == "my-secret";
+    // }));
+    template<typename Validator>
+    inline Middleware bearer_auth(Validator validator) {
+        return [validator](Request& req, Response& res, auto next) -> Task {
+            if (!req.has_header("Authorization")) {
+                res.status(401).json({{"error", "Unauthorized"}, {"message", "Missing Authorization header"}});
+                co_return;
+            }
+
+            std::string_view auth = req.get_header("Authorization");
+            if (auth.substr(0, 7) != "Bearer ") {
+                res.status(401).json({{"error", "Unauthorized"}, {"message", "Invalid Authorization scheme"}});
+                co_return;
+            }
+
+            std::string_view token = auth.substr(7);
+            if (!validator(token)) {
+                res.status(403).json({{"error", "Forbidden"}, {"message", "Invalid Token"}});
+                co_return;
+            }
+
+            co_await next();
+        };
+    }
+
 } // namespace middleware
 
 } // namespace blaze

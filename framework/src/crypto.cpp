@@ -126,8 +126,12 @@ namespace blaze::crypto {
         std::string_view sig_b64 = token.substr(last_dot + 1);
         
         std::string expected_sig = hmac_sha256(secret, data);
-        if(base64url_encode(expected_sig) != sig_b64)
+        std::string received_sig = base64url_decode(sig_b64);
+
+        if (expected_sig.size() != received_sig.size() ||
+            CRYPTO_memcmp(expected_sig.data(), received_sig.data(), expected_sig.size()) != 0) {
             return nullptr;
+        }
 
         try {
             std::string payload_json = base64url_decode(token.substr(first_dot + 1, last_dot - first_dot - 1));

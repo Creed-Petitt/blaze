@@ -22,8 +22,8 @@ public:
     template<typename T>
     Json(const T& value) : Json(boost::json::value_from(value)) {}
 
-    // Allow Json{{"key", "val"}, {"k2", 123}}
-    Json(std::initializer_list<std::pair<std::string_view, boost::json::value>> list);
+    // Use value_ref to allow implicit conversion from std::string in initializer lists
+    Json(std::initializer_list<std::pair<std::string_view, boost::json::value_ref>> list);
 
     Json operator[](size_t idx) const;
     Json operator[](int idx) const { return (*this)[static_cast<size_t>(idx)]; }
