@@ -3,6 +3,7 @@
 #include <chrono>
 #include <memory>
 #include <vector>
+#include <iostream>
 #include "server.h"
 
 namespace blaze {
@@ -17,14 +18,12 @@ App::~App() {
 }
 
 void App::ws(const std::string& path, WebSocketHandlers handlers) {
-    router_.add_ws_route(path, std::move(handlers));
+    ws_routes_[path] = std::move(handlers);
 }
 
 void App::spawn(Task task) {
-    boost::asio::co_spawn(engine_->get_executor(), std::move(task), boost::asio::detached);
+    boost::asio::co_spawn(ioc_.get_executor(), std::move(task), boost::asio::detached);
 }
-
-App::Config& App::config() {
 
 const WebSocketHandlers* App::get_ws_handler(const std::string& path) const {
     auto it = ws_routes_.find(path);
