@@ -1,10 +1,34 @@
-# Blaze 
+<div align="center">
+  <img src="docs/assets/logo.png" alt="Blaze Logo" width="200">
 
-![Platform](https://img.shields.io/badge/os-linux%20%7C%20macos-blue)
-![C++](https://img.shields.io/badge/c%2B%2B-20-blue)
-![Status](https://img.shields.io/badge/status-beta-yellow)
+  [![Blaze CI](https://github.com/Creed-Petitt/blaze/actions/workflows/ci.yml/badge.svg)](https://github.com/Creed-Petitt/blaze/actions/workflows/ci.yml)
+  ![License](https://img.shields.io/badge/license-MIT-blue)
+  ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey)
+  ![Standard](https://img.shields.io/badge/c%2B%2B-20-blue)
+
+  <p>
+    <a href="#features">Features</a> •
+    <a href="#installation">Installation</a> •
+    <a href="#quick-start">Quick Start</a> •
+    <a href="docs/MANUAL.md">Documentation</a>
+  </p>
+</div>
+
+---
 
 **Blaze** is a high-performance, zero-config C++20 web framework built for peak developer experience. It combines a non-blocking engine with an elegant API to build the fastest, cleanest backends on the web.
+
+## Features
+
+*   **Extremely Fast**: Handles **150,000+ req/sec** (plaintext) and **130,000+ req/sec** (JSON) with  < 10 Mb/s latency.
+*   **Modern API**: Write clean, explicit handlers with **Auto-Injection** (`[](User u)`) and **Async Returns** (`-> Async<User>`).
+*   **Dependency Injection (IoC)**: First-class support for Singletons, Transients, and Auto-Wiring (`BLAZE_DEPS`).
+*   **Async-First**: Built on C++20 Coroutines (`co_await`).
+*   **Real-Time WebSockets**: Support for high-performance WebSocket connections.
+*   **Database Ready**: Asynchronous PostgreSQL and MySQL drivers accessed via the `Database` interface.
+*   **Fullstack Ready**: Create React, Vue, or Svelte frontends instantly with Vite integration (`blaze init --fullstack`).
+*   **Modern TUI**: A beautiful interface for builds and scaffolding.
+*   **All-in-One**: Built-in commands to manage app containers and background databases.
 
 ## Requirements
 
@@ -23,17 +47,6 @@ You only need the following system libraries:
 *   **libmariadb** (`libmariadb-dev` / `mariadb-devel`)
 
 > **Note:** The installer (`install.sh`) handles these dependencies and repository setup (EPEL/CRB) automatically for you.
-
-## Features
-
-*   **Extremely Fast**: Handles **150,000+ req/sec** (plaintext) and **130,000+ req/sec** (JSON) with  < 10 Mb/s latency.
-*   **Dependency Injection (IoC)**: First-class support for Singletons, Transients, and Auto-Wiring (`BLAZE_DEPS`).
-*   **Async-First**: Built on C++20 Coroutines (`co_await`).
-*   **Real-Time WebSockets**: Support for high-performance WebSocket connections.
-*   **Database Ready**: Asynchronous PostgreSQL and MySQL drivers accessed via the `Database` interface.
-*   **Fullstack Ready**: Create React, Vue, or Svelte frontends instantly with Vite integration (`blaze init --fullstack`).
-*   **Modern TUI**: A beautiful interface for builds and scaffolding.
-*   **All-in-One**: Built-in commands to manage app containers and background databases.
 
 ## Installation
 
@@ -81,12 +94,13 @@ BLAZE_MODEL(User, id, name)
 int main() {
     App app;
 
-    // JSON Input & Output with Automatic Serialization
-    app.post("/users", [](Request& req, Response& res) {
-        auto user = req.json<User>(); // Auto-parse
-        if (user.id < 0) throw BadRequest("Invalid ID"); // Auto-400
+    // Modern API: Auto-Injection & Auto-Return
+    app.post("/users", [](User user) -> Async<User> {
+        if (user.id < 0) throw BadRequest("Invalid ID");
         
-        res.json(user); // Auto-serialize
+        // Save to DB...
+        
+        co_return user; // Auto-serialized to JSON
     });
 
     app.listen(8080);

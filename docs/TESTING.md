@@ -62,6 +62,9 @@ wrk -t4 -c100 -d10s http://localhost:8080/health
 
 # POST with JSON payload (using Lua script)
 wrk -t4 -c100 -d10s -s tests/integration_app/post.lua http://localhost:8080/modern-api
+
+# Auto-Injection Stress Test
+wrk -t4 -c100 -d10s -s tests/integration_app/user_post.lua http://localhost:8080/all-in-one
 ```
 
 ## 3. Security Philosophy

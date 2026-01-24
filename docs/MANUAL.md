@@ -117,11 +117,38 @@ app.service(MySql::open(app, "mysql://...", 10))
    .as<Database>();
 ```
 
-## 5. JSON Handling & Validation
+## 5. JSON & Modern Handlers
 
-Blaze uses **Boost.JSON** for maximum performance, wrapped in a type-safe API.
+Blaze supports both a manual, low-level API and a modern, high-level "Magic" syntax.
 
-### Receiving JSON
+### Modern Syntax (Recommended)
+You can write handlers that return `Async<T>` and accept Models as arguments. Blaze handles all serialization logic for you.
+
+```cpp
+// 1. Return JSON directly
+app.get("/api/status", []() -> Async<Json> {
+    co_return Json({ {"status", "ok"}, {"uptime", 100} });
+});
+
+// 2. Accept Body (Auto-Injection) & Return Model (Auto-Serialization)
+app.post("/users", [](User user) -> Async<User> {
+    // 'user' is parsed from the body automatically.
+    // If invalid, Blaze returns 400 Bad Request before this runs.
+    
+    user.id = 100; // Simulate saving
+    co_return user;
+});
+
+// 3. Return Lists
+app.get("/users", []() -> Async<std::vector<User>> {
+    co_return std::vector<User>{ {1, "Alice"}, {2, "Bob"} };
+});
+```
+
+### Manual Handling
+For full control (headers, status codes, raw bytes), use the `Request` and `Response` objects.
+
+#### Receiving JSON
 Use `req.json<T>()` to parse incoming bodies directly into your Models.
 This method **automatically throws** `BadRequest` if the JSON is malformed or types mismatch.
 
