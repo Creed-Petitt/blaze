@@ -3,8 +3,18 @@ name: Blaze CI
 on:
   push:
     branches: [ main, ci-pipeline, feature/* ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
 
 jobs:
   unit-tests:
