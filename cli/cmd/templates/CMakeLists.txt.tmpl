@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 include(FetchContent)
 
-# Download Blaze Framework (Automatically pulls latest core + drivers)
+# Download Blaze Framework
 FetchContent_Declare(
     blaze
     GIT_REPOSITORY https://github.com/Creed-Petitt/blaze.git
@@ -17,11 +17,7 @@ FetchContent_MakeAvailable(blaze)
 add_executable({{ .ProjectName }} src/main.cpp)
 
 # Link Libraries
-
-# Blaze handles its own dependencies (Boost, OpenSSL, etc.)
-
+# Blaze is modular. You only link what you need.
 target_link_libraries({{ .ProjectName }} PRIVATE 
-
-    blaze::framework
-
+    blaze::core
 )

@@ -23,9 +23,12 @@ add_executable(blaze_tests
 
 target_link_libraries(blaze_tests 
     PRIVATE 
-    blaze::framework
+    blaze::core
     Catch2::Catch2WithMain
 )
+
+# If we had DB tests
+# target_link_libraries(blaze_tests PRIVATE blaze::mysql blaze::postgres)
 
 include(Catch)
 catch_discover_tests(blaze_tests)

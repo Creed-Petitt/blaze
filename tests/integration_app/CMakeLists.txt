@@ -7,5 +7,7 @@ add_executable(blaze_integration_app main.cpp)
 
 target_link_libraries(blaze_integration_app 
     PRIVATE 
-    blaze::framework
+    blaze::core
+    blaze::mysql
+    blaze::postgres
 )

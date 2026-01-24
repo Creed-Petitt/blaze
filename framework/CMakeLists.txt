@@ -37,15 +37,11 @@ endif()
 
 # boost_thread
 if(NOT TARGET boost_thread)
-    # Thread requires pthread on Linux
     find_package(Threads REQUIRED)
-    
     file(GLOB BOOST_THREAD_SOURCES 
         "${boost_all_SOURCE_DIR}/libs/thread/src/pthread/thread.cpp"
         "${boost_all_SOURCE_DIR}/libs/thread/src/pthread/once.cpp"
     )
-    
-    # Fallback if specific files change, just grab the src/pthread content mostly
     if(NOT BOOST_THREAD_SOURCES)
          file(GLOB_RECURSE BOOST_THREAD_SOURCES "${boost_all_SOURCE_DIR}/libs/thread/src/pthread/*.cpp")
     endif()
@@ -56,15 +52,17 @@ if(NOT TARGET boost_thread)
     add_library(Boost::thread ALIAS boost_thread)
 endif()
 
-
-# --- DETECT SYSTEM LIBRARIES ---
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MARIADB REQUIRED libmariadb)
+# OPTIONAL DRIVER DETECTION
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+    pkg_check_modules(MARIADB QUIET libmariadb)
+endif()
 
 find_package(OpenSSL REQUIRED)
-find_package(PostgreSQL REQUIRED)
+find_package(PostgreSQL QUIET)
 
-set(BLAZE_SOURCES
+# --- TARGET: BLAZE_CORE ---
+set(CORE_SOURCES
     src/app.cpp
     src/request.cpp
     src/response.cpp
@@ -74,56 +72,66 @@ set(BLAZE_SOURCES
     src/json.cpp
     src/crypto.cpp
     src/client.cpp
-    src/drivers/mysql/mysql_connection.cpp
-    src/drivers/mysql/mysql_pool.cpp
-    src/drivers/mysql/mysql_result.cpp
-    # Postgres Driver
-    src/drivers/postgres/pg_connection.cpp
-    src/drivers/postgres/pg_pool.cpp
-    src/drivers/postgres/pg_result.cpp
 )
 
-add_library(blaze_framework STATIC ${BLAZE_SOURCES})
-add_library(blaze::framework ALIAS blaze_framework)
+add_library(blaze_core STATIC ${CORE_SOURCES})
+add_library(blaze::core ALIAS blaze_core)
 
-if(BLAZE_ENABLE_SANITIZERS)
-    message(STATUS "Blaze: Enabling ASan and UBSan...")
-    target_compile_options(blaze_framework PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
-    target_link_options(blaze_framework PUBLIC -fsanitize=address,undefined)
-endif()
-
-if(BLAZE_ENABLE_TSAN)
-    message(STATUS "Blaze: Enabling ThreadSanitizer (TSan)...")
-    target_compile_options(blaze_framework PUBLIC -fsanitize=thread)
-    target_link_options(blaze_framework PUBLIC -fsanitize=thread)
-endif()
-
-# Legacy aliases
-add_library(blaze::core ALIAS blaze_framework)
-add_library(blaze::mysql ALIAS blaze_framework)
-add_library(blaze::postgres ALIAS blaze_framework)
-
-target_include_directories(blaze_framework BEFORE PUBLIC 
+target_include_directories(blaze_core BEFORE PUBLIC 
     $<BUILD_INTERFACE:${boost_all_SOURCE_DIR}>
     include
-    ${PostgreSQL_INCLUDE_DIRS}
-    ${MARIADB_INCLUDE_DIRS}
 )
 
-# Fix for macOS/Linux MariaDB linking
-target_link_directories(blaze_framework PUBLIC ${MARIADB_LIBRARY_DIRS})
-
-target_include_directories(blaze_framework PRIVATE 
-    src
-    src/drivers/mysql
-    src/drivers/postgres
-)
-
-target_link_libraries(blaze_framework PUBLIC 
+target_link_libraries(blaze_core PUBLIC 
     Boost::system 
     Boost::thread 
     OpenSSL::SSL 
     OpenSSL::Crypto
-    ${MARIADB_LIBRARIES}
-    PostgreSQL::PostgreSQL
 )
+
+# TARGET: BLAZE_MYSQL
+if(MARIADB_FOUND)
+    set(MYSQL_SOURCES
+        src/drivers/mysql/mysql_connection.cpp
+        src/drivers/mysql/mysql_pool.cpp
+        src/drivers/mysql/mysql_result.cpp
+    )
+    add_library(blaze_mysql STATIC ${MYSQL_SOURCES})
+    add_library(blaze::mysql ALIAS blaze_mysql)
+    
+    target_link_libraries(blaze_mysql PUBLIC blaze::core ${MARIADB_LIBRARIES})
+    target_include_directories(blaze_mysql PUBLIC ${MARIADB_INCLUDE_DIRS})
+    target_link_directories(blaze_mysql PUBLIC ${MARIADB_LIBRARY_DIRS})
+    message(STATUS "Blaze: MySQL driver enabled.")
+else()
+    message(STATUS "Blaze: MySQL driver disabled (libmariadb not found).")
+endif()
+
+# TARGET: BLAZE_POSTGRES
+if(PostgreSQL_FOUND)
+    set(PG_SOURCES
+        src/drivers/postgres/pg_connection.cpp
+        src/drivers/postgres/pg_pool.cpp
+        src/drivers/postgres/pg_result.cpp
+    )
+    add_library(blaze_postgres STATIC ${PG_SOURCES})
+    add_library(blaze::postgres ALIAS blaze_postgres)
+    
+    target_link_libraries(blaze_postgres PUBLIC blaze::core PostgreSQL::PostgreSQL)
+    target_include_directories(blaze_postgres PUBLIC ${PostgreSQL_INCLUDE_DIRS})
+    message(STATUS "Blaze: PostgreSQL driver enabled.")
+else()
+    message(STATUS "Blaze: PostgreSQL driver disabled (libpq not found).")
+endif()
+
+# Sanitizers for core
+if(BLAZE_ENABLE_SANITIZERS)
+    target_compile_options(blaze_core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(blaze_core PUBLIC -fsanitize=address,undefined)
+endif()
+
+if(BLAZE_ENABLE_TSAN)
+    target_compile_options(blaze_core PUBLIC -fsanitize=thread)
+    target_link_options(blaze_core PUBLIC -fsanitize=thread)
+endif()
+
