@@ -13,13 +13,12 @@ using namespace blaze;
 int main() {
     App app;
 
-    // Health check route
-    app.get("/", [](Response& res) -> Task {
-        res.json({
+    // Modern API: Async Returns & Auto-Serialization
+    app.get("/", []() -> Async<Json> {
+        co_return Json({
             {"status", "ok"},
             {"message", "Welcome to Blaze!"}
         });
-        co_return;
     });
 
     std::cout << "Starting server on http://localhost:8080" << std::endl;
