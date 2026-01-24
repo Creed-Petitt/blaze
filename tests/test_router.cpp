@@ -8,7 +8,7 @@ using namespace blaze;
 TEST_CASE("Router: Static Route Matching", "[router]") {
     Router router;
 
-    router.add_route("GET", "/hello", [](Request& req, Response& res) -> Task {
+    router.add_route("GET", "/hello", [](Request& req, Response& res) -> Async<void> {
         co_return;
     });
 
@@ -31,7 +31,7 @@ TEST_CASE("Router: Static Route Matching", "[router]") {
 TEST_CASE("Router: Parameter Extraction", "[router]") {
     Router router;
 
-    router.add_route("GET", "/user/:id", [](Request& req, Response& res) -> Task {
+    router.add_route("GET", "/user/:id", [](Request& req, Response& res) -> Async<void> {
         co_return;
     });
 

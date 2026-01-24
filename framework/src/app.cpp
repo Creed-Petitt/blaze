@@ -28,7 +28,7 @@ boost::asio::awaitable<void> delay(std::chrono::milliseconds ms) {
     co_await timer.async_wait(boost::asio::use_awaitable);
 }
 
-void App::spawn(Task task) {
+void App::spawn(Async<void> task) {
     boost::asio::co_spawn(ioc_.get_executor(), std::move(task), boost::asio::detached);
 }
 

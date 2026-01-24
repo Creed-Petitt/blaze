@@ -15,11 +15,11 @@ namespace blaze {
 template <typename T = void>
 using Async = boost::asio::awaitable<T>;
 
-using Task = Async<void>;
 
-using Next = std::function<Task()>;
-using Middleware = std::function<Task(Request&, Response&, Next)>;
-using Handler = std::function<Task(Request&, Response&)>;
+
+using Next = std::function<Async<void>()>;
+using Middleware = std::function<Async<void>(Request&, Response&, Next)>;
+using Handler = std::function<Async<void>(Request&, Response&)>;
 
 struct RouteMatch {
     Handler handler;                                      // The function to call

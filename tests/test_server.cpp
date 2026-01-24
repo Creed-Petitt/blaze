@@ -18,7 +18,7 @@ BLAZE_MODEL(User, id, name)
 
 TEST_CASE("Server: End-to-End Request", "[integration]") {
     App app;
-    app.get("/test", [](Response& res) -> Task {
+    app.get("/test", [](Response& res) -> Async<void> {
         res.send("Integration OK");
         co_return;
     });
@@ -138,12 +138,12 @@ TEST_CASE("Server: Auth & Cookies", "[integration]") {
         return token == "valid-token";
     }));
 
-    app.get("/protected", [](Response& res) -> Task {
+    app.get("/protected", [](Response& res) -> Async<void> {
         res.send("Secret");
         co_return;
     });
 
-    app.get("/cookie", [](Response& res) -> Task {
+    app.get("/cookie", [](Response& res) -> Async<void> {
         res.set_cookie("session", "xyz", 3600, true, true);
         res.send("ok");
         co_return;

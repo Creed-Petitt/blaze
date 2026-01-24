@@ -27,7 +27,7 @@ public:
     BLAZE_DEPS(Database)
     UserService(std::shared_ptr<Database> db) : db_(db) {}
 
-    Task get_data(Response& res) {
+    Async<void> get_data(Response& res) {
         try {
             // New Clean Syntax: Returns std::vector<DataModel>
             auto result = co_await db_->query<DataModel>("SELECT 1 as val");
@@ -74,12 +74,12 @@ int main() {
     std::cout << "--- DEFINING ROUTES ---" << std::endl;
 
     // ROUTE 1: Service Injection
-    app.get("/abstract", [](Response& res, UserService& user) -> Task {
+    app.get("/abstract", [](Response& res, UserService& user) -> Async<void> {
         co_await user.get_data(res);
     });
 
     // ROUTE 2: Direct Interface Injection (Manual Mode)
-    app.get("/direct", [](Response& res, Database& db) -> Task {
+    app.get("/direct", [](Response& res, Database& db) -> Async<void> {
         auto result = co_await db.query("SELECT 999 as val");
         // Manual mode: result[0] works directly now (Value Wrapper)
         int val = result[0]["val"].as<int>();
@@ -87,7 +87,7 @@ int main() {
     });
 
     // ROUTE 3: Safe Parameterized Query (Postgres syntax)
-    app.get("/safe-query", [](Response& res, Database& db) -> Task {
+    app.get("/safe-query", [](Response& res, Database& db) -> Async<void> {
         std::vector<std::string> params = {"Hello from Parameters!"};
         auto result = co_await db.query("SELECT $1::text as echo", params);
         
@@ -101,7 +101,7 @@ int main() {
     });
 
     // ROUTE 4: MySQL Safe Parameterized Query
-    app.get("/mysql-safe", [](Response& res, MySql& db) -> Task {
+    app.get("/mysql-safe", [](Response& res, MySql& db) -> Async<void> {
         std::vector<std::string> params = {"Hello from MySQL!"};
         auto result = co_await db.query("SELECT ? as echo", params);
         
@@ -116,7 +116,7 @@ int main() {
 
     // ROUTE 5: Modern API Showcase (New Features)
     // Expects JSON Body: [1, 2, 3]
-    app.post("/modern-api", [](Request& req, Response& res) -> Task {
+    app.post("/modern-api", [](Request& req, Response& res) -> Async<void> {
         // 1. Typed Request Body (One-Liner)
         // If JSON is invalid or not an array of ints, this throws automatically -> 500 (or we can catch for 400)
         std::vector<int> inputs;
@@ -147,7 +147,7 @@ int main() {
     });
 
     // ROUTE 6: Async HTTP Client (Fetch)
-    app.get("/fetch-test", [](Response& res) -> Task {
+    app.get("/fetch-test", [](Response& res) -> Async<void> {
         try {
             // Calling a real external HTTPS API
             auto response = co_await blaze::fetch("https://httpbin.org/get");
@@ -185,7 +185,7 @@ int main() {
         co_return user;
     });
 
-    app.get("/health", [](Response& res) -> Task {
+    app.get("/health", [](Response& res) -> Async<void> {
         res.send("OK");
         co_return;
     });

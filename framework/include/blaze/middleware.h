@@ -74,7 +74,7 @@ namespace middleware {
     }
 
     inline Middleware cors() {
-        return [](Request& req, Response& res, auto next) -> Task {
+        return [](Request& req, Response& res, auto next) -> Async<void> {
             res.header("Access-Control-Allow-Origin", "*");
             res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
             res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -91,7 +91,7 @@ namespace middleware {
     inline Middleware cors(const std::string& origin,
                           const std::string& methods = "GET, POST, PUT, DELETE, OPTIONS",
                           const std::string& headers = "Content-Type, Authorization") {
-        return [origin, methods, headers](Request& req, Response& res, const auto& next) -> Task {
+        return [origin, methods, headers](Request& req, Response& res, const auto& next) -> Async<void> {
             res.header("Access-Control-Allow-Origin", origin);
             res.header("Access-Control-Allow-Methods", methods);
             res.header("Access-Control-Allow-Headers", headers);
@@ -117,7 +117,7 @@ namespace middleware {
             abs_root = fs::absolute(root_dir);
         }
 
-        return [abs_root, serve_index, cache](Request& req, Response& res, auto next) -> Task {
+        return [abs_root, serve_index, cache](Request& req, Response& res, auto next) -> Async<void> {
             if (req.method != "GET") {
                 co_await next();
                 co_return;
@@ -206,7 +206,7 @@ namespace middleware {
     }
 
     inline Middleware limit_body_size(size_t max_bytes) {
-        return [max_bytes](Request& req, Response& res, auto next) -> Task {
+        return [max_bytes](Request& req, Response& res, auto next) -> Async<void> {
             if (req.body.size() > max_bytes) {
                 res.status(413).json({
                     {"error", "Request body too large"},
@@ -225,7 +225,7 @@ namespace middleware {
     // }));
     template<typename Validator>
     inline Middleware bearer_auth(Validator validator) {
-        return [validator](Request& req, Response& res, auto next) -> Task {
+        return [validator](Request& req, Response& res, auto next) -> Async<void> {
             if (!req.has_header("Authorization")) {
                 res.status(401).json({{"error", "Unauthorized"}, {"message", "Missing Authorization header"}});
                 co_return;

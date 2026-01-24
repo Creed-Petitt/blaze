@@ -22,7 +22,7 @@ public:
      * 
      * @param sql The SQL string (use $1, $2 for Postgres or ? for MySQL placeholders).
      * @param params Vector of string parameters to be safely escaped.
-     * @return A Task yielding a DbResult value wrapper.
+     * @return Async<DbResult> yielding a value wrapper.
      */
     virtual boost::asio::awaitable<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) = 0;
     

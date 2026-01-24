@@ -198,7 +198,7 @@ public:
     void _register_ws(const std::string& path, std::shared_ptr<WebSocket> ws);
 
     /** @brief Starts a background task (coroutine) in the event loop. */
-    void spawn(Task task);
+    void spawn(Async<void> task);
 
     // Getters for internal state (used by drivers/handlers)
     /**
@@ -244,7 +244,7 @@ private:
         using ReturnType = typename function_traits<Func>::return_type;
         using AsyncInfo = extract_async_type<ReturnType>;
 
-        return [this, handler](Request& req, Response& res) -> Task {
+        return [this, handler](Request& req, Response& res) -> Async<void> {
             if constexpr (AsyncInfo::is_async && !std::is_void_v<typename AsyncInfo::type>) {
                 using InnerT = typename AsyncInfo::type;
                 InnerT result = co_await inject_and_call(const_cast<Func&>(handler), services_, req, res);

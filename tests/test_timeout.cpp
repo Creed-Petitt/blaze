@@ -13,7 +13,7 @@ TEST_CASE("Server: Timeout Protection (Slowloris)", "[security]") {
     // Set aggressive timeout for testing
     app.config().timeout_seconds = 1;
 
-    app.get("/", [](Response& res) -> Task {
+    app.get("/", [](Response& res) -> Async<void> {
         res.send("OK");
         co_return;
     });
