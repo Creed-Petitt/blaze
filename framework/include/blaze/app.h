@@ -18,11 +18,24 @@ namespace ssl = boost::asio::ssl;
 
 namespace blaze {
 
+template<typename T>
+struct extract_async_type {
+    using type = void;
+    static constexpr bool is_async = false;
+};
+
+template<typename T>
+struct extract_async_type<boost::asio::awaitable<T>> {
+    using type = T;
+    static constexpr bool is_async = true;
+};
+
 struct AppConfig {
     size_t max_body_size = 10 * 1024 * 1024; // 10MB default
     int timeout_seconds = 30;                // 30s timeout
     std::string log_path = "stdout";         // Logging destination
 };
+
 
 /**
  * @brief The primary entry point for a Blaze application.
@@ -205,17 +218,23 @@ private:
     template<typename Func>
     Handler wrap_handler(Func handler) {
         using ReturnType = typename function_traits<Func>::return_type;
+        using AsyncInfo = extract_async_type<ReturnType>;
 
         return [this, handler](Request& req, Response& res) -> Task {
-            if constexpr (std::is_same_v<ReturnType, Async<Json>>) {
-                Json result = co_await inject_and_call(const_cast<Func&>(handler), services_, req, res);
-                res.json(static_cast<boost::json::value>(result));
-            }
-            else if constexpr (std::is_same_v<ReturnType, Async<std::string>>) {
-                std::string result = co_await inject_and_call(const_cast<Func&>(handler), services_, req, res);
-                res.send(result);
-            }
-            else {
+            if constexpr (AsyncInfo::is_async && !std::is_void_v<typename AsyncInfo::type>) {
+                using InnerT = typename AsyncInfo::type;
+                InnerT result = co_await inject_and_call(const_cast<Func&>(handler), services_, req, res);
+                
+                if constexpr (std::is_convertible_v<InnerT, std::string>) {
+                    res.send(result);
+                } else if constexpr (std::is_same_v<InnerT, Json>) {
+                    // Special handling for our Json wrapper
+                    res.json(static_cast<boost::json::value>(result));
+                } else {
+                    // Generic JSON serialization for Models, Vectors, Maps, etc.
+                    res.json(result);
+                }
+            } else {
                 co_await inject_and_call(const_cast<Func&>(handler), services_, req, res);
             }
         };

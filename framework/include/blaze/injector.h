@@ -4,6 +4,7 @@
 #include <blaze/di.h>
 #include <blaze/request.h>
 #include <blaze/response.h>
+#include <blaze/model.h>
 #include <tuple>
 #include <functional>
 #include <type_traits>
@@ -46,10 +47,21 @@ auto call_with_deps_impl(Func& func, ServiceProvider& provider, Request& req, Re
             using PureType = std::remove_cvref_t<ArgType>;
             
             if constexpr (std::is_same_v<PureType, Request> || std::is_same_v<PureType, Response>) {
-                return nullptr; // Placeholders
+                return nullptr;
             } else if constexpr (is_shared_ptr_v<PureType>) {
                 return provider.resolve<typename PureType::element_type>();
             } else {
+                // Check DI Container
+                if (provider.has<PureType>()) {
+                    return provider.resolve<PureType>();
+                }
+                
+                // Check if it's a Model (Parse from Body)
+                if constexpr (boost::describe::has_describe_members<PureType>::value) {
+                    return std::make_shared<PureType>(req.json<PureType>());
+                }
+
+                // Try DI again (will throw "Service not registered")
                 return provider.resolve<PureType>();
             }
         }()...
