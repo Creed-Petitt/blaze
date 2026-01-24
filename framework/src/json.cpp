@@ -74,4 +74,11 @@ Json::operator boost::json::value() const {
     return boost::json::value(as<std::string>());
 }
 
+std::string Json::dump() const {
+    if (data_.type == Type::BOOST_VAL) {
+        return boost::json::serialize(*data_.boost_ptr);
+    }
+    return "";
+}
+
 } // namespace blaze

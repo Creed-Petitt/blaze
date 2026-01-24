@@ -42,6 +42,8 @@ public:
     bool empty() const { return size() == 0; }
     bool is_ok() const;
 
+    std::string dump() const;
+
 private:
     struct Internal {
         Type type = Type::NONE;
