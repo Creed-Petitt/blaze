@@ -177,6 +177,10 @@ public:
      */
     void ws(const std::string& path, WebSocketHandlers handlers);
 
+    // Run a background task (coroutine)
+    void spawn(Task task);
+
+    // Getters for internal state (used by drivers/handlers)
     /**
      * @brief Starts the HTTP server on the specified port.
      * 
