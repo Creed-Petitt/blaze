@@ -37,18 +37,6 @@ TEST_CASE("Middleware: Execution Order", "[middleware]") {
         req.path = "/test";
         
         // Directly invoke the internal handler to simulate a request
-        // (This tests the 'run_middleware' logic in app.cpp)
         auto result = app.handle_request(req, "127.0.0.1", false);
-        
-        // We need to run the Asio engine briefly to process the co_await chain
-        // But since we are testing the logic flow, we can verify the vector
-        // after the coroutine finishes.
-        
-        // Note: handle_request is an awaitable, so we run it in a loop or 
-        // use a simple blocking helper if needed. For this test, 
-        // we'll rely on the fact that these lambdas are capturing by reference.
-        
-        // In a real scenario, we'd use a co_spawn, but here we just want to 
-        // verify the logic in app.cpp's run_middleware.
     }
 }
