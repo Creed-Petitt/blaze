@@ -43,7 +43,7 @@ func runDevEnvironment() {
 		return
 	}
 
-	if err := RunBlazeBuild(); err != nil {
+	if err := RunBlazeBuild(false); err != nil {
 		fmt.Printf("\nBuild Failed: %v\n", err)
 		return
 	}

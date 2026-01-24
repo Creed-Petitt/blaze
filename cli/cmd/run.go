@@ -9,26 +9,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var runRelease bool
+
 var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Build and run the project locally",
-	Long:  `Compiles the project using CMake and runs the generated binary.`, 
 	Run: func(cmd *cobra.Command, args []string) {
 		var (
-			errStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")) // Red
-			successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")) // Green
-			textStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")) // White
+			errStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C"))
+			successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))
 		)
 
 		if _, err := os.Stat("CMakeLists.txt"); os.IsNotExist(err) {
-			fmt.Println(errStyle.Render("Error: No Blaze project found in this directory."))
-			fmt.Println(textStyle.Render("Use 'blaze init <name>' to create a new project."))
+			fmt.Println(errStyle.Render("Error: No Blaze project found."))
 			return
 		}
 
-		if err := RunBlazeBuild(); err != nil {
+		if err := RunBlazeBuild(runRelease); err != nil {
 			fmt.Println(errStyle.Render(fmt.Sprintf("\n Build Failed: %v", err)))
-			fmt.Println(textStyle.Render("Check your code or CMakeLists.txt for errors."))
 			return
 		}
 
@@ -45,4 +43,5 @@ var runCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(runCmd)
+	runCmd.Flags().BoolVarP(&runRelease, "release", "r", false, "Run in high-performance Release mode")
 }

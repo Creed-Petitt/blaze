@@ -38,26 +38,9 @@ var loadingMessages = []string{
 	"Igniting the engine...",
 	"Teaching C++ how to be modern...",
 	"Fetching Boost (Time for a coffee break?)...",
-	"Searching for missing semicolons...",
 	"Optimizing the binary for maximum speed...",
 	"Convincing the linker to behave...",
 	"Converting caffeine into high-performance code...",
-	"Blazing through dependencies...",
-	"Updating the laws of physics to support async C++...",
-	"Are you still reading these?",
-	"Watering the server plants...",
-	"Asking a rubber duck for architectural advice...",
-	"Adjusting the flux capacitor...",
-	"Bending the space-time continuum...",
-	"Calculating the meaning of life... (it's 42)",
-	"Rerouting the orbital lasers...",
-	"Counting to infinity... twice.",
-	"Generating a sense of urgency...",
-	"Look behind you! (Just kidding, keep coding)...",
-	"Thinking about what to have for dinner...",
-	"Initializing the secret handshake...",
-	"Refactoring the universe...",
-	"Downloading more RAM...",
 	"Everything is fine. Probably.",
 }
 
@@ -197,9 +180,14 @@ func tickFunnyMessage() tea.Cmd {
 	})
 }
 
-func RunBlazeBuild() error {
+func RunBlazeBuild(release bool) error {
 	m := initialModel()
 	p := tea.NewProgram(m)
+
+	buildMode := "Debug"
+	if release {
+		buildMode = "Release"
+	}
 
 	var buildErr error
 
@@ -221,7 +209,9 @@ func RunBlazeBuild() error {
 			}
 		}()
 
-		if err := runCmdWithParsing(p, "cmake", []string{"-B", "build"}, 0, 0.2); err != nil {
+		// Pass build mode to CMake
+		cmakeArgs := []string{" -B", "build", fmt.Sprintf("-DCMAKE_BUILD_TYPE=%s", buildMode)}
+		if err := runCmdWithParsing(p, "cmake", cmakeArgs, 0, 0.2); err != nil {
 			doneChan <- true
 			buildErr = err
 			p.Send(errMsg(err))
@@ -280,7 +270,50 @@ func runCmdWithParsing(p *tea.Program, command string, args []string, startRange
 	pw.Close()
 	
 	if err != nil {
-		return fmt.Errorf("%w\n\n=== Build Output ===\n%s", err, outputLog.String())
+		beautified := BeautifyError(outputLog.String())
+		return fmt.Errorf("%w\n\n%s", err, beautified)
 	}
 	return nil
+}
+
+func BeautifyError(raw string) string {
+	var (
+		errStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")).Bold(true)
+		tipStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Italic(true)
+		headerStyle = lipgloss.NewStyle().Background(lipgloss.Color("#FF4C4C")).Foreground(lipgloss.Color("#FFFFFF")).Padding(0, 1).Bold(true)
+	)
+
+	out := headerStyle.Render(" COMPILER ERROR ") + "\n\n"
+
+	// 1. Driver Links
+	if strings.Contains(raw, "undefined reference to `mysql_") || strings.Contains(raw, "undefined reference to `mariadb_") {
+		out += errStyle.Render("  [!] Driver Missing\n")
+		out += "      You are using MySQL functions but the driver isn't linked.\n"
+		out += tipStyle.Render("      Tip: Run 'blaze add mysql' to fix this.")
+		return out
+	}
+
+	// 2. Handler Mismatch
+	if strings.Contains(raw, "no matching member function for call to 'get'") || 
+	   strings.Contains(raw, "no matching member function for call to 'post'") {
+		out += errStyle.Render("  [!] Route Handler Mismatch\n")
+		out += "      One of your .get() or .post() handlers has the wrong signature.\n"
+		out += tipStyle.Render("      Tip: Check if you are returning Async<T> and have the correct arguments.")
+		return out
+	}
+
+	// Default fallback
+	lines := strings.Split(raw, "\n")
+	shortRaw := ""
+	count := 0
+	for _, line := range lines {
+		if strings.Contains(line, "error:") || strings.Contains(line, "note:") {
+			shortRaw += "  " + line + "\n"
+			count++
+			if count > 8 { break }
+		}
+	}
+	out += errStyle.Render("  [!] Raw Compiler Output (Summary):\n")
+	out += shortRaw
+	return out
 }
