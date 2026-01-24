@@ -20,15 +20,13 @@
 
 ## Features
 
-*   **Extremely Fast**: Handles **150,000+ req/sec** (plaintext) and **130,000+ req/sec** (JSON) with  < 10 Mb/s latency.
-*   **Modern API**: Write clean, explicit handlers with **Auto-Injection** (`[](User u)`) and **Async Returns** (`-> Async<User>`).
-*   **Dependency Injection (IoC)**: First-class support for Singletons, Transients, and Auto-Wiring (`BLAZE_DEPS`).
-*   **Async-First**: Built on C++20 Coroutines (`co_await`).
-*   **Real-Time WebSockets**: Support for high-performance WebSocket connections.
-*   **Database Ready**: Asynchronous PostgreSQL and MySQL drivers accessed via the `Database` interface.
-*   **Fullstack Ready**: Create React, Vue, or Svelte frontends instantly with Vite integration (`blaze init --fullstack`).
-*   **Modern TUI**: A beautiful interface for builds and scaffolding.
-*   **All-in-One**: Built-in commands to manage app containers and background databases.
+*   **150,000+ req/sec** (plaintext) and **130,000+ req/sec** (JSON) with sub 10 mb/s latency.
+*   Write safe and clean handlers with **Auto-Injection** (`[](User u)`) and **Async Returns** (`-> Async<User>`).
+*   First-class support for Singletons, Transients, and Auto-Wiring (`BLAZE_DEPS`).
+*   Built solely for C++20 Coroutines (`co_await`).
+*   Easy-to-use API for high-performance WebSocket connections.
+*   Asynchronous PostgreSQL and MySQL drivers accessed via the `Database` interface.
+*   Built-in commands to manage app containers and background databases.
 
 ## Requirements
 
@@ -39,12 +37,11 @@ Blaze is tested and verified to work out-of-the-box on:
 *   **macOS** (Apple Silicon/Intel)
 
 You only need the following system libraries:
-
 *   **CMake** (3.20+)
 *   **G++ / Clang** (C++20 support)
 *   **OpenSSL** (`libssl-dev` / `openssl-devel`)
-*   **libpq** (`libpq-dev` / `libpq-devel`)
-*   **libmariadb** (`libmariadb-dev` / `mariadb-devel`)
+*   **libpq** (`libpq-dev` / `libpq-devel`) ``//optional``
+*   **libmariadb** (`libmariadb-dev` / `mariadb-devel`) ``//optional``
 
 > **Note:** The installer (`install.sh`) handles these dependencies and repository setup (EPEL/CRB) automatically for you.
 
@@ -94,9 +91,10 @@ BLAZE_MODEL(User, id, name)
 int main() {
     App app;
 
-    // Modern API: Auto-Injection & Auto-Return
+    // Auto-Injection & Auto-Return
     app.post("/users", [](User user) -> Async<User> {
-        if (user.id < 0) throw BadRequest("Invalid ID");
+        if (user.id < 0) 
+          throw BadRequest("Invalid ID");
         
         // Save to DB...
         
@@ -111,15 +109,14 @@ For a deep dive into the API, Dependency Injection, and WebSockets, see the **[F
 
 ## CLI Reference
 
-Blaze comes with a powerful CLI to manage your entire development lifecycle. See the **[Full CLI Reference](docs/CLI.md)** for more details.
+Blaze comes with a powerful CLI to manage your entire development lifecycle. Below is a few useful commands See the **[Full CLI Reference](docs/CLI.md)** for more details.
 
-| Command | Description |
-| :--- | :--- |
-| `init` | Scaffold a new project (add `--fullstack` for UI). |
-| `dev` | Run C++ and Vite in parallel with unified logs. |
-| `add` | Add features like a `frontend` to existing projects. |
-| `doctor` | Verify your system requirements. |
-| `docker` | Manage Postgres, MySQL, and Redis containers. |
+| Command | Description                                                       |
+| :--- |:------------------------------------------------------------------|
+| `init` | Scaffold a new project (add `--fullstack` for UI).                |
+| `dev` | Run C++ and Vite in parallel with unified logs.                   |
+| `add` | Add features like a `frontend` or `database` to existing projects. |
+| `doctor` | Verify your system requirements.                                  |
 
 
 ## Testing and Security
