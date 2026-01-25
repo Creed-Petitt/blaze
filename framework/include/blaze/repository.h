@@ -13,6 +13,74 @@
 
 namespace blaze {
 
+template <typename T>
+class Repository;
+
+/**
+ * @brief Fluent Query Builder for Repository types.
+ */
+template <typename T>
+class QueryBuilder {
+private:
+    Repository<T>& repo_;
+    std::vector<std::string> conditions_;
+    std::vector<std::string> params_;
+    std::string order_by_;
+    int limit_ = -1;
+    int offset_ = -1;
+
+public:
+    explicit QueryBuilder(Repository<T>& repo) : repo_(repo) {}
+
+    template <typename Val>
+    QueryBuilder& where(const std::string& column, const std::string& op, Val&& val) {
+        int idx = params_.size() + 1;
+        conditions_.push_back("\"" + column + "\" " + op + " " + repo_.database()->placeholder(idx));
+        params_.push_back(to_string_param(std::forward<Val>(val)));
+        return *this;
+    }
+
+    QueryBuilder& order_by(const std::string& column, const std::string& direction = "ASC") {
+        order_by_ = " ORDER BY \"" + column + "\" " + direction;
+        return *this;
+    }
+
+    QueryBuilder& limit(int limit) {
+        limit_ = limit;
+        return *this;
+    }
+
+    QueryBuilder& offset(int offset) {
+        offset_ = offset;
+        return *this;
+    }
+
+    boost::asio::awaitable<std::vector<T>> all() {
+        std::string sql = repo_.select_base();
+        if (!conditions_.empty()) {
+            sql += " WHERE ";
+            for (size_t i = 0; i < conditions_.size(); ++i) {
+                if (i > 0) sql += " AND ";
+                sql += conditions_[i];
+            }
+        }
+        sql += order_by_;
+        if (limit_ != -1) sql += " LIMIT " + std::to_string(limit_);
+        if (offset_ != -1) sql += " OFFSET " + std::to_string(offset_);
+
+        co_return co_await repo_.database()->template query<T>(sql, params_);
+    }
+
+    boost::asio::awaitable<T> first() {
+        this->limit(1);
+        auto results = co_await all();
+        if (results.empty()) {
+            throw NotFound(repo_.table_name() + " not found");
+        }
+        co_return results[0];
+    }
+};
+
 template <typename T, typename = void>
 struct has_table_name : std::false_type {};
 
@@ -62,6 +130,19 @@ public:
         table_name_ = infer_table_name();
     }
 
+    // --- Accessors for QueryBuilder ---
+    std::shared_ptr<Database> database() { return db_; }
+    std::string table_name() const { return table_name_; }
+    std::string select_base() { return "SELECT " + get_columns() + " FROM \"" + table_name_ + "\""; }
+
+    /**
+     * @brief Start a fluent query.
+     * usage: co_await repo.query().where("age", ">", 20).limit(5).all();
+     */
+    QueryBuilder<T> query() {
+        return QueryBuilder<T>(*this);
+    }
+
     // Find by ID. Throws NotFound if missing.
     // usage: auto user = co_await users.find(1);
     template <typename ID>
@@ -79,7 +160,7 @@ public:
 
     // Find all
     boost::asio::awaitable<std::vector<T>> all() {
-        std::string sql = "SELECT " + get_columns() + " FROM \"" + table_name_ + "\"";
+        std::string sql = select_base();
         co_return co_await db_->query<T>(sql);
     }
 
