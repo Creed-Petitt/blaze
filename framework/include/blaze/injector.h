@@ -52,6 +52,20 @@ T convert_string(const std::string& s) {
     }
 }
 
+// Detects if T has a void validate() method
+template <typename T, typename = void>
+struct has_validate : std::false_type {};
+
+template <typename T>
+struct has_validate<T, std::void_t<decltype(std::declval<T>().validate())>> : std::true_type {};
+
+template <typename T>
+void try_validate(T& model) {
+    if constexpr (has_validate<T>::value) {
+        model.validate();
+    }
+}
+
 
 template <typename T>
 struct function_traits : public function_traits<decltype(&T::operator())> {};
@@ -97,8 +111,10 @@ auto call_with_deps_impl(Func& func, ServiceProvider& provider, Request& req, Re
                 }
                 return std::make_shared<PureType>();
             } else if constexpr (is_instantiation_of<Body, PureType>::value) {
-                using InnerT = PureType::value_type;
-                return std::make_shared<PureType>(req.json<InnerT>());
+                using InnerT = typename PureType::value_type;
+                auto model = req.json<InnerT>();
+                try_validate(model);
+                return std::make_shared<PureType>(std::move(model));
             } else if constexpr (is_instantiation_of<Query, PureType>::value) {
                 using InnerT = PureType::value_type;
                 InnerT model{};
@@ -112,6 +128,7 @@ auto call_with_deps_impl(Func& func, ServiceProvider& provider, Request& req, Re
                     }
                 });
                 
+                try_validate(model);
                 return std::make_shared<PureType>(model);
             } else if constexpr (is_instantiation_of<Context, PureType>::value) {
                 using InnerT = typename PureType::value_type;
@@ -129,7 +146,9 @@ auto call_with_deps_impl(Func& func, ServiceProvider& provider, Request& req, Re
                 
                 // Check if it's a Model (Parse from Body)
                 if constexpr (boost::describe::has_describe_members<PureType>::value) {
-                    return std::make_shared<PureType>(req.json<PureType>());
+                    auto model = req.json<PureType>();
+                    try_validate(model);
+                    return std::make_shared<PureType>(std::move(model));
                 }
 
                 // Try DI again (will throw "Service not registered")
