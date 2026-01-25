@@ -272,6 +272,46 @@ namespace blaze::middleware
         };
     }
 
+    inline Middleware rate_limit(int max_requests, int window_seconds) {
+        struct ClientState {
+            int count;
+            std::chrono::steady_clock::time_point window_start;
+        };
+        
+        auto state = std::make_shared<std::pair<std::mutex, std::unordered_map<std::string, ClientState>>>();
+
+        return [max_requests, window_seconds, state](Request& req, Response& res, auto next) -> Async<void> {
+            std::string ip = "unknown";
+            if (auto ip_ctx = req.get_opt<std::string>("client_ip")) {
+                ip = *ip_ctx;
+            }
+
+            std::lock_guard lock(state->first);
+            auto& clients = state->second;
+            auto now = std::chrono::steady_clock::now();
+
+            auto& client = clients[ip];
+            
+            // Check window reset
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - client.window_start).count();
+            if (elapsed > window_seconds) {
+                client.count = 0;
+                client.window_start = now;
+            }
+
+            if (client.count >= max_requests) {
+                res.status(429).json({
+                    {"error", "Too Many Requests"},
+                    {"retry_after_seconds", window_seconds - elapsed}
+                });
+                co_return;
+            }
+
+            client.count++;
+            co_await next();
+        };
+    }
+
 }
 
 #endif
