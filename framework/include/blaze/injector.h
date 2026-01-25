@@ -5,12 +5,53 @@
 #include <blaze/request.h>
 #include <blaze/response.h>
 #include <blaze/model.h>
+#include <blaze/wrappers.h>
 #include <tuple>
 #include <functional>
 #include <type_traits>
 #include <memory>
+#include <charconv>
+#include <boost/mp11.hpp>
 
 namespace blaze {
+
+// Helper to check if a type is a template instance of a specific template
+template <template <typename...> class Template, typename T>
+struct is_instantiation_of : std::false_type {};
+
+template <template <typename...> class Template, typename... Args>
+struct is_instantiation_of<Template, Template<Args...>> : std::true_type {};
+
+// Helper to count how many times a template appears in a tuple before index N
+template <template <typename...> class Template, size_t N, typename Tuple>
+struct count_instances_before {
+    static constexpr size_t count() {
+        return count_impl(std::make_index_sequence<N>{});
+    }
+private:
+    template <size_t... Is>
+    static constexpr size_t count_impl(std::index_sequence<Is...>) {
+        return (0 + ... + (is_instantiation_of<Template, std::remove_cvref_t<std::tuple_element_t<Is, Tuple>>>::value ? 1 : 0));
+    }
+};
+
+// String to Type conversion helper
+template<typename T>
+T convert_string(const std::string& s) {
+    if constexpr (std::is_same_v<T, std::string>) {
+        return s;
+    } else if constexpr (std::is_integral_v<T>) {
+        T val;
+        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
+        if (ec != std::errc()) return T{};
+        return val;
+    } else if constexpr (std::is_floating_point_v<T>) {
+        return static_cast<T>(std::stod(s));
+    } else {
+        return T{};
+    }
+}
+
 
 template <typename T>
 struct function_traits : public function_traits<decltype(&T::operator())> {};
@@ -48,6 +89,36 @@ auto call_with_deps_impl(Func& func, ServiceProvider& provider, Request& req, Re
             
             if constexpr (std::is_same_v<PureType, Request> || std::is_same_v<PureType, Response>) {
                 return nullptr;
+            } else if constexpr (is_instantiation_of<Path, PureType>::value) {
+                using InnerT = typename PureType::value_type;
+                static constexpr size_t idx = count_instances_before<Path, Is, Tuple>::count();
+                if (idx < req.path_values.size()) {
+                    return std::make_shared<PureType>(convert_string<InnerT>(req.path_values[idx]));
+                }
+                return std::make_shared<PureType>();
+            } else if constexpr (is_instantiation_of<Body, PureType>::value) {
+                using InnerT = PureType::value_type;
+                return std::make_shared<PureType>(req.json<InnerT>());
+            } else if constexpr (is_instantiation_of<Query, PureType>::value) {
+                using InnerT = PureType::value_type;
+                InnerT model{};
+                
+                using Members = boost::describe::describe_members<InnerT, boost::describe::mod_any_access>;
+                boost::mp11::mp_for_each<Members>([&](auto meta) {
+                    std::string key = meta.name;
+                    if (req.query.count(key)) {
+                        using FieldT = std::remove_cvref_t<decltype(model.*meta.pointer)>;
+                        model.*meta.pointer = convert_string<FieldT>(req.query.at(key));
+                    }
+                });
+                
+                return std::make_shared<PureType>(model);
+            } else if constexpr (is_instantiation_of<Context, PureType>::value) {
+                using InnerT = typename PureType::value_type;
+                // Try to find in context by type name
+                auto val = req.get_opt<InnerT>(typeid(InnerT).name());
+                if (val) return std::make_shared<PureType>(*val);
+                return std::make_shared<PureType>();
             } else if constexpr (is_shared_ptr_v<PureType>) {
                 return provider.resolve<typename PureType::element_type>();
             } else {

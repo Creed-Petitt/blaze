@@ -24,7 +24,7 @@ void RouteGroup::del(const std::string& path, const Handler &handler) const {
 }
 
 RouteGroup RouteGroup::group(const std::string& subpath) const {
-    return RouteGroup(router_, prefix_ + subpath);
+    return {router_, prefix_ + subpath};
 }
 
 // Router implementation
@@ -50,8 +50,9 @@ std::optional<RouteMatch> Router::match(std::string_view method, std::string_vie
         }
 
         std::unordered_map<std::string, std::string> params;
-        if (matches(route.segments, request_segments, params)) {
-            return RouteMatch{route.handler, params};
+        std::vector<std::string> path_values;
+        if (matches(route.segments, request_segments, params, path_values)) {
+            return RouteMatch{route.handler, params, path_values};
         }
     }
 
@@ -60,14 +61,17 @@ std::optional<RouteMatch> Router::match(std::string_view method, std::string_vie
 
 bool Router::matches(const std::vector<std::string>& route_segments,
                      const std::vector<std::string_view>& request_segments,
-                     std::unordered_map<std::string, std::string>& params) {
+                     std::unordered_map<std::string, std::string>& params,
+                     std::vector<std::string>& path_values) {
     for (size_t i = 0; i < route_segments.size(); i++) {
         const std::string& route_seg = route_segments[i];
         const std::string_view& request_seg = request_segments[i];
 
         if (!route_seg.empty() && route_seg[0] == ':') {
             std::string param_name = route_seg.substr(1);
-            params[param_name] = std::string(request_seg);
+            std::string param_value = std::string(request_seg);
+            params[param_name] = param_value;
+            path_values.push_back(param_value);
         } else {
             if (route_seg != request_seg) {
                 return false;

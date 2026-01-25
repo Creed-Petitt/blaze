@@ -19,6 +19,7 @@ struct Request {
     std::string path;
     std::string body;
     std::unordered_map<std::string, std::string> params;
+    std::vector<std::string> path_values;
     std::unordered_map<std::string, std::string> query;
 
     // Owned copy of Beast headers

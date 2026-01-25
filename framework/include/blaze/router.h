@@ -24,6 +24,7 @@ using Handler = std::function<Async<void>(Request&, Response&)>;
 struct RouteMatch {
     Handler handler;                                      // The function to call
     std::unordered_map<std::string, std::string> params;  // Extracted params like {"id": "42"}
+    std::vector<std::string> path_values;                 // Ordered param values like ["42"]
 };
 
 class Router;
@@ -73,7 +74,8 @@ private:
 
     static bool matches(const std::vector<std::string>& route_segments,
                         const std::vector<std::string_view>& request_segments,
-                        std::unordered_map<std::string, std::string>& params);
+                        std::unordered_map<std::string, std::string>& params,
+                        std::vector<std::string>& path_values);
 
     static std::vector<std::string> split(const std::string& str);
     static std::vector<std::string_view> split_view(std::string_view str);

@@ -97,6 +97,7 @@ boost::asio::awaitable<std::string> App::handle_request(Request& req, const std:
         Handler handler;
         if (match.has_value()) {
             req.params = match->params;
+            req.path_values = match->path_values;
             handler = match->handler;
         } else {
             handler = [](Request&, Response& res) -> boost::asio::awaitable<void> {
