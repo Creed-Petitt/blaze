@@ -2,6 +2,8 @@
 
 Blaze provides a modular, asynchronous database abstraction layer that supports PostgreSQL and MySQL/MariaDB.
 
+> **Tip:** For standard CRUD operations and simple queries, we recommend using the high-level **[Smart Repository](REPOSITORY.md)** instead of raw SQL.
+
 ## 1. Modular Drivers
 To keep binaries lean, database drivers are not linked by default. You must add them to your project using the Blaze CLI.
 
@@ -58,12 +60,14 @@ app.get("/products", [](Database& db) -> Async<std::vector<Product>> {
 ### Parameterized Queries
 Always use parameters to prevent SQL injection. Blaze supports both positional (`?`) and indexed (`$1`) syntax depending on the driver.
 
+You can pass arguments directly (Variadic templates). No need for `std::vector` or `std::to_string`.
+
 ```cpp
 // Postgres syntax ($1, $2)
-auto users = co_await db.query<User>("SELECT * FROM users WHERE email = $1", {"alice@example.com"});
+auto users = co_await db.query<User>("SELECT * FROM users WHERE email = $1", "alice@example.com");
 
 // MySQL syntax (?)
-auto users = co_await db.query<User>("SELECT * FROM users WHERE email = ?", {"alice@example.com"});
+auto users = co_await db.query<User>("SELECT * FROM users WHERE email = ? AND age > ?", "alice@example.com", 18);
 ```
 
 ### Dynamic Access

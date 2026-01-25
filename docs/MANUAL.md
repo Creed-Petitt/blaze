@@ -12,6 +12,9 @@ To get the most out of Blaze, explore our detailed guides:
 4.  **[WebSockets & Real-time](WEBSOCKETS.md)**: Scaling to thousands of connections with the Dream API.
 5.  **[Middleware & Security](MIDDLEWARE.md)**: JWT Authentication, Logging, and Static Files.
 6.  **[Advanced Features](ADVANCED.md)**: Route Groups, Environment variables, and Server configuration.
+7.  **[Typed Injection & Validation](INJECTION.md)**: Learn about Path, Body, Query, and Context injection.
+8.  **[Smart Repository & ORM](REPOSITORY.md)**: Zero-boilerplate CRUD and the Fluent Query Builder.
+9.  **[API Documentation](ADVANCED.md#6-automatic-api-docs-swagger)**: Learn about the built-in Swagger UI and OpenAPI generator.
 
 ---
 

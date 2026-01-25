@@ -61,10 +61,48 @@ app.log_to("server.log");
 While `Async<T>` is recommended, you can use the fluent `Response` API for full control.
 
 ```cpp
-app.get("/custom", [](Response& res) -> Task {
+app.get("/custom", [](Response& res) -> Async<void> {
     res.status(201)
        .header("X-Custom-Header", "Blaze")
        .json({{"status", "created"}});
     co_return;
 });
 ```
+
+## 5. Built-in HTTP Client (blaze::fetch)
+Blaze includes a non-blocking HTTP client that uses the same coroutine engine as the server. This is perfect for calling external APIs or microservices.
+
+### Basic Usage
+```cpp
+#include <blaze/client.h>
+
+app.get("/proxy", []() -> Async<Json> {
+    // Non-blocking GET request
+    auto response = co_await blaze::fetch("https://api.github.com/repos/Creed-Petitt/blaze");
+    
+    if (response.status == 200) {
+        co_return response.body; // response.body is a blaze::Json object
+    }
+    
+    throw InternalServerError("Upstream API failed");
+});
+```
+
+### Advanced POST Request
+```cpp
+auto res = co_await blaze::fetch("https://api.example.com/v1/data", "POST", 
+    {{"Authorization", "Bearer secret"}}, 
+    Json({{"key", "value"}})
+);
+```
+
+## 6. Automatic API Docs (Swagger)
+Blaze automatically generates an OpenAPI 3.0 specification for your API using compile-time reflection.
+
+### Accessing the Docs
+When you run your application, the following routes are registered automatically:
+*   `GET /openapi.json`: The raw OpenAPI specification.
+*   `GET /docs`: An interactive Swagger UI.
+
+### How it works
+The documentation engine inspects your route handlers and models. If you use `Body<User>`, the engine automatically generates a JSON Schema for the `User` struct and includes it in the spec. No annotations or manual configuration required.
