@@ -20,13 +20,13 @@
 
 ## Features
 
-*   **150,000+ req/sec** (plaintext) and **130,000+ req/sec** (JSON) with sub 10 mb/s latency.
-*   Write safe and clean handlers with **Auto-Injection** (`[](User u)`) and **Async Returns** (`-> Async<User>`).
-*   First-class support for Singletons, Transients, and Auto-Wiring (`BLAZE_DEPS`).
-*   Built solely for C++20 Coroutines (`co_await`).
-*   Easy-to-use API for high-performance WebSocket connections.
-*   Asynchronous PostgreSQL and MySQL drivers accessed via the `Database` interface.
-*   Built-in commands to manage app containers and background databases.
+*   **150,000+ req/sec** (plaintext) and **140,000+ req/sec** (JSON) with sub 10 mb/s latency.
+*   **Typed Injection**: Zero-boilerplate access to `Path<T>`, `Body<T>`, and `Query<T>`.
+*   **Automatic Validation**: Define a `validate()` method on your models, and Blaze enforces it automatically.
+*   **Interactive API Docs**: Built-in Swagger UI and OpenAPI generation at `/docs`.
+*   **Built-in Auth & Security**: JWT Middleware, Rate Limiting, and CORS out of the box.
+*   **Variadic SQL**: Clean database queries like `db.query("SELECT ...", id, name)`.
+*   **Modern C++20**: Built solely for Coroutines (`co_await`).
 
 ## Requirements
 
@@ -75,30 +75,34 @@ blaze dev
 
 ## Quick Start
 
-Create a high-performance API in less than 15 lines.
+Create a high-performance, validated API in less than 15 lines.
 
 ```cpp
 #include <blaze/app.h>
-#include <blaze/model.h>
+#include <blaze/wrappers.h> // Path, Body, Query
 using namespace blaze;
 
 struct User { 
     int id; 
     std::string name; 
+    
+    // Automatic Validation
+    void validate() const {
+        if (id < 0) throw BadRequest("Invalid ID");
+    }
 };
 BLAZE_MODEL(User, id, name)
 
 int main() {
     App app;
 
-    // Auto-Injection & Auto-Return
-    app.post("/users", [](User user) -> Async<User> {
-        if (user.id < 0) 
-          throw BadRequest("Invalid ID");
-        
-        // Save to DB...
-        
-        co_return user; // Auto-serialized to JSON
+    // Typed Injection: Framework parses JSON, Validates it, and Injects 'user'
+    app.post("/users", [](Body<User> user) -> Async<Json> {
+        // Safe to use immediately!
+        co_return Json({
+            {"status", "created"}, 
+            {"user_id", user.id} // Direct member access
+        }); 
     });
 
     app.listen(8080);
