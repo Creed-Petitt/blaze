@@ -8,6 +8,7 @@
 #include <boost/json.hpp>
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
+#include <any>
 #include <blaze/json.h>
 #include <blaze/exceptions.h>
 
@@ -50,6 +51,49 @@ struct Request {
     bool has_header(std::string_view key) const;
     
     std::optional<int> get_param_int(const std::string& key) const;
+
+    void set_user(blaze::Json user) { user_context_ = std::move(user); }
+    
+    // Returns the user object directly. Throws Unauthorized if not authenticated.
+    const blaze::Json& user() const {
+        if (!user_context_.has_value()) {
+            throw blaze::Unauthorized("User not authenticated");
+        }
+        return *user_context_;
+    }
+
+    bool is_authenticated() const { return user_context_.has_value(); }
+
+    std::string cookie(const std::string& name) const;
+
+    template<typename T>
+    void set(const std::string& key, T&& value) {
+        context_[key] = std::make_any<T>(std::forward<T>(value));
+    }
+
+    template<typename T>
+    T get(const std::string& key) const {
+        auto it = context_.find(key);
+        if (it == context_.end()) {
+            throw std::runtime_error("Key not found in request context: " + key);
+        }
+        return std::any_cast<T>(it->second);
+    }
+
+    template<typename T>
+    std::optional<T> get_opt(const std::string& key) const {
+        const auto it = context_.find(key);
+        if (it == context_.end()) return std::nullopt;
+        try {
+            return std::any_cast<T>(it->second);
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+
+private:
+    std::optional<blaze::Json> user_context_;
+    std::unordered_map<std::string, std::any> context_;
 };
 
 } // namespace blaze

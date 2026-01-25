@@ -5,6 +5,7 @@
 #include <string_view>
 #include <boost/beast/http/fields.hpp>
 #include <boost/json.hpp>
+#include <blaze/json.h>
 
 namespace blaze {
 
@@ -33,10 +34,14 @@ public:
     // Boost.JSON overload
     Response& json(const boost::json::value& data);
 
-    // Generic JSON Serializer
+    //Generic JSON Serializer
     template<typename T>
     Response& json(const T& data) {
-        return json(boost::json::value_from(data));
+        if constexpr (std::is_convertible_v<T, boost::json::value>) {
+            return json(static_cast<boost::json::value>(data));
+        } else {
+            return json(boost::json::value_from(data));
+        }
     }
     
     // Raw JSON string
@@ -50,6 +55,8 @@ public:
     Response& set_cookie(const std::string& name, const std::string& value, 
                         int max_age_seconds = 0, bool http_only = true, bool secure = false);
     Response& no_content();
+    Response& created(const std::string& location = "");
+    Response& accepted();
     Response& bad_request(const std::string& message);
     Response& unauthorized(const std::string& message = "Unauthorized");
     Response& forbidden(const std::string& message = "Forbidden");

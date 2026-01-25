@@ -4,6 +4,8 @@
 #include <blaze/router.h>
 #include <blaze/request.h>
 #include <blaze/response.h>
+#include <blaze/crypto.h>
+#include <blaze/exceptions.h>
 #include <string>
 #include <fstream>
 #include <sys/stat.h>
@@ -13,13 +15,12 @@
 #include <unordered_map>
 #include <filesystem>
 
-namespace blaze {
-
-namespace middleware {
+namespace blaze::middleware
+{
 
     namespace fs = std::filesystem;
 
-    inline bool ends_with(std::string_view str, std::string_view suffix) {
+    inline bool ends_with(const std::string_view str, const std::string_view suffix) {
         if (suffix.length() > str.length()) return false;
         return str.compare(str.length() - suffix.length(), suffix.length(), suffix) == 0;
     }
@@ -89,8 +90,8 @@ namespace middleware {
     }
 
     inline Middleware cors(const std::string& origin,
-                          const std::string& methods = "GET, POST, PUT, DELETE, OPTIONS",
-                          const std::string& headers = "Content-Type, Authorization") {
+                           const std::string& methods = "GET, POST, PUT, DELETE, OPTIONS",
+                           const std::string& headers = "Content-Type, Authorization") {
         return [origin, methods, headers](Request& req, Response& res, const auto& next) -> Async<void> {
             res.header("Access-Control-Allow-Origin", origin);
             res.header("Access-Control-Allow-Methods", methods);
@@ -108,7 +109,7 @@ namespace middleware {
     inline Middleware static_files(const std::string& root_dir, bool serve_index = true) {
         // Shared cache instance
         auto cache = std::make_shared<FileCache>();
-        
+
         // Resolve absolute path for security checks once
         fs::path abs_root;
         try {
@@ -124,7 +125,7 @@ namespace middleware {
             }
 
             std::string decoded_path = url_decode(req.path);
-            
+
             // 1. Check Cache First (Fast Path - No Syscalls)
             // If it's in the cache, we already validated it was safe when we put it there.
             {
@@ -154,8 +155,8 @@ namespace middleware {
             std::string p_str = canonical_path.string();
             std::string r_str = abs_root.string();
             if (p_str.compare(0, r_str.length(), r_str) != 0) {
-                 res.status(403).json({{"error", "Forbidden"}, {"message", "Access Denied"}});
-                 co_return;
+                res.status(403).json({{"error", "Forbidden"}, {"message", "Access Denied"}});
+                co_return;
             }
 
             // Directory Handling (Index)
@@ -179,15 +180,15 @@ namespace middleware {
             file.seekg(0, std::ios::beg);
 
             if (size <= 0) {
-                 res.send("");
-                 co_return;
+                res.send("");
+                co_return;
             }
 
             std::string content;
             content.resize(size);
             if (!file.read(content.data(), size)) {
-                 co_await next();
-                 co_return;
+                co_await next();
+                co_return;
             }
 
             std::string content_type = get_mime_type(file_real_path);
@@ -231,7 +232,7 @@ namespace middleware {
                 co_return;
             }
 
-            std::string_view auth = req.get_header("Authorization");
+            const std::string_view auth = req.get_header("Authorization");
             if (auth.substr(0, 7) != "Bearer ") {
                 res.status(401).json({{"error", "Unauthorized"}, {"message", "Invalid Authorization scheme"}});
                 co_return;
@@ -247,8 +248,30 @@ namespace middleware {
         };
     }
 
-} // namespace middleware
+    inline Middleware jwt_auth(const std::string_view secret) {
+        std::string secret_str(secret);
+        return [secret_str](Request& req, Response& res, auto next) -> Async<void> {
+            if (!req.has_header("Authorization")) {
+                throw Unauthorized("Missing Authorization header");
+            }
 
-} // namespace blaze
+            std::string_view auth = req.get_header("Authorization");
+            if (auth.substr(0, 7) != "Bearer ") {
+                throw Unauthorized("Invalid Authorization scheme (Expected Bearer)");
+            }
+
+            std::string_view token = auth.substr(7);
+            try {
+                auto payload = crypto::jwt_verify(token, secret_str);
+                req.set_user(Json(payload));
+            } catch (const std::exception& e) {
+                throw Unauthorized(std::string("Invalid Token: ") + e.what());
+            }
+
+            co_await next();
+        };
+    }
+
+}
 
 #endif

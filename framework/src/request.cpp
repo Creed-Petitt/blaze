@@ -89,4 +89,30 @@ std::optional<int> Request::get_param_int(const std::string& key) const {
     return std::nullopt;
 }
 
+std::string Request::cookie(const std::string& name) const {
+    std::string_view cookie_header = get_header("Cookie");
+    if (cookie_header.empty()) return "";
+
+    size_t pos = 0;
+    while (pos < cookie_header.size()) {
+        size_t end = cookie_header.find(';', pos);
+        if (end == std::string_view::npos) end = cookie_header.size();
+
+        std::string_view pair = cookie_header.substr(pos, end - pos);
+        while (!pair.empty() && std::isspace(pair.front()))
+            pair.remove_prefix(1);
+
+        size_t eq = pair.find('=');
+        if (eq != std::string_view::npos) {
+            if (pair.substr(0, eq) == name) {
+                return std::string(pair.substr(eq + 1));
+            }
+        }
+
+        pos = end + 1;
+    }
+
+    return "";
+}
+
 } // namespace blaze

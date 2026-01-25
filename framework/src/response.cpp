@@ -78,6 +78,19 @@ Response& Response::no_content() {
     return *this;
 }
 
+Response& Response::created(const std::string& location) {
+    status(201);
+    if (!location.empty()) {
+        header("Location", location);
+    }
+    return *this;
+}
+
+Response& Response::accepted() {
+    status(202);
+    return *this;
+}
+
 Response& Response::bad_request(const std::string& message) {
     status(400);
     return json({{"error", "Bad Request"}, {"message", message}});
@@ -102,6 +115,7 @@ std::string Response::get_status_text(int code) {
     switch (code) {
         case 200: return "OK";
         case 201: return "Created";
+        case 202: return "Accepted";
         case 204: return "No Content";
         case 301: return "Moved Permanently";
         case 302: return "Found";
@@ -109,6 +123,8 @@ std::string Response::get_status_text(int code) {
         case 401: return "Unauthorized";
         case 403: return "Forbidden";
         case 404: return "Not Found";
+        case 413: return "Payload Too Large";
+        case 429: return "Too Many Requests";
         case 500: return "Internal Server Error";
         default: return "Unknown Status";
     }
