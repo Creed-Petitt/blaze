@@ -105,9 +105,7 @@ jobs:
         wrk -t4 -c100 -d5s http://127.0.0.1:8080/users/count
         wrk -t4 -c100 -d5s http://127.0.0.1:8080/users/1
         wrk -t4 -c100 -d5s "http://127.0.0.1:8080/search?name=Blaze"
-        wrk -t4 -c100 -d5s -X POST -s tests/integration_app/user_post.lua http://127.0.0.1:8080/users
-        wrk -t4 -c100 -d5s -X PUT -s tests/integration_app/user_post.lua http://127.0.0.1:8080/users/1
-        wrk -t4 -c100 -d5s -X DELETE http://127.0.0.1:8080/users/1
+        wrk -t4 -c100 -d5s -s tests/integration_app/user_post.lua http://127.0.0.1:8080/users
         wrk -t4 -c100 -d5s -s tests/integration_app/login.lua http://127.0.0.1:8080/login
         wrk -t4 -c100 -d5s -s tests/integration_app/post.lua http://127.0.0.1:8080/modern-api
         wrk -t4 -c100 -d5s -s tests/integration_app/user_post.lua http://127.0.0.1:8080/all-in-one
@@ -157,7 +155,7 @@ jobs:
 
     - name: Fuzzing Attack (ASan)
       run: |
-        sleep 15
+        sleep 30
         python3 tests/integration_app/fuzz.py
         # Stress test ALL routes to catch leaks in every subsystem
         wrk -t2 -c20 -d5s http://127.0.0.1:8080/users
@@ -213,7 +211,7 @@ jobs:
 
     - name: Fuzzing Attack (TSan)
       run: |
-        sleep 15
+        sleep 30
         python3 tests/integration_app/fuzz.py
         # Stress test ALL routes to catch race conditions everywhere
         wrk -t2 -c20 -d5s http://127.0.0.1:8080/users

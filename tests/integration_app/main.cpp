@@ -73,8 +73,8 @@ int main() {
     App app;
     app.log_to("/dev/null");
 
-    // Feature: Rate Limiting (1000 reqs / 60s)
-    app.use(middleware::rate_limit(1000, 60));
+    // Feature: Rate Limiting (1M reqs / 60s for Benchmarks)
+    app.use(middleware::rate_limit(1000000, 60));
 
     // Feature: JWT Auth
     std::string secret = "integration-secret-key";
