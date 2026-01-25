@@ -71,7 +71,8 @@ private:
 
 int main() {
     App app;
-    app.log_to("/dev/null");
+    // Enabled logging for CI visibility
+    // app.log_to("/dev/null"); 
 
     // Feature: Rate Limiting (1M reqs / 60s for Benchmarks)
     app.use(middleware::rate_limit(1000000, 60));
