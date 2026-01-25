@@ -27,6 +27,10 @@ BLAZE_MODEL(User, id, name)
 struct LoginRequest {
     std::string username;
     std::string password;
+
+    void validate() const {
+        if (username.empty()) throw BadRequest("Username required");
+    }
 };
 BLAZE_MODEL(LoginRequest, username, password)
 
@@ -61,7 +65,7 @@ int main() {
     app.log_to("/dev/null");
 
     // Feature: Rate Limiting (1000 reqs / 60s)
-    // app.use(middleware::rate_limit(1000, 60));
+    app.use(middleware::rate_limit(1000, 60));
 
     // Feature: JWT Auth
     std::string secret = "integration-secret-key";
@@ -85,7 +89,7 @@ int main() {
 
     // Feature: Login (Generates JWT)
     app.post("/login", [secret](Body<LoginRequest> creds) -> Async<Json> {
-        if (creds.value.username == "admin" && creds.value.password == "password") {
+        if (creds.username == "admin" && creds.password == "password") {
             std::string token = crypto::jwt_sign({{"id", 1}, {"role", "admin"}}, secret);
             co_return Json({{"token", token}});
         }
@@ -111,7 +115,8 @@ int main() {
     // Feature: Typed Path Injection + Variadic DB
     app.get("/users/:id", [](Path<int> id, Database& db) -> Async<User> {
         // "SELECT ... WHERE id = $1", 100
-        auto result = co_await db.query<User>("SELECT 42 as id, 'Alice' as name WHERE 1 = $1", id.value);
+        // Feature: Implicit conversion for 'id'
+        auto result = co_await db.query<User>("SELECT 42 as id, 'Alice' as name WHERE 1 = $1", id);
         if (result.empty()) throw NotFound("User not found");
         co_return result[0];
     });
@@ -119,7 +124,8 @@ int main() {
     // Feature: Typed Body Injection
     app.post("/modern-api", [](Body<std::vector<int>> inputs) -> Async<Json> {
         std::vector<int> outputs;
-        for(int i : inputs.value) outputs.push_back(i * 10);
+        // Feature: Implicit iteration via inheritance
+        for(int i : inputs) outputs.push_back(i * 10);
         co_return Json(outputs);
     });
 

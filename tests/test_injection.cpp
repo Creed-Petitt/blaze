@@ -64,12 +64,12 @@ TEST_CASE("Typed Injection: Body Content", "[injection]") {
     Request req;
     req.body = R"({"id": 1, "name": "Blaze"})";
     
-    SECTION("Should parse Body<T> and allow arrow access") {
+    SECTION("Should parse Body<T> and allow direct member access") {
         Body<User> user(req.json<User>());
-        CHECK(user->id == 1);
-        CHECK(user->name == "Blaze");
+        CHECK(user.id == 1);
+        CHECK(user.name == "Blaze");
         
-        User u = user; // Implicit conversion
+        User u = user; // Implicit conversion (Slicing)
         CHECK(u.id == 1);
     }
 }
@@ -78,7 +78,7 @@ TEST_CASE("Typed Injection: Query Parameters", "[injection]") {
     Request req;
     req.query = {{"q", "hello"}, {"page", "5"}};
 
-    SECTION("Should map query to Model and allow arrow access") {
+    SECTION("Should map query to Model and allow direct member access") {
         Search search{};
         
         using Members = boost::describe::describe_members<Search, boost::describe::mod_any_access>;
@@ -91,8 +91,37 @@ TEST_CASE("Typed Injection: Query Parameters", "[injection]") {
         });
 
         Query<Search> q(search);
-        CHECK(q->q == "hello");
-        CHECK(q->page == 5);
+        CHECK(q.q == "hello");
+        CHECK(q.page == 5);
+    }
+}
+
+struct ValidatedUser {
+    int age;
+    void validate() const {
+        if (age < 0) throw BadRequest("Age cannot be negative");
+    }
+};
+BLAZE_MODEL(ValidatedUser, age)
+
+TEST_CASE("Typed Injection: Automatic Validation", "[injection][validation]") {
+    SECTION("Should pass when validation succeeds") {
+        Request req;
+        req.body = R"({"age": 25})";
+        
+        auto user = req.json<ValidatedUser>();
+        // Trigger manual check to simulate injector logic
+        CHECK_NOTHROW(user.validate());
+        CHECK(user.age == 25);
+    }
+
+    SECTION("Should throw BadRequest when validation fails") {
+        Request req;
+        req.body = R"({"age": -1})";
+        
+        auto user = req.json<ValidatedUser>();
+        // This simulates what try_validate(model) does inside the injector
+        CHECK_THROWS_AS(user.validate(), BadRequest);
     }
 }
 
