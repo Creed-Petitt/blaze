@@ -36,6 +36,13 @@ public:
     virtual boost::asio::awaitable<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) = 0;
     
     /**
+     * @brief Returns the parameter placeholder for the specific driver.
+     * Postgres: "$1", "$2"
+     * MySQL: "?", "?"
+     */
+    virtual std::string placeholder(int index) const = 0;
+
+    /**
      * @brief Variadic overload for convenient parameter passing.
      * usage: db.query("SELECT * FROM table WHERE id = $1", 100);
      * SFINAE: Disabled if the only argument is already a vector<string> to prevent recursion.

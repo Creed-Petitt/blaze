@@ -30,6 +30,10 @@ namespace blaze {
 
         void connect();
         boost::asio::awaitable<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) override;
+        
+        std::string placeholder(const int index) const override {
+            return "$" + std::to_string(index);
+        }
 
     private:
         boost::asio::io_context& ctx_;
