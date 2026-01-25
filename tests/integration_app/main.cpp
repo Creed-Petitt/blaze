@@ -96,15 +96,16 @@ int main() {
     app.provide<UserService>();
 
     // --- AUTO MIGRATION (Ensures test environment is ready) ---
-    app.spawn([&app]() -> Async<void> {
+    auto migrate = [](App& a) -> Async<void> {
         try {
-            auto db = app.services().resolve<Database>();
+            auto db = a.services().resolve<Database>();
             co_await db->query("CREATE TABLE IF NOT EXISTS \"User\" (id INT PRIMARY KEY, name TEXT)");
             std::cout << "[Migration] 'User' table ready." << std::endl;
         } catch (...) {
-            std::cerr << "[Migration] Warning: Could not run migrations. DB might be unavailable." << std::endl;
+            std::cerr << "[Migration] Warning: Could not run migrations." << std::endl;
         }
-    }());
+    };
+    app.spawn(migrate(app));
 
     std::cout << "--- DEFINING ROUTES ---" << std::endl;
 
