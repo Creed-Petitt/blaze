@@ -6,6 +6,7 @@
 #include <blaze/response.h>
 #include <blaze/model.h>
 #include <blaze/wrappers.h>
+#include <blaze/repository.h>
 #include <tuple>
 #include <functional>
 #include <type_traits>
@@ -136,6 +137,10 @@ auto call_with_deps_impl(Func& func, ServiceProvider& provider, Request& req, Re
                 auto val = req.get_opt<InnerT>(typeid(InnerT).name());
                 if (val) return std::make_shared<PureType>(*val);
                 return std::make_shared<PureType>();
+            } else if constexpr (is_instantiation_of<Repository, PureType>::value) {
+                // Auto-wire Repository: Needs Database
+                auto db = provider.resolve<Database>();
+                return std::make_shared<PureType>(db);
             } else if constexpr (is_shared_ptr_v<PureType>) {
                 return provider.resolve<typename PureType::element_type>();
             } else {

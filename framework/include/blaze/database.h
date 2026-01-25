@@ -66,9 +66,12 @@ public:
         co_return vec;
     }
 
-    // query<User>("SELECT...", 1, 2)
+    // Variadic Helper: query<User>("SELECT...", 1, 2)
     template<typename T, typename... Args,
-             typename = std::enable_if_t<!(sizeof...(Args) == 1 && (std::is_same_v<std::decay_t<Args>, std::vector<std::string>> && ...))>>
+             typename = std::enable_if_t<(
+                sizeof...(Args) > 0 && 
+                !(sizeof...(Args) == 1 && (std::is_same_v<std::decay_t<Args>, std::vector<std::string>> && ...))
+             )>>
     boost::asio::awaitable<std::vector<T>> query(const std::string& sql, Args&&... args) {
         std::vector<std::string> params = { to_string_param(args)... };
         co_return co_await query<T>(sql, params);
