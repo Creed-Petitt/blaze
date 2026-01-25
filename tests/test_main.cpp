@@ -1,6 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <blaze/db_result.h>
 #include <blaze/model.h>
+#include <blaze/database.h>
+#include <blaze/router.h>
+#include <boost/asio.hpp>
 #include <memory>
 
 using namespace blaze;
@@ -32,6 +35,18 @@ public:
     
     bool is_ok() const override { return true; }
     std::string error_message() const override { return ""; }
+};
+
+// Mock Database for capturing params
+class SpyDatabase : public Database {
+public:
+    using Database::query; 
+    std::vector<std::string> last_params;
+
+    Async<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) override {
+        last_params = params;
+        co_return DbResult(std::make_shared<MockResult>());
+    }
 };
 
 // --- TEST MODEL ---
@@ -66,4 +81,30 @@ TEST_CASE("Database: Decoupled Result and Model Mapping", "[db]") {
         CHECK(profile.id == 42);
         CHECK(profile.name == "Blaze");
     }
+}
+
+TEST_CASE("Database: Variadic Query Parameters", "[db]") {
+    SpyDatabase db;
+    boost::asio::io_context ioc;
+    
+    // simple flag to check completion
+    bool done = false;
+
+    boost::asio::co_spawn(ioc, [&]() -> Async<void> {
+        // Test Variadic Expansion: int, const char*, double
+        co_await db.query("SELECT ?", 100, "hello", 3.14);
+        done = true;
+        co_return;
+    }, boost::asio::detached);
+
+    // Run until the handlers are executed
+    // We limit the run count to prevent infinite blocking
+    ioc.run_one(); 
+    ioc.poll();
+
+    CHECK(done == true);
+    CHECK(db.last_params.size() == 3);
+    CHECK(db.last_params[0] == "100");
+    CHECK(db.last_params[1] == "hello");
+    CHECK(db.last_params[2].substr(0, 4) == "3.14");
 }

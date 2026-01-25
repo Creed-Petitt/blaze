@@ -6,6 +6,8 @@
 #include <blaze/model.h>
 #include <blaze/client.h>
 #include <blaze/middleware.h>
+#include <blaze/wrappers.h>
+#include <blaze/crypto.h>
 #include <iostream>
 #include <vector>
 
@@ -22,6 +24,12 @@ struct User {
 };
 BLAZE_MODEL(User, id, name)
 
+struct LoginRequest {
+    std::string username;
+    std::string password;
+};
+BLAZE_MODEL(LoginRequest, username, password)
+
 class UserService {
 public:
     BLAZE_DEPS(Database)
@@ -29,8 +37,8 @@ public:
 
     Async<void> get_data(Response& res) {
         try {
-            // New Clean Syntax: Returns std::vector<DataModel>
-            auto result = co_await db_->query<DataModel>("SELECT 1 as val");
+            // Feature: Variadic Query
+            auto result = co_await db_->query<DataModel>("SELECT 1 as val WHERE 1 = $1", 1);
             
             if (result.empty()) throw NotFound("No data");
 
@@ -52,137 +60,73 @@ int main() {
     App app;
     app.log_to("/dev/null");
 
-    std::cout << "--- REGISTERING ABSTRACT SERVICES ---" << std::endl;
+    // Feature: Rate Limiting (1000 reqs / 60s)
+    // app.use(middleware::rate_limit(1000, 60));
 
-    // Fluent Service Registration
-    // In CI/Test environment, we assume these services are available.
-    // If one fails, the app might crash on startup, which fails the test (Good).
+    // Feature: JWT Auth
+    std::string secret = "integration-secret-key";
+    app.use(middleware::jwt_auth(secret));
+
+    std::cout << "--- REGISTERING ABSTRACT SERVICES ---" << std::endl;
     
     try {
         app.service(MySql::open(app, "mysql://root:blaze_secret@127.0.0.1:3306/blaze", 10))
            .as<Database>();
 
         app.service(Postgres::open(app, "postgresql://postgres:blaze_secret@127.0.0.1:5432/postgres", 10))
-           .as<Database>(); // Postgres wins the 'Database' slot
+           .as<Database>();
     } catch (const std::exception& e) {
         std::cerr << "Warning: Failed to connect to one or more databases: " << e.what() << std::endl;
-        // We continue, but routes using them will fail
     }
 
     app.provide<UserService>();
 
     std::cout << "--- DEFINING ROUTES ---" << std::endl;
 
-    // ROUTE 1: Service Injection
+    // Feature: Login (Generates JWT)
+    app.post("/login", [secret](Body<LoginRequest> creds) -> Async<Json> {
+        if (creds.value.username == "admin" && creds.value.password == "password") {
+            std::string token = crypto::jwt_sign({{"id", 1}, {"role", "admin"}}, secret);
+            co_return Json({{"token", token}});
+        }
+        throw Unauthorized("Invalid credentials");
+    });
+
+    // Feature: Protected Route (Requires Auth)
+    app.get("/protected", [](Request& req) -> Async<Json> {
+        if (!req.is_authenticated()) throw Unauthorized("Please login");
+        
+        // Feature: Pointer-free User Access
+        co_return Json({
+            {"message", "You are authenticated"},
+            {"user", req.user()} 
+        });
+    });
+
+    // Feature: Service Injection
     app.get("/abstract", [](Response& res, UserService& user) -> Async<void> {
         co_await user.get_data(res);
     });
 
-    // ROUTE 2: Direct Interface Injection (Manual Mode)
-    app.get("/direct", [](Response& res, Database& db) -> Async<void> {
-        auto result = co_await db.query("SELECT 999 as val");
-        // Manual mode: result[0] works directly now (Value Wrapper)
-        int val = result[0]["val"].as<int>();
-        res.json({{"method", "Direct Interface Injection"}, {"val", val}});
+    // Feature: Typed Path Injection + Variadic DB
+    app.get("/users/:id", [](Path<int> id, Database& db) -> Async<User> {
+        // "SELECT ... WHERE id = $1", 100
+        auto result = co_await db.query<User>("SELECT 42 as id, 'Alice' as name WHERE 1 = $1", id.value);
+        if (result.empty()) throw NotFound("User not found");
+        co_return result[0];
     });
 
-    // ROUTE 3: Safe Parameterized Query (Postgres syntax)
-    app.get("/safe-query", [](Response& res, Database& db) -> Async<void> {
-        std::vector<std::string> params = {"Hello from Parameters!"};
-        auto result = co_await db.query("SELECT $1::text as echo", params);
-        
-        if (result.empty()) {
-            throw NotFound("No results found in safe-query");
-        } 
-        
-        res.json({
-            {"echo", result[0]["echo"].as<std::string>()}
-        });
-    });
-
-    // ROUTE 4: MySQL Safe Parameterized Query
-    app.get("/mysql-safe", [](Response& res, MySql& db) -> Async<void> {
-        std::vector<std::string> params = {"Hello from MySQL!"};
-        auto result = co_await db.query("SELECT ? as echo", params);
-        
-        if (result.empty()) {
-            throw NotFound("No results found in mysql-safe");
-        }
-
-        res.json({
-            {"echo", result[0]["echo"].as<std::string>()}
-        });
-    });
-
-    // ROUTE 5: Modern API Showcase (New Features)
-    // Expects JSON Body: [1, 2, 3]
-    app.post("/modern-api", [](Request& req, Response& res) -> Async<void> {
-        // 1. Typed Request Body (One-Liner)
-        // If JSON is invalid or not an array of ints, this throws automatically -> 500 (or we can catch for 400)
-        std::vector<int> inputs;
-        try {
-            inputs = req.json<std::vector<int>>();
-        } catch (const std::exception&) {
-            throw BadRequest("Invalid JSON body: Expected array of integers");
-        }
-
-        if (inputs.empty()) {
-            throw BadRequest("Input array cannot be empty");
-        }
-
-        // 2. Logic
+    // Feature: Typed Body Injection
+    app.post("/modern-api", [](Body<std::vector<int>> inputs) -> Async<Json> {
         std::vector<int> outputs;
-        for(int i : inputs) outputs.push_back(i * 10);
-
-        // 3. Fluid Headers
-        res.headers({
-            {"X-Powered-By", "Blaze V1"},
-            {"X-Count", std::to_string(outputs.size())}
-        });
-
-        // 4. Typed Response (Vector -> JSON)
-        res.json(outputs);
-        
-        co_return;
+        for(int i : inputs.value) outputs.push_back(i * 10);
+        co_return Json(outputs);
     });
 
-    // ROUTE 6: Async HTTP Client (Fetch)
-    app.get("/fetch-test", [](Response& res) -> Async<void> {
-        try {
-            // Calling a real external HTTPS API
-            auto response = co_await blaze::fetch("https://httpbin.org/get");
-            
-            res.json({
-                {"remote_status", response.status},
-                {"remote_data", response.body}
-            });
-        } catch (const std::exception& e) {
-            throw InternalServerError(std::string("Fetch Failed: ") + e.what());
-        }
-    });
-
-    // ROUTE 7: Static File Cache Test
-    app.use(middleware::static_files("tests/integration_app/public"));
-
-    // ROUTE 8: New Async<Json> Return Type
-    app.get("/async-json", []() -> Async<Json> {
-        co_return Json({
-            {"message", "It works!"}, 
-            {"type", "Async<Json>"}
-        });
-    });
-
-    // ROUTE 9: New Async<std::string> Return Type
-    app.get("/async-text", []() -> Async<std::string> {
-        co_return "Hello from Async<std::string>";
-    });
-
-    // ROUTE 10: "The Future" - Auto-Injection & Auto-Serialization
-    app.post("/all-in-one", [](User user) -> Async<User> {
-        // Logic: 'user' is already parsed from JSON body.
-        // We modify it and return it (Auto-Serialized).
-        user.name += " (Verified)";
-        co_return user;
+    app.post("/all-in-one", [](Body<User> user) -> Async<User> {
+        User u = user;
+        u.name += " (Verified)";
+        co_return u;
     });
 
     app.get("/health", [](Response& res) -> Async<void> {

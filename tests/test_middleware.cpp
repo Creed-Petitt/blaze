@@ -1,9 +1,15 @@
 #include <catch2/catch_test_macros.hpp>
 #include <blaze/app.h>
 #include <blaze/middleware.h>
+#include <boost/asio.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+#include <thread>
 #include <vector>
 
 using namespace blaze;
+namespace net = boost::asio;
+using tcp = net::ip::tcp;
 
 TEST_CASE("Middleware: Execution Order", "[middleware]") {
     App app;
@@ -120,4 +126,56 @@ TEST_CASE("Request: Generic Context Storage", "[request]") {
         // Throwing access
         CHECK_THROWS_AS(req.get<int>("non_existent"), std::runtime_error);
     }
+}
+
+TEST_CASE("Middleware: Rate Limiting", "[middleware]") {
+    App app;
+    // Allow 2 requests every 60 seconds
+    app.use(middleware::rate_limit(2, 60));
+
+    app.get("/limit", [](Response& res) -> Async<void> {
+        res.send("OK");
+        co_return;
+    });
+
+    auto run_req = [&](std::string ip) {
+        Request req;
+        req.method = "GET";
+        req.path = "/limit";
+        req.set("client_ip", ip); // Simulate IP from App
+        return app.handle_request(req, ip, false); // IP arg here is for logger, req.set is for middleware
+    };
+
+
+    auto t1 = run_req("10.0.0.1");
+
+    std::thread server_thread([&]() {
+        app.listen(9990);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    
+    net::io_context ioc;
+    tcp::resolver resolver(ioc);
+    auto const results = resolver.resolve("127.0.0.1", "9990");
+
+    auto send = [&](std::string ip_header) {
+        tcp::socket socket(ioc);
+        net::connect(socket, results);
+
+        net::write(socket, net::buffer("GET /limit HTTP/1.1\r\nHost: localhost\r\n\r\n"));
+        
+        boost::beast::http::response<boost::beast::http::string_body> res;
+        boost::beast::flat_buffer buffer;
+        boost::beast::http::read(socket, buffer, res);
+        return res.result_int();
+    };
+
+    SECTION("Enforce Rate Limit on Localhost") {
+        CHECK(send("") == 200); // 1st
+        CHECK(send("") == 200); // 2nd
+        CHECK(send("") == 429); // 3rd (Blocked)
+    }
+
+    app.engine().stop();
+    if (server_thread.joinable()) server_thread.join();
 }
