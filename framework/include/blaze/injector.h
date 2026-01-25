@@ -74,12 +74,14 @@ struct function_traits : public function_traits<decltype(&T::operator())> {};
 template <typename ClassType, typename ReturnType, typename... Args>
 struct function_traits<ReturnType(ClassType::*)(Args...) const> {
     using args_tuple = std::tuple<Args...>;
+    using args_type = boost::mp11::mp_list<Args...>;
     using return_type = ReturnType;
 };
 
 template <typename ReturnType, typename... Args>
 struct function_traits<ReturnType(*)(Args...)> {
     using args_tuple = std::tuple<Args...>;
+    using args_type = boost::mp11::mp_list<Args...>;
     using return_type = ReturnType;
 };
 

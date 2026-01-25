@@ -8,14 +8,13 @@
 #include <unordered_map>
 #include <blaze/request.h>
 #include <blaze/response.h>
+#include <blaze/openapi.h>
 #include <boost/asio/awaitable.hpp>
 
 namespace blaze {
 
 template <typename T = void>
 using Async = boost::asio::awaitable<T>;
-
-
 
 using Next = std::function<Async<void>()>;
 using Middleware = std::function<Async<void>(Request&, Response&, Next)>;
@@ -71,6 +70,7 @@ private:
     };
 
     std::vector<Route> routes_;
+    std::vector<openapi::RouteDoc> docs_;
 
     static bool matches(const std::vector<std::string>& route_segments,
                         const std::vector<std::string_view>& request_segments,
@@ -82,6 +82,8 @@ private:
 
 public:
     void add_route(const std::string& method, const std::string& path, const Handler &handler);
+    void add_doc(openapi::RouteDoc doc) { docs_.push_back(std::move(doc)); }
+    const std::vector<openapi::RouteDoc>& docs() const { return docs_; }
 
     std::optional<RouteMatch> match(std::string_view method, std::string_view path) const;
 };

@@ -7,6 +7,7 @@
 #include <blaze/di.h>
 #include <blaze/injector.h>
 #include <blaze/json.h>
+#include <blaze/reflection.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <functional>
@@ -159,24 +160,28 @@ public:
      */
     template<typename Func>
     void get(const std::string& path, Func handler) {
+        router_.add_doc(reflection::inspect_handler<Func>("GET", path));
         router_.add_route("GET", path, wrap_handler(handler));
     }
 
     /** @brief Registers a POST route with magic injection. */
     template<typename Func>
     void post(const std::string& path, Func handler) {
+        router_.add_doc(reflection::inspect_handler<Func>("POST", path));
         router_.add_route("POST", path, wrap_handler(handler));
     }
 
     /** @brief Registers a PUT route with magic injection. */
     template<typename Func>
     void put(const std::string& path, Func handler) {
+        router_.add_doc(reflection::inspect_handler<Func>("PUT", path));
         router_.add_route("PUT", path, wrap_handler(handler));
     }
 
     /** @brief Registers a DELETE route with magic injection. */
     template<typename Func>
     void del(const std::string& path, Func handler) {
+        router_.add_doc(reflection::inspect_handler<Func>("DELETE", path));
         router_.add_route("DELETE", path, wrap_handler(handler));
     }
 
@@ -236,6 +241,7 @@ public:
     boost::asio::awaitable<std::string> handle_request(Request& req, const std::string& client_ip, bool keep_alive);
 
 private:
+    void _register_docs();
     boost::asio::awaitable<void> run_middleware(size_t index, Request& req, Response& res, const Handler& final_handler);
 
     // Takes lambda and converts it into a standard (Request, Response) handler
