@@ -7,6 +7,7 @@
 #include <blaze/client.h>
 #include <blaze/middleware.h>
 #include <blaze/wrappers.h>
+#include <blaze/repository.h>
 #include <blaze/crypto.h>
 #include <iostream>
 #include <vector>
@@ -19,6 +20,9 @@ struct DataModel {
 BLAZE_MODEL(DataModel, val)
 
 struct User {
+    // Demo: Manual Table Name Override
+    static constexpr const char* table_name = "User";
+    
     int id;
     std::string name;
 };
@@ -33,6 +37,11 @@ struct LoginRequest {
     }
 };
 BLAZE_MODEL(LoginRequest, username, password)
+
+struct SearchRequest {
+    std::string name;
+};
+BLAZE_MODEL(SearchRequest, name)
 
 class UserService {
 public:
@@ -85,6 +94,17 @@ int main() {
 
     app.provide<UserService>();
 
+    // --- AUTO MIGRATION (Ensures test environment is ready) ---
+    app.spawn([&app]() -> Async<void> {
+        try {
+            auto db = app.services().resolve<Database>();
+            co_await db->query("CREATE TABLE IF NOT EXISTS \"User\" (id INT PRIMARY KEY, name TEXT)");
+            std::cout << "[Migration] 'User' table ready." << std::endl;
+        } catch (...) {
+            std::cerr << "[Migration] Warning: Could not run migrations. DB might be unavailable." << std::endl;
+        }
+    }());
+
     std::cout << "--- DEFINING ROUTES ---" << std::endl;
 
     // Feature: Login (Generates JWT)
@@ -112,16 +132,45 @@ int main() {
         co_await user.get_data(res);
     });
 
-    // Feature: Typed Path Injection + Variadic DB
-    app.get("/users/:id", [](Path<int> id, Database& db) -> Async<User> {
-        // "SELECT ... WHERE id = $1", 100
-        // Feature: Implicit conversion for 'id'
-        auto result = co_await db.query<User>("SELECT 42 as id, 'Alice' as name WHERE 1 = $1", id);
-        if (result.empty()) throw NotFound("User not found");
-        co_return result[0];
+    // Feature: Repository - Find All
+    app.get("/users", [](Repository<User> users) -> Async<std::vector<User>> {
+        co_return co_await users.all();
     });
 
-    // Feature: Typed Body Injection
+    // Feature: Repository - Get Count
+    app.get("/users/count", [](Repository<User> users) -> Async<Json> {
+        int count = co_await users.count();
+        co_return Json({{"total", count}});
+    });
+
+    // Feature: Repository - Find by ID
+    app.get("/users/:id", [](Path<int> id, Repository<User> users) -> Async<User> {
+        co_return co_await users.find(id);
+    });
+
+    // Feature: Repository - Create
+    app.post("/users", [](Body<User> user, Repository<User> users) -> Async<void> {
+        co_await users.save(user);
+    });
+
+    // Feature: Repository - Update
+    app.put("/users/:id", [](Body<User> user, Repository<User> users) -> Async<void> {
+        co_await users.update(user);
+    });
+
+    // Feature: Repository - Delete
+    app.del("/users/:id", [](Path<int> id, Repository<User> users) -> Async<void> {
+        co_await users.remove(id);
+    });
+
+    // Feature: Fluent Query Builder
+    app.get("/search", [](Query<SearchRequest> req, Repository<User> users) -> Async<std::vector<User>> {
+        co_return co_await users.query()
+            .where("name", "=", req.name)
+            .limit(10)
+            .all();
+    });
+
     app.post("/modern-api", [](Body<std::vector<int>> inputs) -> Async<Json> {
         std::vector<int> outputs;
         // Feature: Implicit iteration via inheritance

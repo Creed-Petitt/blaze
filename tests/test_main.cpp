@@ -2,6 +2,7 @@
 #include <blaze/db_result.h>
 #include <blaze/model.h>
 #include <blaze/database.h>
+#include <blaze/repository.h>
 #include <blaze/router.h>
 #include <boost/asio.hpp>
 #include <memory>
@@ -42,9 +43,13 @@ class SpyDatabase : public Database {
 public:
     using Database::query; 
     std::vector<std::string> last_params;
+    std::string last_sql;
+
+    std::string placeholder(int index) const override { return "$" + std::to_string(index); }
 
     Async<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) override {
         last_params = params;
+        last_sql = sql;
         co_return DbResult(std::make_shared<MockResult>());
     }
 };
@@ -107,4 +112,65 @@ TEST_CASE("Database: Variadic Query Parameters", "[db]") {
     CHECK(db.last_params[0] == "100");
     CHECK(db.last_params[1] == "hello");
     CHECK(db.last_params[2].substr(0, 4) == "3.14");
+}
+
+class SpyRepo : public Repository<UserProfile> {
+public:
+    using Repository<UserProfile>::Repository;
+};
+
+TEST_CASE("Repository: SQL Generation", "[db]") {
+    auto db = std::make_shared<SpyDatabase>();
+    SpyRepo repo(db);
+
+    boost::asio::io_context ioc;
+    
+    SECTION("remove(id)") {
+        boost::asio::co_spawn(ioc, [&]() -> Async<void> {
+            co_await repo.remove(999);
+            co_return;
+        }, boost::asio::detached);
+        ioc.run_one();
+
+        CHECK(db->last_sql.find("DELETE FROM \"UserProfile\"") != std::string::npos);
+        CHECK(db->last_params[0] == "999");
+    }
+
+    SECTION("count()") {
+        boost::asio::co_spawn(ioc, [&]() -> Async<void> {
+            co_await repo.count();
+            co_return;
+        }, boost::asio::detached);
+        ioc.run_one();
+        
+        CHECK(db->last_sql.find("SELECT COUNT(*) FROM \"UserProfile\"") != std::string::npos);
+    }
+
+    SECTION("find_where()") {
+        boost::asio::co_spawn(ioc, [&]() -> Async<void> {
+            co_await repo.find_where("name = $1", "test");
+            co_return;
+        }, boost::asio::detached);
+        ioc.run_one();
+
+        CHECK(db->last_sql.find("SELECT \"id\", \"name\" FROM \"UserProfile\" WHERE name = $1") != std::string::npos);
+        CHECK(db->last_params[0] == "test");
+    }
+
+    SECTION("fluent query()") {
+        boost::asio::co_spawn(ioc, [&]() -> Async<void> {
+            co_await repo.query()
+                .where("age", ">", 18)
+                .order_by("name", "DESC")
+                .limit(10)
+                .all();
+            co_return;
+        }, boost::asio::detached);
+        ioc.run_one();
+
+        CHECK(db->last_sql.find("WHERE \"age\" > $1") != std::string::npos);
+        CHECK(db->last_sql.find("ORDER BY \"name\" DESC") != std::string::npos);
+        CHECK(db->last_sql.find("LIMIT 10") != std::string::npos);
+        CHECK(db->last_params[0] == "18");
+    }
 }
