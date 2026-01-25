@@ -251,8 +251,10 @@ namespace blaze::middleware
     inline Middleware jwt_auth(const std::string_view secret) {
         std::string secret_str(secret);
         return [secret_str](Request& req, Response& res, auto next) -> Async<void> {
+            // Optional Auth: If no header, continue as guest
             if (!req.has_header("Authorization")) {
-                throw Unauthorized("Missing Authorization header");
+                co_await next();
+                co_return;
             }
 
             std::string_view auth = req.get_header("Authorization");
