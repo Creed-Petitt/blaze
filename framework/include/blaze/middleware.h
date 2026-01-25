@@ -151,7 +151,7 @@ namespace blaze::middleware
                 co_return;
             }
 
-            // Path Traversal Check: Ensure canonical path starts with abs_root
+            // Ensure canonical path starts with abs_root
             std::string p_str = canonical_path.string();
             std::string r_str = abs_root.string();
             if (p_str.compare(0, r_str.length(), r_str) != 0) {
@@ -168,7 +168,6 @@ namespace blaze::middleware
                 }
             }
 
-            // 2. Read File (Optimized)
             std::string file_real_path = canonical_path.string();
             std::ifstream file(file_real_path, std::ios::binary | std::ios::ate);
             if (!file.is_open()) {
@@ -288,28 +287,30 @@ namespace blaze::middleware
                 ip = *ip_ctx;
             }
 
-            std::lock_guard lock(state->first);
-            auto& clients = state->second;
-            auto now = std::chrono::steady_clock::now();
+            {
+                std::lock_guard lock(state->first);
+                auto& clients = state->second;
+                const auto now = std::chrono::steady_clock::now();
 
-            auto& client = clients[ip];
-            
-            // Check window reset
-            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - client.window_start).count();
-            if (elapsed > window_seconds) {
-                client.count = 0;
-                client.window_start = now;
+                auto& client = clients[ip];
+
+                // Check window reset
+                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - client.window_start).count();
+                if (elapsed > window_seconds) {
+                    client.count = 0;
+                    client.window_start = now;
+                }
+
+                if (client.count >= max_requests) {
+                    res.status(429).json({
+                        {"error", "Too Many Requests"},
+                        {"retry_after_seconds", window_seconds - elapsed}
+                    });
+                    co_return;
+                }
+
+                client.count++;
             }
-
-            if (client.count >= max_requests) {
-                res.status(429).json({
-                    {"error", "Too Many Requests"},
-                    {"retry_after_seconds", window_seconds - elapsed}
-                });
-                co_return;
-            }
-
-            client.count++;
             co_await next();
         };
     }

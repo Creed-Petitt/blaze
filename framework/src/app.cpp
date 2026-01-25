@@ -213,7 +213,8 @@ void App::listen(const int port, int num_threads) {
     _register_docs();
 
     if (num_threads <= 0) {
-        num_threads = 4;
+        num_threads = std::thread::hardware_concurrency();
+        if (num_threads == 0) num_threads = 4;
     }
 
     auto const address = net::ip::make_address("0.0.0.0");
@@ -254,7 +255,8 @@ void App::listen_ssl(const int port, const std::string& cert_path, const std::st
     _register_docs();
 
     if (num_threads <= 0) {
-        num_threads = 4;
+        num_threads = std::thread::hardware_concurrency();
+        if (num_threads == 0) num_threads = 4; // Fallback
     }
 
     try {

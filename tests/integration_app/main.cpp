@@ -71,13 +71,13 @@ private:
 
 int main() {
     App app;
-    // Enabled logging for CI visibility
-    // app.log_to("/dev/null"); 
+    // Silence logs
+    app.log_to("/dev/null"); 
 
-    // Feature: Rate Limiting (1M reqs / 60s for Benchmarks)
-    app.use(middleware::rate_limit(1000000, 60));
+    // Rate Limiting (10M reqs / 60s for Benchmarks)
+    app.use(middleware::rate_limit(10000000, 60));
 
-    // Feature: JWT Auth
+    // JWT Auth
     std::string secret = "integration-secret-key";
     app.use(middleware::jwt_auth(secret));
 
@@ -95,7 +95,7 @@ int main() {
 
     app.provide<UserService>();
 
-    // --- AUTO MIGRATION (Ensures test environment is ready) ---
+    // AUTO MIGRATION (Ensures test environment is ready) ---
     auto migrate = [](App& a) -> Async<void> {
         try {
             auto db = a.services().resolve<Database>();
@@ -109,7 +109,7 @@ int main() {
 
     std::cout << "--- DEFINING ROUTES ---" << std::endl;
 
-    // Feature: Login (Generates JWT)
+    // Login (Generates JWT)
     app.post("/login", [secret](Body<LoginRequest> creds) -> Async<Json> {
         if (creds.username == "admin" && creds.password == "password") {
             std::string token = crypto::jwt_sign({{"id", 1}, {"role", "admin"}}, secret);
@@ -118,54 +118,54 @@ int main() {
         throw Unauthorized("Invalid credentials");
     });
 
-    // Feature: Protected Route (Requires Auth)
+    // Protected Route (Requires Auth)
     app.get("/protected", [](Request& req) -> Async<Json> {
         if (!req.is_authenticated()) throw Unauthorized("Please login");
         
-        // Feature: Pointer-free User Access
+        // Pointer-free User Access
         co_return Json({
             {"message", "You are authenticated"},
             {"user", req.user()} 
         });
     });
 
-    // Feature: Service Injection
+    // Service Injection
     app.get("/abstract", [](Response& res, UserService& user) -> Async<void> {
         co_await user.get_data(res);
     });
 
-    // Feature: Repository - Find All
+    // Repository - Find All
     app.get("/users", [](Repository<User> users) -> Async<std::vector<User>> {
         co_return co_await users.all();
     });
 
-    // Feature: Repository - Get Count
+    // Repository - Get Count
     app.get("/users/count", [](Repository<User> users) -> Async<Json> {
         int count = co_await users.count();
         co_return Json({{"total", count}});
     });
 
-    // Feature: Repository - Find by ID
+    // Repository - Find by ID
     app.get("/users/:id", [](Path<int> id, Repository<User> users) -> Async<User> {
         co_return co_await users.find(id);
     });
 
-    // Feature: Repository - Create
+    // Repository - Create
     app.post("/users", [](Body<User> user, Repository<User> users) -> Async<void> {
         co_await users.save(user);
     });
 
-    // Feature: Repository - Update
+    // Repository - Update
     app.put("/users/:id", [](Body<User> user, Repository<User> users) -> Async<void> {
         co_await users.update(user);
     });
 
-    // Feature: Repository - Delete
+    // Repository - Delete
     app.del("/users/:id", [](Path<int> id, Repository<User> users) -> Async<void> {
         co_await users.remove(id);
     });
 
-    // Feature: Fluent Query Builder
+    // Fluent Query Builder
     app.get("/search", [](Query<SearchRequest> req, Repository<User> users) -> Async<std::vector<User>> {
         co_return co_await users.query()
             .where("name", "=", req.name)
