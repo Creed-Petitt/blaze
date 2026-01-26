@@ -25,6 +25,9 @@ public:
         } else if constexpr (std::is_integral_v<T>) {
             if (val_.empty()) return T{};
             return boost::lexical_cast<T>(val_);
+        } else if constexpr (std::is_floating_point_v<T>) {
+            if (val_.empty()) return T{};
+            return boost::lexical_cast<T>(val_);
         }
         return T{};
     }
