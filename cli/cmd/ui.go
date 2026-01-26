@@ -17,64 +17,31 @@ import (
 )
 
 var (
-	colorB = lipgloss.Color("214") // Yellow-Orange
-	colorL = lipgloss.Color("208") // Pure Orange
-	colorA = lipgloss.Color("204") // Orange-Red
-	colorZ = lipgloss.Color("202") // Red
-	colorE = lipgloss.Color("160") // Deep Red
-
+	colorB = lipgloss.Color("202") // Blaze Orange
 	styleB = lipgloss.NewStyle().Foreground(colorB).Bold(true)
-	styleL = lipgloss.NewStyle().Foreground(colorL).Bold(true)
-	styleA = lipgloss.NewStyle().Foreground(colorA).Bold(true)
-	styleZ = lipgloss.NewStyle().Foreground(colorZ).Bold(true)
-	styleE = lipgloss.NewStyle().Foreground(colorE).Bold(true)
-
-	darkGray     = lipgloss.Color("240")
-	unlitStyle   = lipgloss.NewStyle().Foreground(darkGray)
+	orangeStyle = lipgloss.NewStyle().Foreground(colorB).Bold(true)
+	blueStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#00A2FF"))
+	whiteStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Bold(true)
 	percentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("246"))
+	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
+
+const banner = `
+   (   )\ )    (      ( /(       
+ ( )\ (()/(    )\     )\()) (    
+ )((_) /(_))((((_)(  ((_)\  )\   
+((_)_ (_))   )\_ \ )  _((_)((_)  
+ | _ )| |    (_) \(_)|_  / | __| 
+ | _ \| |__   / _ \   / /  | _|  
+ |___/|____| /_/ \_\ /___| |___| 
+`
 
 var loadingMessages = []string{
 	"Igniting the engine...",
-	"Teaching C++ how to be modern...",
-	"Fetching Boost (Time for a coffee break?)...",
-	"Optimizing the binary for maximum speed...",
-	"Convincing the linker to behave...",
-	"Converting caffeine into high-performance code...",
-	"Everything is fine. Probably.",
+	"Optimizing binaries...",
+	"Linker is thinking...",
+	"Making C++ modern...",
 }
-
-const (
-	logoB1 = `░█████   `
-	logoL1 = `░██      `
-	logoA1 = `  ░██    `
-	logoZ1 = `░███████ `
-	logoE1 = `░██████ `
-
-	logoB2 = `░██  ░██ `
-	logoL2 = `░██      `
-	logoA2 = ` ░██░██  `
-	logoZ2 = `   ░███  `
-	logoE2 = `░██     `
-
-	logoB3 = `░█████   `
-	logoL3 = `░██      `
-	logoA3 = `░███████ `
-	logoZ3 = `  ░███   `
-	logoE3 = `░█████  `
-
-	logoB4 = `░██  ░██ `
-	logoL4 = `░██      `
-	logoA4 = `░██  ░██ `
-	logoZ4 = ` ░███    `
-	logoE4 = `░██     `
-
-	logoB5 = `░█████   `
-	logoL5 = `░███████ `
-	logoA5 = `░██  ░██ `
-	logoZ5 = `░███████ `
-	logoE5 = `░██████ `
-)
 
 type progressMsg float64
 type funnyMsg string
@@ -87,17 +54,19 @@ type model struct {
 	funnyMsg   string
 	err        error
 	quitting   bool
+	showLogo   bool
 }
 
-func initialModel() model {
+func initialModel(showLogo bool) model {
 	s := spinner.New()
-	s.Spinner = spinner.Dot
+	s.Spinner = spinner.Line
 	s.Style = lipgloss.NewStyle().Foreground(colorB)
 
 	return model{
 		spinner:    s,
 		funnyMsg:   loadingMessages[0],
 		percent:    0,
+		showLogo:   showLogo,
 	}
 }
 
@@ -132,45 +101,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	if m.err != nil {
+	if m.quitting || m.err != nil {
 		return ""
 	}
 
-	done := m.percent >= 1.0
-
-	glowB := m.percent >= 0.05
-	glowL := m.percent >= 0.25
-	glowA := m.percent >= 0.45
-	glowZ := m.percent >= 0.65
-	glowE := m.percent >= 0.85
-
-	renderLogo := func(b, l, a, z, e string) string {
-		out := ""
-		if glowB { out += styleB.Render(b) } else { out += unlitStyle.Render(b) }
-		if glowL { out += styleL.Render(l) } else { out += unlitStyle.Render(l) }
-		if glowA { out += styleA.Render(a) } else { out += unlitStyle.Render(a) }
-		if glowZ { out += styleZ.Render(z) } else { out += unlitStyle.Render(z) }
-		if glowE { out += styleE.Render(e) } else { out += unlitStyle.Render(e) }
-		return out
+	var s string
+	if m.showLogo {
+		s += whiteStyle.Render(banner) + "\n"
 	}
 
-	logo := fmt.Sprintf("%s\n%s\n%s\n%s\n%s",
-		renderLogo(logoB1, logoL1, logoA1, logoZ1, logoE1),
-		renderLogo(logoB2, logoL2, logoA2, logoZ2, logoE2),
-		renderLogo(logoB3, logoL3, logoA3, logoZ3, logoE3),
-		renderLogo(logoB4, logoL4, logoA4, logoZ4, logoE4),
-		renderLogo(logoB5, logoL5, logoA5, logoZ5, logoE5),
-	)
-
-	s := fmt.Sprintf("\n%s\n\n", logo) 
+	width := 30
+	full := int(m.percent * float64(width))
+	if full > width { full = width }
+	bar := styleB.Render(strings.Repeat("━", full)) + dimStyle.Render(strings.Repeat("━", width-full))
 	
-	if !done {
-		pct := int(m.percent * 100)
-		s += fmt.Sprintf("%s %s %s\n", m.spinner.View(), percentStyle.Render(fmt.Sprintf("%d%%", pct)), m.funnyMsg)
-	} else if !m.quitting {
-		s += "\n"
-	}
+pct := int(m.percent * 100)
+	if pct > 100 { pct = 100 }
 
+	s += fmt.Sprintf("  %s %s %s %s\n", 
+		m.spinner.View(),
+		bar, 
+		percentStyle.Render(fmt.Sprintf("%3d%%", pct)),
+		m.funnyMsg,
+	)
 	return s
 }
 
@@ -180,54 +133,51 @@ func tickFunnyMessage() tea.Cmd {
 	})
 }
 
-func RunBlazeBuild(release bool) error {
-	m := initialModel()
+func RunBlazeBuild(release bool, showLogo bool) error {
+	m := initialModel(showLogo)
 	p := tea.NewProgram(m)
 
 	buildMode := "Debug"
-	if release {
-		buildMode = "Release"
-	}
+	if release { buildMode = "Release" }
 
 	var buildErr error
+	doneChan := make(chan bool)
 
 	go func() {
-		doneChan := make(chan bool)
+		ticker := time.NewTicker(time.Millisecond * 100)
+		fakePercent := 0.0
 		go func() {
-			ticker := time.NewTicker(time.Millisecond * 100)
-			fakePercent := 0.0
 			for {
 				select {
 				case <-doneChan:
+					ticker.Stop()
 					return
 				case <-ticker.C:
-					if fakePercent < 0.95 {
-						fakePercent += 0.002
+					if fakePercent < 0.92 {
+						fakePercent += 0.004
 						p.Send(progressMsg(fakePercent))
 					}
 				}
 			}
 		}()
 
-		// Pass build mode to CMake
-		cmakeArgs := []string{" -B", "build", fmt.Sprintf("-DCMAKE_BUILD_TYPE=%s", buildMode)}
-		if err := runCmdWithParsing(p, "cmake", cmakeArgs, 0, 0.2); err != nil {
-			doneChan <- true
+		if err := runCmdWithParsing(p, "cmake", []string{"-B", "build", fmt.Sprintf("-DCMAKE_BUILD_TYPE=%s", buildMode)}, 0, 0.15); err != nil {
+			close(doneChan)
 			buildErr = err
 			p.Send(errMsg(err))
 			return
 		}
 
-		if err := runCmdWithParsing(p, "cmake", []string{"--build", "build", "--parallel"}, 0.2, 1.0); err != nil {
-			doneChan <- true
+		if err := runCmdWithParsing(p, "cmake", []string{"--build", "build", "--parallel"}, 0.15, 1.0); err != nil {
+			close(doneChan)
 			buildErr = err
 			p.Send(errMsg(err))
 			return
 		}
 
-		doneChan <- true
+		close(doneChan)
 		p.Send(progressMsg(1.0))
-		time.Sleep(time.Millisecond * 300) 
+		time.Sleep(time.Millisecond * 50)
 		p.Send(quitMsg{})
 	}()
 
@@ -243,7 +193,6 @@ func runCmdWithParsing(p *tea.Program, command string, args []string, startRange
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw
 	cmd.Stderr = pw
-	
 	var outputLog strings.Builder
 
 	if err := cmd.Start(); err != nil {
@@ -253,11 +202,9 @@ func runCmdWithParsing(p *tea.Program, command string, args []string, startRange
 	go func() {
 		scanner := bufio.NewScanner(pr)
 		rePercent := regexp.MustCompile(`[\s*(\d+)%]`)
-		
 		for scanner.Scan() {
 			line := scanner.Text()
 			outputLog.WriteString(line + "\n")
-
 			if matches := rePercent.FindStringSubmatch(line); len(matches) > 1 {
 				val, _ := strconv.Atoi(matches[1])
 				progress := startRange + (float64(val)/100.0)*(endRange-startRange)
@@ -270,50 +217,52 @@ func runCmdWithParsing(p *tea.Program, command string, args []string, startRange
 	pw.Close()
 	
 	if err != nil {
-		beautified := BeautifyError(outputLog.String())
-		return fmt.Errorf("%w\n\n%s", err, beautified)
+		return BeautifyError(outputLog.String())
 	}
 	return nil
 }
 
-func BeautifyError(raw string) string {
-	var (
-		errStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")).Bold(true)
-		tipStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Italic(true)
-		headerStyle = lipgloss.NewStyle().Background(lipgloss.Color("#FF4C4C")).Foreground(lipgloss.Color("#FFFFFF")).Padding(0, 1).Bold(true)
-	)
+func BeautifyError(raw string) error {
+	headerStyle := lipgloss.NewStyle().Background(colorB).Foreground(lipgloss.Color("#FFFFFF")).Padding(0, 1).Bold(true)
+	errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")).Bold(true)
+	tipStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00A2FF")).Italic(true)
 
-	out := headerStyle.Render(" COMPILER ERROR ") + "\n\n"
+	out := "\n" + headerStyle.Render(" COMPILER ERROR ") + "\n\n"
 
-	// 1. Driver Links
-	if strings.Contains(raw, "undefined reference to `mysql_") || strings.Contains(raw, "undefined reference to `mariadb_") {
+	if strings.Contains(raw, "undefined reference to `mysql_") {
 		out += errStyle.Render("  [!] Driver Missing\n")
-		out += "      You are using MySQL functions but the driver isn't linked.\n"
-		out += tipStyle.Render("      Tip: Run 'blaze add mysql' to fix this.")
-		return out
+		out += "  MySQL functions used but driver isn't linked.\n"
+		out += tipStyle.Render("  Tip: Run 'blaze add mysql' to fix this.")
+		return fmt.Errorf(out)
 	}
 
-	// 2. Handler Mismatch
-	if strings.Contains(raw, "no matching member function for call to 'get'") || 
-	   strings.Contains(raw, "no matching member function for call to 'post'") {
-		out += errStyle.Render("  [!] Route Handler Mismatch\n")
-		out += "      One of your .get() or .post() handlers has the wrong signature.\n"
-		out += tipStyle.Render("      Tip: Check if you are returning Async<T> and have the correct arguments.")
-		return out
-	}
-
-	// Default fallback
+	// Extract lines containing errors or CMake issues
 	lines := strings.Split(raw, "\n")
-	shortRaw := ""
-	count := 0
+	var errorLines []string
 	for _, line := range lines {
-		if strings.Contains(line, "error:") || strings.Contains(line, "note:") {
-			shortRaw += "  " + line + "\n"
-			count++
-			if count > 8 { break }
+		t := strings.TrimSpace(line)
+		if t == "" { continue }
+		if strings.Contains(line, "error:") || strings.Contains(line, "CMake Error") || strings.Contains(line, "note:") {
+			errorLines = append(errorLines, "  "+t)
 		}
 	}
-	out += errStyle.Render("  [!] Raw Compiler Output (Summary):\n")
-	out += shortRaw
-	return out
+
+	if len(errorLines) == 0 {
+		// Fallback: show last 10 lines of raw output
+		out += errStyle.Render("  [!] Build failed:\n")
+		start := len(lines) - 10
+		if start < 0 { start = 0 }
+		for i := start; i < len(lines); i++ {
+			if t := strings.TrimSpace(lines[i]); t != "" {
+				out += "  " + t + "\n"
+			}
+		}
+	} else {
+		out += errStyle.Render("  [!] Error Details:\n")
+		limit := 15
+		if len(errorLines) < limit { limit = len(errorLines) }
+		out += strings.Join(errorLines[:limit], "\n") + "\n"
+	}
+	
+	return fmt.Errorf(out)
 }

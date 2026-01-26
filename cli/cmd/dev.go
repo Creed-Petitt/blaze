@@ -5,21 +5,18 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
-	"strings"
-	"sync"
-	"syscall"
+	"path/filepath"
+	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 )
 
 var devCmd = &cobra.Command{
 	Use:   "dev",
-	Short: "Run fullstack development environment (C++ + Vite)",
-	Long:  `Compiles the C++ backend and starts the Vite frontend server in parallel.`,
+	Short: "Start the fullstack development environment",
 	Run: func(cmd *cobra.Command, args []string) {
-		runDevEnvironment()
+		runDev()
 	},
 }
 
@@ -27,112 +24,100 @@ func init() {
 	rootCmd.AddCommand(devCmd)
 }
 
-func runDevEnvironment() {
-	var (
-		blazeStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")).Bold(true).SetString("[Blaze]")
-		viteStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")).Bold(true).SetString("[Vite] ")
-		linkStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Underline(true)
-	)
-
-	if _, err := os.Stat("CMakeLists.txt"); os.IsNotExist(err) {
-		fmt.Println("Error: No Blaze project found.")
-		return
-	}
+func runDev() {
 	if _, err := os.Stat("frontend/package.json"); os.IsNotExist(err) {
-		fmt.Println("Error: No frontend found (missing frontend/package.json).")
+		fmt.Println(orangeStyle.Render("Error: No frontend found (missing frontend/package.json)."))
 		return
 	}
 
-	if err := RunBlazeBuild(false); err != nil {
-		fmt.Printf("\nBuild Failed: %v\n", err)
+	// 1. Initial Build
+	if err := RunBlazeBuild(false, true); err != nil {
+		fmt.Println(err)
 		return
 	}
 
 	projectName := getProjectName()
 	backendPath := fmt.Sprintf("./build/%s", projectName)
 
-	backendCmd := exec.Command(backendPath)
+	// Setup Processes
+	var backendCmd *exec.Cmd
 	frontendCmd := exec.Command("npm", "run", "dev")
 	frontendCmd.Dir = "frontend"
 
-	// Cleanup on Exit
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		if backendCmd.Process != nil {
+	// Watcher for Backend
+	watcher, _ := fsnotify.NewWatcher()
+	defer watcher.Close()
+	filepath.Walk("src", func(path string, info os.FileInfo, err error) error {
+		if info != nil && info.IsDir() { watcher.Add(path) }
+		return nil
+	})
+	filepath.Walk("include", func(path string, info os.FileInfo, err error) error {
+		if info != nil && info.IsDir() { watcher.Add(path) }
+		return nil
+	})
+
+	isFirstRun := true
+	restartBackend := func() {
+		if backendCmd != nil && backendCmd.Process != nil {
 			backendCmd.Process.Kill()
 		}
-		if frontendCmd.Process != nil {
-			frontendCmd.Process.Kill()
+		
+		if err := RunBlazeBuild(false, isFirstRun); err != nil {
+			fmt.Println(err)
+			return
 		}
-		os.Exit(0)
-	}()
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+		if !isFirstRun {
+			fmt.Printf("\n%s\n", orangeStyle.Render(" [ Hot Reload ]"))
+		}
+		isFirstRun = false
 
-	go func() {
-		defer wg.Done()
+		fmt.Printf("Launching %s\n", projectName)
+		fmt.Printf("Local: http://localhost:8080\n")
+		fmt.Printf("Docs:  http://localhost:8080/docs\n\n")
+
+		backendCmd = exec.Command(backendPath)
 		stdout, _ := backendCmd.StdoutPipe()
 		stderr, _ := backendCmd.StderrPipe()
 		backendCmd.Start()
 
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if line == "" { continue }
-			fmt.Printf("%s %s\n", blazeStyle, line)
-		}
-		
-		errScanner := bufio.NewScanner(stderr)
-		for errScanner.Scan() {
-			fmt.Printf("%s %s\n", blazeStyle, errScanner.Text())
-		}
-	}()
+		go func() {
+			scanner := bufio.NewScanner(stdout)
+			for scanner.Scan() {
+				fmt.Println(scanner.Text())
+			}
+		}()
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			for scanner.Scan() {
+				fmt.Println(scanner.Text())
+			}
+		}()
+	}
 
+	restartBackend()
+
+	// Frontend Process
 	go func() {
-		defer wg.Done()
-		stdout, _ := frontendCmd.StdoutPipe()
-		stderr, _ := frontendCmd.StderrPipe()
-		frontendCmd.Start()
-
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			
-			// Filter known noise signatures (Empty lines, startup commands, etc)
-			if strings.TrimSpace(line) == "" ||
-			   strings.Contains(line, "> frontend@") || 
-			   strings.Contains(line, "Network: use") || 
-			   strings.Contains(line, "press h + enter") ||
-			   strings.Contains(line, "ready in") ||
-			   strings.Contains(line, "> vite") {
-				continue
-			}
-
-			// Style the Link
-			if strings.Contains(line, "Local:") && strings.Contains(line, "http") {
-
-				parts := strings.Split(line, "http")
-				if len(parts) > 1 {
-					url := "http" + parts[1]
-					// Remove any trailing noise/ansi
-					url = strings.Fields(url)[0] 
-					fmt.Printf("%s Local:   %s\n", viteStyle, linkStyle.Render(url))
-				}
-				continue
-			}
-
-			// Pass through everything else (Errors, other info)
-			fmt.Printf("%s %s\n", viteStyle, line)
-		}
-
-		errScanner := bufio.NewScanner(stderr)
-		for errScanner.Scan() {
-			fmt.Printf("%s %s\n", viteStyle, errScanner.Text())
-		}
+		frontendCmd.Stdout = os.Stdout
+		frontendCmd.Stderr = os.Stderr
+		frontendCmd.Run()
 	}()
 
-	wg.Wait()
+	// Watch Loop with Debounce
+	var timer *time.Timer
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok { return }
+			if event.Op&fsnotify.Write == fsnotify.Write {
+				if timer != nil { timer.Stop() }
+				timer = time.AfterFunc(100*time.Millisecond, func() {
+					restartBackend()
+				})
+			}
+		case <-watcher.Errors:
+			return
+		}
+	}
 }

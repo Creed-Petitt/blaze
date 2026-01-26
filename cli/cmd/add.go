@@ -10,13 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF4C4C")) // Red
-	checkStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))            // Green
-	textStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF"))            // White
-	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C"))            // Red
-)
-
 var addCmd = &cobra.Command{
 	Use:   "add [feature]",
 	Short: "Add features or drivers to an existing Blaze project",
@@ -34,7 +27,7 @@ var addMysqlCmd = &cobra.Command{
 	Use:   "mysql",
 	Short: "Add MySQL driver support to this project",
 	Run: func(cmd *cobra.Command, args []string) {
-		addDriver("mysql", "libmariadb-dev", "blaze::mysql")
+		addDriver("mysql", "libmariadb-dev", "blaze::mysql", false)
 	},
 }
 
@@ -42,7 +35,15 @@ var addPostgresCmd = &cobra.Command{
 	Use:   "postgres",
 	Short: "Add PostgreSQL driver support to this project",
 	Run: func(cmd *cobra.Command, args []string) {
-		addDriver("postgres", "libpq-dev", "blaze::postgres")
+		addDriver("postgres", "libpq-dev", "blaze::postgres", false)
+	},
+}
+
+var addTestCmd = &cobra.Command{
+	Use:   "test",
+	Short: "Add a Catch2 testing suite to this project",
+	Run: func(cmd *cobra.Command, args []string) {
+		addTesting(false)
 	},
 }
 
@@ -51,106 +52,125 @@ func init() {
 	addCmd.AddCommand(addFrontendCmd)
 	addCmd.AddCommand(addMysqlCmd)
 	addCmd.AddCommand(addPostgresCmd)
+	addCmd.AddCommand(addTestCmd)
 }
 
-func addDriver(name, pkgName, libName string) {
-	// 1. Verify Project
+func addDriver(name, pkgName, libName string, silent bool) {
 	if _, err := os.Stat("CMakeLists.txt"); os.IsNotExist(err) {
-		fmt.Println(errStyle.Render("Error: No Blaze project found."))
+		if !silent { fmt.Println(orangeStyle.Render("Error: No Blaze project found.")) }
 		return
 	}
 
-	fmt.Println(titleStyle.Render(fmt.Sprintf("\n  Adding %s support...", name)))
-
-	// 2. Check System Dependencies (Optional warning)
-	cmd := exec.Command("pkg-config", "--exists", strings.ReplaceAll(pkgName, "-dev", ""))
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("  %s Note: %s might be missing on your system.\n", errStyle.Render("[!]"), pkgName)
-		fmt.Printf("    Try: sudo apt install %s\n\n", pkgName)
+	if !silent {
+		fmt.Println(orangeStyle.Render(fmt.Sprintf("\n  Adding %s support...", name)))
 	}
 
-	// 3. Update CMakeLists.txt
-	content, err := os.ReadFile("CMakeLists.txt")
-	if err != nil {
-		fmt.Println(errStyle.Render("Error reading CMakeLists.txt"))
-		return
-	}
-
+	content, _ := os.ReadFile("CMakeLists.txt")
 	cmakeStr := string(content)
+
 	if strings.Contains(cmakeStr, libName) {
-		fmt.Println(checkStyle.Render(fmt.Sprintf("  [+] %s is already configured in CMakeLists.txt", name)))
-	} else {
-		// Insert before the closing parenthesis of target_link_libraries
-		newCmake := strings.Replace(cmakeStr, "blaze::framework", "blaze::framework\n    "+libName, 1)
-		if newCmake == cmakeStr {
-			// Fallback for core-only apps
-			newCmake = strings.Replace(cmakeStr, "blaze::core", "blaze::core\n    "+libName, 1)
-		}
-		
-		err = os.WriteFile("CMakeLists.txt", []byte(newCmake), 0644)
-		if err != nil {
-			fmt.Println(errStyle.Render("Error updating CMakeLists.txt"))
-			return
-		}
-		fmt.Println(checkStyle.Render(fmt.Sprintf("  [+] Added %s to target_link_libraries", libName)))
+		if !silent { fmt.Println(blueStyle.Render(fmt.Sprintf("  [+] %s is already configured.", name))) }
+		return
 	}
 
-	// 4. Offer Include Tip
-	fmt.Println("")
-	fmt.Println(textStyle.Render("  To use this driver, add this to your main.cpp:"))
-	fmt.Println(checkStyle.Render(fmt.Sprintf("  #include <blaze/%s.h>", name)))
-	fmt.Println("")
+	// Replace ALL occurrences to catch both main app and test suites
+	marker := "# [[BLAZE_DRIVERS_START]]"
+	if strings.Contains(cmakeStr, marker) {
+		newCmake := strings.ReplaceAll(cmakeStr, marker, marker+"\n    "+libName)
+		os.WriteFile("CMakeLists.txt", []byte(newCmake), 0644)
+	} else {
+		// Fallback for old projects or simplified link blocks
+		newCmake := strings.ReplaceAll(cmakeStr, "blaze::core", "blaze::core\n    "+libName)
+		os.WriteFile("CMakeLists.txt", []byte(newCmake), 0644)
+	}
+
+	if !silent {
+		fmt.Println(blueStyle.Render(fmt.Sprintf("  [+] Added %s to CMakeLists.txt", libName)))
+		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(fmt.Sprintf("  Tip: Add #include <blaze/%s.h> to your main.cpp", name)))
+	}
+}
+
+func addTesting(silent bool) {
+	if !silent {
+		fmt.Println(orangeStyle.Render("\n  Setting up Blaze Testing Suite..."))
+	}
+
+	os.MkdirAll("tests", 0755)
+
+	testFile := "#include <blaze/app.h>\n#include <catch2/catch_test_macros.hpp>\n\nusing namespace blaze;\n\nTEST_CASE(\"Basic Math\", \"[math]\") {\n    REQUIRE(1 + 1 == 2);\n}\n"
+	os.WriteFile("tests/test_main.cpp", []byte(testFile), 0644)
+
+	content, _ := os.ReadFile("CMakeLists.txt")
+	cmakeStr := string(content)
+	
+	if !strings.Contains(cmakeStr, "enable_testing()") {
+		catch2Block := `
+
+# Download Catch2 for Testing
+FetchContent_Declare(
+  Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG        v3.5.2
+)
+FetchContent_MakeAvailable(Catch2)
+
+# Testing Suite
+enable_testing()
+add_executable(blaze_tests tests/test_main.cpp)
+target_link_libraries(blaze_tests PRIVATE 
+    blaze::core
+    # [[BLAZE_DRIVERS_START]]
+    # [[BLAZE_DRIVERS_END]]
+    Catch2::Catch2WithMain
+)
+`
+		os.WriteFile("CMakeLists.txt", []byte(cmakeStr+catch2Block), 0644)
+	}
+
+	if !silent {
+		fmt.Println(blueStyle.Render("  [+] Created tests/test_main.cpp"))
+		fmt.Println(blueStyle.Render("  [+] Configured Catch2 and blaze_tests in CMakeLists.txt"))
+		fmt.Println(whiteStyle.Render("\n  Run your tests with: blaze test"))
+	}
 }
 
 func addFrontend() {
-	// Check for existing project
 	if _, err := os.Stat("CMakeLists.txt"); os.IsNotExist(err) {
-		fmt.Println(errStyle.Render("Error: No Blaze project found. (CMakeLists.txt missing)"))
+		fmt.Println(orangeStyle.Render("Error: No Blaze project found. (CMakeLists.txt missing)"))
 		return
 	}
-
-	// Check if frontend already exists
 	if _, err := os.Stat("frontend"); err == nil {
-		fmt.Println(errStyle.Render("Error: A 'frontend' directory already exists."))
+		fmt.Println(orangeStyle.Render("Error: A 'frontend' directory already exists."))
 		return
 	}
-
 	checkNpm()
-
-	// Select framework
 	framework := selectFrontend()
 	if framework == "" {
-		fmt.Println("Selection cancelled.")
 		return
 	}
 
-	fmt.Println(titleStyle.Render(fmt.Sprintf("\n  Adding %s frontend...", framework)))
+	fmt.Println(orangeStyle.Render(fmt.Sprintf("\n  Adding %s frontend...", framework)))
 
 	viteTemplate := "vanilla-ts"
 	switch framework {
-	case "React":
-		viteTemplate = "react-ts"
-	case "Vue":
-		viteTemplate = "vue-ts"
-	case "Svelte":
-		viteTemplate = "svelte-ts"
-	case "Solid":
-		viteTemplate = "solid-ts"
+	case "React": viteTemplate = "react-ts"
+	case "Vue": viteTemplate = "vue-ts"
+	case "Svelte": viteTemplate = "svelte-ts"
+	case "Solid": viteTemplate = "solid-ts"
 	}
 
 	cmd := exec.Command("npm", "create", "vite@latest", "frontend", "--", "--template", viteTemplate)
 	cmd.Stdout = nil
 	cmd.Stderr = os.Stderr
-
 	if err := cmd.Run(); err != nil {
-		fmt.Println(errStyle.Render(fmt.Sprintf("  Error creating frontend: %v", err)))
+		fmt.Println(orangeStyle.Render(fmt.Sprintf("  Error creating frontend: %v", err)))
 		return
 	}
 
-	fmt.Println(checkStyle.Render(fmt.Sprintf("  [+] Frontend (%s) added in /frontend", framework)))
+	fmt.Println(blueStyle.Render(fmt.Sprintf("  [+] Frontend (%s) added in /frontend", framework)))
 	fmt.Println("")
-	fmt.Println(textStyle.Render("  To get started:"))
-	fmt.Println(textStyle.Render("  cd frontend && npm install && cd .."))
-	fmt.Println(textStyle.Render("  blaze dev"))
+	fmt.Println(whiteStyle.Render("  To get started:"))
+	fmt.Println(whiteStyle.Render("  cd frontend && npm install && cd .."))
+	fmt.Println(whiteStyle.Render("  blaze dev"))
 	fmt.Println("")
 }

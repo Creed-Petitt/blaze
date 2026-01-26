@@ -1,19 +1,11 @@
 #include <blaze/app.h>
-#include <iostream>
-
-/**
- * DATABASE DRIVERS:
- * To use databases, uncomment the following:
- * #include <blaze/postgres.h>
- * #include <blaze/mysql.h>
- */
 
 using namespace blaze;
 
 int main() {
     App app;
 
-    // Modern API: Async Returns & Auto-Serialization
+    // Welcome Route
     app.get("/", []() -> Async<Json> {
         co_return Json({
             {"status", "ok"},
@@ -21,10 +13,6 @@ int main() {
         });
     });
 
-    std::cout << "Starting server on http://localhost:8080" << std::endl;
-    
-    // Start the server on port 8080
     app.listen(8080);
-
     return 0;
 }

@@ -18,69 +18,138 @@ var templatesFS embed.FS
 
 var fullstackMode bool
 
-// initCmd represents the init command
 var initCmd = &cobra.Command{
 	Use:   "init [name]",
 	Short: "Initialize a new Blaze project",
-	Long: `Scaffolds a new C++ project with CMake, Docker, and source files.
-Use --fullstack to include a React/Vue/Svelte frontend.`, 
-	Args: cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		projectName := args[0]
-		
+		features := selectFeatures()
+
+		var frontend string
 		if fullstackMode {
 			checkNpm()
-			framework := selectFrontend()
-			if framework == "" {
-				fmt.Println("Selection cancelled.")
+			frontend = selectFrontend()
+			if frontend == "" {
 				os.Exit(0)
 			}
-			createProject(projectName, framework)
-		} else {
-			createProject(projectName, "")
 		}
+		createProject(projectName, frontend, features)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(initCmd)
-	initCmd.Flags().BoolVarP(&fullstackMode, "fullstack", "f", false, "Initialize with a Frontend (React/Vue/Svelte)")
+	initCmd.Flags().BoolVarP(&fullstackMode, "fullstack", "f", false, "Initialize with a Frontend")
 }
 
 type ProjectData struct {
 	ProjectName string
 }
 
+// --- Backend Feature Selection ---
+
+type featureItem struct {
+	title    string
+	selected bool
+}
+
+type featureSelectionModel struct {
+	choices []featureItem
+	cursor  int
+	done    bool
+}
+
+func initialFeatureModel() featureSelectionModel {
+	return featureSelectionModel{
+		choices: []featureItem{
+			{title: "PostgreSQL", selected: false},
+			{title: "MySQL", selected: false},
+			{title: "Catch2 Testing", selected: false},
+		},
+	}
+}
+
+func (m featureSelectionModel) Init() tea.Cmd { return nil }
+
+func (m featureSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q", "esc":
+			return m, tea.Quit
+		case "up", "k":
+			if m.cursor > 0 { m.cursor-- }
+		case "down", "j":
+			if m.cursor < len(m.choices) { m.cursor++ }
+		case "enter", " ", "x":
+			if m.cursor == len(m.choices) {
+				m.done = true
+				return m, tea.Quit
+			}
+			m.choices[m.cursor].selected = !m.choices[m.cursor].selected
+		}
+	}
+	return m, nil
+}
+
+func (m featureSelectionModel) View() string {
+	if m.done { return "" }
+	s := fmt.Sprintf("\n%s\n\n", orangeStyle.Render("  Select Backend Features:"))
+
+	for i, choice := range m.choices {
+		cursor := "  "
+		if m.cursor == i { cursor = orangeStyle.Render("❯ ") }
+
+		checked := "[ ]"
+		if choice.selected { checked = blueStyle.Render("[x]") }
+
+		s += fmt.Sprintf("%s%s %s\n", cursor, checked, choice.title)
+	}
+
+	doneCursor := "  "
+	doneStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	if m.cursor == len(m.choices) {
+		doneCursor = orangeStyle.Render("❯ ")
+		doneStyle = blueStyle.Bold(true)
+	}
+	s += fmt.Sprintf("\n%s%s\n", doneCursor, doneStyle.Render("[ Confirm & Create ]"))
+	return s + "\n"
+}
+
+func selectFeatures() []string {
+	p := tea.NewProgram(initialFeatureModel())
+	m, err := p.Run()
+	if err != nil { os.Exit(1) }
+
+	var selected []string
+	if finalModel, ok := m.(featureSelectionModel); ok {
+		if !finalModel.done { os.Exit(0) }
+		for _, item := range finalModel.choices {
+			if item.selected { selected = append(selected, item.title) }
+		}
+	}
+	return selected
+}
+
 func checkNpm() {
-	_, err := exec.LookPath("npm")
-	if err != nil {
-		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")).Bold(true).Render("\n  [!] Error: Node.js/NPM is required for fullstack mode."))
-		fmt.Println("  Please install Node.js from https://nodejs.org\n")
+	if _, err := exec.LookPath("npm"); err != nil {
+		fmt.Println(orangeStyle.Render("\n  [!] Error: Node.js/NPM is required for fullstack mode."))
 		os.Exit(1)
 	}
 }
 
-// BubbleTea Selection Logic ---
-
-type item struct {
-	title, desc string
-}
+// --- Frontend Selection ---
 
 type selectionModel struct {
-	choices  []item
+	choices  []string
 	cursor   int
 	selected string
 }
 
 func initialSelectionModel() selectionModel {
 	return selectionModel{
-		choices: []item{
-			{title: "React", desc: "The most popular library (TypeScript)"},
-			{title: "Vue", desc: "The progressive framework (TypeScript)"},
-			{title: "Svelte", desc: "Cybernetically enhanced web apps (TypeScript)"},
-			{title: "Solid", desc: "Simple and performant reactivity (TypeScript)"},
-			{title: "Vanilla", desc: "Plain TypeScript (No Framework)"},
-		},
+		choices: []string{"React", "Vue", "Svelte", "Solid", "Vanilla"},
 	}
 }
 
@@ -90,18 +159,13 @@ func (m selectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
+		case "ctrl+c", "q": return m, tea.Quit
 		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
+			if m.cursor > 0 { m.cursor-- }
 		case "down", "j":
-			if m.cursor < len(m.choices)-1 {
-				m.cursor++
-			}
+			if m.cursor < len(m.choices)-1 { m.cursor++ }
 		case "enter", " ":
-			m.selected = m.choices[m.cursor].title
+			m.selected = m.choices[m.cursor]
 			return m, tea.Quit
 		}
 	}
@@ -109,63 +173,28 @@ func (m selectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m selectionModel) View() string {
-	// Header: Style text only, handle newlines manually to avoid alignment bugs
-	headerText := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF4C4C")).Render("  Select a Frontend Framework:")
-	s := fmt.Sprintf("\n%s\n\n", headerText)
-
+	s := fmt.Sprintf("\n%s\n\n", orangeStyle.Render("  Select a Frontend Framework:"))
 	for i, choice := range m.choices {
 		if m.cursor == i {
-			// Selected: "  > Title" (Red)
-			cursor := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")).Bold(true).Render("❯")
-			title := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")).Bold(true).Render(choice.title)
-			s += fmt.Sprintf("  %s %s\n", cursor, title)
+			s += fmt.Sprintf("  %s %s\n", orangeStyle.Render("❯"), choice)
 		} else {
-			// Unselected: "    Title" (White)
-			title := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Render(choice.title)
-			s += fmt.Sprintf("    %s\n", title)
+			s += fmt.Sprintf("    %s\n", choice)
 		}
 	}
-	s += "\n  (Press q to quit)\n"
-	return s
+	return s + "\n"
 }
 
 func selectFrontend() string {
 	p := tea.NewProgram(initialSelectionModel())
 	m, err := p.Run()
-	if err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
-		os.Exit(1)
-	}
-
-	if finalModel, ok := m.(selectionModel); ok {
-		return finalModel.selected
-	}
+	if err != nil { os.Exit(1) }
+	if f, ok := m.(selectionModel); ok { return f.selected }
 	return ""
 }
 
-// Scaffolding Logic
-
-func createProject(name string, frontend string) {
-	var (
-		titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF4C4C")) // Blaze Red
-		checkStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))            // Green
-		textStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF"))            // White
-	)
-
-	fmt.Println(titleStyle.Render(fmt.Sprintf("\n  Scaffolding project '%s'...", name)))
-
-	dirs := []string{
-		name,
-		filepath.Join(name, "src"),
-		filepath.Join(name, "include"),
-	}
-
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Printf("Error creating directory %s: %v\n", dir, err)
-			os.Exit(1)
-		}
-	}
+func createProject(name string, frontend string, features []string) {
+	dirs := []string{ name, filepath.Join(name, "src"), filepath.Join(name, "include") }
+	for _, dir := range dirs { os.MkdirAll(dir, 0755) }
 
 	files := map[string]string{
 		"templates/main.cpp.tmpl":           filepath.Join(name, "src/main.cpp"),
@@ -178,55 +207,39 @@ func createProject(name string, frontend string) {
 	}
 
 	data := ProjectData{ProjectName: name}
-
 	for tmplPath, outPath := range files {
-		tmplContent, err := templatesFS.ReadFile(tmplPath)
-		if err == nil {
-			t, _ := template.New(tmplPath).Parse(string(tmplContent))
-			f, _ := os.Create(outPath)
-			t.Execute(f, data)
-			f.Close()
-		}
+		tmplContent, _ := templatesFS.ReadFile(tmplPath)
+		t, _ := template.New(tmplPath).Parse(string(tmplContent))
+		f, _ := os.Create(outPath)
+		t.Execute(f, data)
+		f.Close()
 	}
 
-	fmt.Println(checkStyle.Render("  [+] Backend structure created"))
+	origDir, _ := os.Getwd()
+	os.Chdir(name) 
+	for _, f := range features {
+		switch f {
+		case "PostgreSQL": addDriver("postgres", "libpq-dev", "blaze::postgres", false)
+		case "MySQL":      addDriver("mysql", "libmariadb-dev", "blaze::mysql", false)
+		case "Catch2 Testing": addTesting(false)
+		}
+	}
+	os.Chdir(origDir) 
 
 	if frontend != "" {
 		viteTemplate := "vanilla-ts"
 		switch frontend {
-		case "React":
-			viteTemplate = "react-ts"
-		case "Vue":
-			viteTemplate = "vue-ts"
-		case "Svelte":
-			viteTemplate = "svelte-ts"
-		case "Solid":
-			viteTemplate = "solid-ts"
+		case "React": viteTemplate = "react-ts"
+		case "Vue":   viteTemplate = "vue-ts"
+		case "Svelte": viteTemplate = "svelte-ts"
+		case "Solid":  viteTemplate = "solid-ts"
 		}
-
-		// Run npm create vite (Silent)
 		cmd := exec.Command("npm", "create", "vite@latest", "frontend", "--", "--template", viteTemplate)
 		cmd.Dir = name
-		// Suppress stdout, but keep stderr for errors
-		cmd.Stdout = nil
-		cmd.Stderr = os.Stderr
-
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("  Error creating frontend: %v\n", err)
-		} else {
-			fmt.Println(checkStyle.Render(fmt.Sprintf("  [+] Frontend (%s) initialized in /frontend", frontend)))
-		}
+		cmd.Run()
 	}
 
-	fmt.Println("")
-	fmt.Println(textStyle.Render("  Project ready! To get started:"))
-	fmt.Println("")
-	fmt.Println(textStyle.Render(fmt.Sprintf("  cd %s", name)))
-	if frontend != "" {
-		fmt.Println(textStyle.Render("  cd frontend && npm install && cd .."))
-		fmt.Println(textStyle.Render("  blaze dev  (Runs Backend + Frontend)"))
-	} else {
-		fmt.Println(textStyle.Render("  blaze run"))
-	}
-	fmt.Println("")
+	fmt.Println(blueStyle.Render("\n  Project ready!"))
+	fmt.Println(whiteStyle.Render(fmt.Sprintf("  cd %s", name)))
+	fmt.Println(whiteStyle.Render("  blaze run\n"))
 }

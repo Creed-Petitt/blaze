@@ -4,44 +4,125 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 )
 
-var runRelease bool
+var watchMode bool
 
 var runCmd = &cobra.Command{
 	Use:   "run",
-	Short: "Build and run the project locally",
+	Short: "Build and run the Blaze project",
 	Run: func(cmd *cobra.Command, args []string) {
-		var (
-			errStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C"))
-			successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))
-		)
+		release, _ := cmd.Flags().GetBool("release")
+		watch, _ := cmd.Flags().GetBool("watch")
 
-		if _, err := os.Stat("CMakeLists.txt"); os.IsNotExist(err) {
-			fmt.Println(errStyle.Render("Error: No Blaze project found."))
-			return
+		if watch {
+			runWithWatch(release)
+		} else {
+			runStatic(release)
 		}
-
-		if err := RunBlazeBuild(runRelease); err != nil {
-			fmt.Println(errStyle.Render(fmt.Sprintf("\n Build Failed: %v", err)))
-			return
-		}
-
-		projectName := getProjectName()
-		binaryPath := "./build/" + projectName
-		fmt.Println(successStyle.Render(fmt.Sprintf("\nLaunching %s...", projectName)))
-		
-		runCmd := exec.Command(binaryPath, args...)
-		runCmd.Stdout = os.Stdout
-		runCmd.Stderr = os.Stderr
-		runCmd.Run()
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-	runCmd.Flags().BoolVarP(&runRelease, "release", "r", false, "Run in high-performance Release mode")
+	runCmd.Flags().BoolVarP(&watchMode, "watch", "w", false, "Watch for changes and hot-reload")
+	runCmd.Flags().BoolP("release", "r", false, "Build in Release mode")
+}
+
+func runStatic(release bool) {
+	if _, err := os.Stat("CMakeLists.txt"); os.IsNotExist(err) {
+		fmt.Println(orangeStyle.Render("Error: No Blaze project found."))
+		return
+	}
+
+	if err := RunBlazeBuild(release, true); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	projectName := getProjectName()
+	fmt.Printf("\nLaunching %s\n", projectName)
+	fmt.Printf("Local: http://localhost:8080\n")
+	fmt.Printf("Docs:  http://localhost:8080/docs\n\n")
+	
+	runCmd := exec.Command("./build/" + projectName)
+	runCmd.Stdout = os.Stdout
+	runCmd.Stderr = os.Stderr
+	runCmd.Run()
+}
+
+func runWithWatch(release bool) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		fmt.Printf("Error creating watcher: %v\n", err)
+		return
+	}
+	defer watcher.Close()
+
+	filepath.Walk("src", func(path string, info os.FileInfo, err error) error {
+		if info != nil && info.IsDir() { watcher.Add(path) }
+		return nil
+	})
+	filepath.Walk("include", func(path string, info os.FileInfo, err error) error {
+		if info != nil && info.IsDir() { watcher.Add(path) }
+		return nil
+	})
+
+	var currentCmd *exec.Cmd
+	isFirstRun := true
+	projectName := getProjectName()
+	
+	restart := func() {
+		if currentCmd != nil && currentCmd.Process != nil {
+			currentCmd.Process.Kill()
+		}
+		
+		if err := RunBlazeBuild(release, isFirstRun); err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		if !isFirstRun {
+			fmt.Printf("\n%s\n", orangeStyle.Render(" [ Hot Reload ]"))
+		}
+		isFirstRun = false
+
+		fmt.Printf("Launching %s\n", projectName)
+		fmt.Printf("Local: http://localhost:8080\n")
+		fmt.Printf("Docs:  http://localhost:8080/docs\n\n")
+
+		currentCmd = exec.Command("./build/" + projectName)
+		currentCmd.Stdout = os.Stdout
+		currentCmd.Stderr = os.Stderr
+		currentCmd.Start()
+	}
+
+	restart()
+
+	// Debounce timer
+	var timer *time.Timer
+	
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok { return }
+			if event.Op&fsnotify.Write == fsnotify.Write {
+				// Reset timer on every write event
+				if timer != nil {
+					timer.Stop()
+				}
+				timer = time.AfterFunc(100*time.Millisecond, func() {
+					restart()
+				})
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok { return }
+			fmt.Printf("Watcher error: %v\n", err)
+		}
+	}
 }

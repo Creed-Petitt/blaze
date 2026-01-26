@@ -20,7 +20,7 @@ var buildCmd = &cobra.Command{
 		fmt.Println(titleStyle.Render("\n  Starting Blaze Build..."))
 
 		// Build defaults to Release (false for debug = true for release)
-		if err := RunBlazeBuild(!buildDebug); err != nil {
+		if err := RunBlazeBuild(!buildDebug, true); err != nil {
 			fmt.Printf("\nBuild Failed: %v\n", err)
 			return
 		}

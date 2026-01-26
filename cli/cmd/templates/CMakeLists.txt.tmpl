@@ -20,4 +20,6 @@ add_executable({{ .ProjectName }} src/main.cpp)
 # Blaze is modular. You only link what you need.
 target_link_libraries({{ .ProjectName }} PRIVATE 
     blaze::core
+    # [[BLAZE_DRIVERS_START]]
+    # [[BLAZE_DRIVERS_END]]
 )
