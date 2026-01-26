@@ -44,6 +44,15 @@ public:
 
     std::string dump() const;
 
+    // Enable Boost.JSON serialization support for vector<blaze::Json>
+    friend void tag_invoke(boost::json::value_from_tag, boost::json::value& jv, const Json& wrapper) {
+        if (wrapper.data_.type == Type::BOOST_VAL && wrapper.data_.boost_ptr) {
+            jv = *wrapper.data_.boost_ptr;
+        } else {
+            jv = nullptr;
+        }
+    }
+
 private:
     struct Internal {
         Type type = Type::NONE;
