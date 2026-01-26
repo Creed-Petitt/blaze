@@ -31,12 +31,26 @@ func runTests() {
 
 	fmt.Println("\nRunning Blaze Test Suite...")
 
-	// 1. Build the test target
 	m := initialModel(false) 
 	p := tea.NewProgram(m)
 
 	go func() {
-		err := runCmdWithParsing(p, "cmake", []string{"--build", "build", "--target", "blaze_tests", "--parallel"}, 0, 1.0)
+		// Auto-Configure if build folder is missing
+		if _, err := os.Stat("build/CMakeCache.txt"); os.IsNotExist(err) {
+			cmakeFlags := []string{"-", "build", "-", "CMAKE_BUILD_TYPE=Debug"}
+			if _, err := exec.LookPath("ccache"); err == nil {
+				cmakeFlags = append(cmakeFlags, "-", "CMAKE_CXX_COMPILER_LAUNCHER=ccache")
+			}
+			
+			// We use a small range (0.0 - 0.2) for config
+			if err := runCmdWithParsing(p, "cmake", cmakeFlags, 0, 0.2); err != nil {
+				p.Send(errMsg(err))
+				return
+			}
+		}
+
+		// Build the test target
+		err := runCmdWithParsing(p, "cmake", []string{"--build", "build", "--target", "blaze_tests", "--parallel"}, 0.2, 1.0)
 		if err != nil {
 			p.Send(errMsg(err))
 			return
@@ -45,22 +59,22 @@ func runTests() {
 	}()
 
 	if _, err := p.Run(); err != nil {
-		fmt.Printf("Build failed: %v\n", err)
 		return
 	}
 
-	// 2. Run the binary and capture output
+	// Run the binary and capture output
 	testRun := exec.Command("./build/blaze_tests")
 	output, err := testRun.CombinedOutput()
 	outputStr := string(output)
 
 	if err != nil {
-		// Failure: Show the raw details so the user can debug
 		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")).Bold(true).Render("\n  [!] Some tests failed:"))
-		fmt.Println(outputStr)
+		if len(outputStr) > 0 {
+			fmt.Println(outputStr)
+		} else {
+			fmt.Println("  (No output. The test binary may have failed to start.)")
+		}
 	} else {
-		// Success: Extract the numbers from Catch2 output
-		// Format: "All tests passed (1 assertion in 1 test case)"
 		summary := "All tests passed!"
 		lines := strings.Split(outputStr, "\n")
 		for _, line := range lines {

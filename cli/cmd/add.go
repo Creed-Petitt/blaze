@@ -64,7 +64,8 @@ func addDriver(name, pkgName, libName string, silent bool) {
 	cmakeStr := string(content)
 
 	if strings.Contains(cmakeStr, libName) {
-		if !silent { fmt.Println(blueStyle.Render(fmt.Sprintf("  ✓ %s is already configured", name))) }
+		if !silent { fmt.Println(blueStyle.Render(fmt.Sprintf("  ✓ %s is already configured", name)))
+		}
 		return
 	}
 
@@ -85,14 +86,40 @@ func addDriver(name, pkgName, libName string, silent bool) {
 func addTesting(silent bool) {
 	os.MkdirAll("tests", 0755)
 
-	testFile := "#include <blaze/app.h>\n#include <catch2/catch_test_macros.hpp>\n\nusing namespace blaze;\n\nTEST_CASE(\"Basic Math\", \"[math]\" ) {\n    REQUIRE(1 + 1 == 2);\n}\n"
+	testFile := "#include <blaze/app.h>\n#include <catch2/catch_test_macros.hpp>\n\nusing namespace blaze;\n\nTEST_CASE(\"Basic Math\", \"[math]\") {\n    REQUIRE(1 + 1 == 2);\n}\n"
 	os.WriteFile("tests/test_main.cpp", []byte(testFile), 0644)
 
 	content, _ := os.ReadFile("CMakeLists.txt")
 	cmakeStr := string(content)
 	
 	if !strings.Contains(cmakeStr, "enable_testing()") {
-		catch2Block := "\n# Download Catch2 for Testing\nFetchContent_Declare(\n  Catch2\n  GIT_REPOSITORY https://github.com/catchorg/Catch2.git\n  GIT_TAG        v3.5.2\n)\nFetchContent_MakeAvailable(Catch2)\n\n# Testing Suite\nenable_testing()\nadd_executable(blaze_tests tests/test_main.cpp)\ntarget_link_libraries(blaze_tests PRIVATE \n    blaze::core\n    # [[BLAZE_DRIVERS_START]]\n    # [[BLAZE_DRIVERS_END]]\n    Catch2::Catch2WithMain\n)"
+		// Detect existing drivers to inject into the test suite
+		existingDrivers := ""
+		if strings.Contains(cmakeStr, "blaze::postgres") {
+			existingDrivers += "\n    blaze::postgres"
+		}
+		if strings.Contains(cmakeStr, "blaze::mysql") {
+			existingDrivers += "\n    blaze::mysql"
+		}
+
+		catch2Block := fmt.Sprintf(`
+# Download Catch2 for Testing
+FetchContent_Declare(
+  Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG        v3.5.2
+)
+FetchContent_MakeAvailable(Catch2)
+
+# Testing Suite
+enable_testing()
+add_executable(blaze_tests tests/test_main.cpp)
+target_link_libraries(blaze_tests PRIVATE 
+    blaze::core
+    # [[BLAZE_DRIVERS_START]]%s
+    # [[BLAZE_DRIVERS_END]]
+    Catch2::Catch2WithMain
+)`, existingDrivers)
 		os.WriteFile("CMakeLists.txt", []byte(cmakeStr+catch2Block), 0644)
 	}
 
