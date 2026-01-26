@@ -1,10 +1,10 @@
 <div align="center">
   <img src="docs/assets/logo.png" alt="Blaze Logo" width="200">
 
-  [![Blaze CI](https://github.com/Creed-Petitt/blaze/actions/workflows/ci.yml/badge.svg)](https://github.com/Creed-Petitt/blaze/actions/workflows/ci.yml)
-  ![License](https://img.shields.io/badge/license-MIT-blue)
-  ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey)
-  ![Standard](https://img.shields.io/badge/c%2B%2B-20-blue)
+[![Blaze CI](https://github.com/Creed-Petitt/blaze/actions/workflows/ci.yml/badge.svg)](https://github.com/Creed-Petitt/blaze/actions/workflows/ci.yml)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey)
+![Standard](https://img.shields.io/badge/c%2B%2B-20-blue)
 
   <p>
     <a href="#features">Features</a> •
@@ -20,30 +20,21 @@
 
 ## Features
 
-*   **150,000+ req/sec** (plaintext) and **140,000+ req/sec** (JSON) with sub 10 mb/s latency.
+*   **170,000+ req/sec** (plaintext) and **140,000+ req/sec** (JSON) with sub 1ms latency.
 *   **Typed Injection**: Zero-boilerplate access to `Path<T>`, `Body<T>`, and `Query<T>`.
 *   **Automatic Validation**: Define a `validate()` method on your models, and Blaze enforces it automatically.
 *   **Interactive API Docs**: Built-in Swagger UI and OpenAPI generation at `/docs`.
 *   **Built-in Auth & Security**: JWT Middleware, Rate Limiting, and CORS out of the box.
-*   **Variadic SQL**: Clean database queries like `db.query("SELECT ...", id, name)`.
 *   **Modern C++20**: Built solely for Coroutines (`co_await`).
 
 ## Requirements
 
 Blaze is tested and verified to work out-of-the-box on:
-*   **Ubuntu** (22.04, 24.04+)
-*   **Fedora** (40, 41, 42+)
-*   **Rocky Linux / AlmaLinux** (9+)
+*   **Ubuntu** (22.04+)
+*   **Fedora** (40+) / **RHEL** (9+)
 *   **macOS** (Apple Silicon/Intel)
 
-You only need the following system libraries:
-*   **CMake** (3.20+)
-*   **G++ / Clang** (C++20 support)
-*   **OpenSSL** (`libssl-dev` / `openssl-devel`)
-*   **libpq** (`libpq-dev` / `libpq-devel`) ``//optional``
-*   **libmariadb** (`libmariadb-dev` / `mariadb-devel`) ``//optional``
-
-> **Note:** The installer (`install.sh`) handles these dependencies and repository setup (EPEL/CRB) automatically for you.
+> **Note:** The installer (`install.sh`) handles all system dependencies (CMake, OpenSSL, Drivers) automatically for you.
 
 ## Installation
 
@@ -64,22 +55,22 @@ cd blaze
 ### Usage
 Once installed, create and run your first project:
 ```bash
-# Create a new project
-blaze init my-api --fullstack
+# Interactive Scaffolding
+blaze init my-api
 
-# Build and Run with Unified Logs
+# Start Development (Hot-Reload Enabled)
 cd my-api
-cd frontend && npm install && cd ..
-blaze dev
+blaze run --watch
 ```
 
 ## Quick Start
 
-Create a high-performance, validated API in less than 15 lines.
+Create a high-performance, validated API with Dependency Injection in less than 20 lines.
 
 ```cpp
 #include <blaze/app.h>
 #include <blaze/wrappers.h> // Path, Body, Query
+
 using namespace blaze;
 
 struct User { 
@@ -96,12 +87,11 @@ BLAZE_MODEL(User, id, name)
 int main() {
     App app;
 
-    // Typed Injection: Framework parses JSON, Validates it, and Injects 'user'
+    // Framework parses JSON, Validates it, and Injects 'user'
     app.post("/users", [](Body<User> user) -> Async<Json> {
-        // Safe to use immediately!
         co_return Json({
             {"status", "created"}, 
-            {"user_id", user.id} // Direct member access
+            {"user_id", user.id} 
         }); 
     });
 
@@ -109,18 +99,18 @@ int main() {
 }
 ```
 
-For a deep dive into the API, Dependency Injection, and WebSockets, see the **[Full Framework Manual](docs/MANUAL.md)**.
-
 ## CLI Reference
 
-Blaze comes with a powerful CLI to manage your entire development lifecycle. Below is a few useful commands See the **[Full CLI Reference](docs/CLI.md)** for more details.
+Blaze comes with a powerful CLI to manage your entire development lifecycle. See the **[Full CLI Reference](docs/CLI.md)** for more details.
 
-| Command | Description                                                       |
-| :--- |:------------------------------------------------------------------|
-| `init` | Scaffold a new project (add `--fullstack` for UI).                |
-| `dev` | Run C++ and Vite in parallel with unified logs.                   |
-| `add` | Add features like a `frontend` or `database` to existing projects. |
-| `doctor` | Verify your system requirements.                                  |
+| Command | Description |
+| :--- |:---|
+| `init` | Scaffold a new project (interactive). |
+| `run -w` | Build and run your app with Hot-Reload. |
+| `test` | Run the Catch2 test suite with clean summaries. |
+| `add` | Inject features (postgres, mysql, frontend) into an existing project. |
+| `dev` | Run C++ and Vite in parallel with unified logs. |
+| `doctor` | Verify your system requirements. |
 
 
 ## Testing and Security
@@ -128,12 +118,11 @@ Blaze comes with a powerful CLI to manage your entire development lifecycle. Bel
 Every commit is audited via an automated **CI pipeline** in GitHub Actions. Feel free to view **[Full Testing Pipeline](docs/TESTING.md)** for more info.
 
 *   **Logic Integrity:** Comprehensive **Catch2** unit tests for every core component (Routing, DI, JSON).
-*   **Memory Safety:** Automatic memory audit via **AddressSanitizer (ASan)** and **UBSan** on every push.
-*   **Concurrency Safety:** Race condition and deadlock detection via **ThreadSanitizer (TSan)** on every push.
+*   **Memory Safety:** Automatic memory audit via **AddressSanitizer (ASan)** and **UBSan**.
+*   **Concurrency Safety:** Race condition and deadlock detection via **ThreadSanitizer (TSan)**.
 *   **Fuzz Tested:** Resilient against malformed packets and malicious payloads.
-*   **Compatability:** Verified builds and tests on **Ubuntu Linux** and **macOS**.
 
 
 ## License
 
-[MIT](LICENSE)
+Blaze is 100% open-source under the [MIT](LICENSE) license.

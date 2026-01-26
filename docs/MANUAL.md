@@ -1,4 +1,4 @@
-# Blaze v1.1 Documentation
+# Blaze v1.0.0 Documentation
 
 Welcome to the official manual for the Blaze Framework.
 
@@ -18,31 +18,24 @@ To get the most out of Blaze, explore our detailed guides:
 
 ---
 
-## Quick Start (60 Seconds)
-
-### 1. Create a Project
-```bash
-blaze init my-app
-cd my-app
-```
-
-### 2. Define a Route
-In `src/main.cpp`:
-```cpp
-app.get("/", []() -> Async<Json> {
-    co_return Json({{"message", "Hello Blaze!"}});
-});
-```
-
-### 3. Run it
-```bash
-blaze run
-```
-
----
-
 ## Framework Philosophy
-Blaze is built on three core pillars:
-1.  **Zero Manual Memory Management**: Use `shared_ptr` and `co_await`.
-2.  **Modular by Design**: Only link what you use.
-3.  **Modern C++20**: Leverage coroutines for simple, high-performance async logic.
+
+Blaze was built to solve the "Performance vs. Productivity" dilemma in C++.
+
+### 1. Zero Manual Memory Management
+We believe `new` and `delete` should be relics of the past. Blaze uses `std::shared_ptr` and `std::move` semantics internally to guarantee memory safety without garbage collection pauses.
+
+### 2. Modular by Design
+Legacy C++ frameworks force you to link massive 50MB binaries. Blaze is granular.
+*   Need a database? `blaze add postgres`.
+*   Need a frontend? `blaze add frontend`.
+*   Need nothing? You get a <5MB binary.
+
+### 3. Modern C++20 Coroutines
+Blaze uses `co_await` to let you write asynchronous, non-blocking code that looks synchronous.
+
+```cpp
+// This looks blocking, but it suspends!
+auto user = co_await db.query("SELECT * FROM users");
+auto data = co_await http.get("https://api.example.com");
+```
