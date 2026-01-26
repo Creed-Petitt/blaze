@@ -82,6 +82,21 @@ func addDriver(name, pkgName, libName string, silent bool) {
 	}
 
 	if !silent {
+		// Quick system check for the driver library
+		pkgConfigName := strings.TrimSuffix(pkgName, "-dev")
+		if pkgConfigName == "libmariadb" {
+			pkgConfigName = "libmariadb" // Match doctor.go
+		}
+		if pkgConfigName == "libpq" {
+			pkgConfigName = "libpq"
+		}
+
+		check := exec.Command("pkg-config", "--exists", pkgConfigName)
+		if err := check.Run(); err != nil {
+			fmt.Printf(orangeStyle.Render("  [!] Warning: %s dev libs not found on system.\n"), name)
+			fmt.Printf(dimStyle.Render("      You may need to run 'blaze doctor --fix' or install %s manually.\n"), pkgName)
+		}
+
 		fmt.Println(blueStyle.Render(fmt.Sprintf("  ✓ Added %s support", name)))
 	}
 }

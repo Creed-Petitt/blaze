@@ -37,9 +37,9 @@ func runTests() {
 	go func() {
 		// Auto-Configure if build folder is missing
 		if _, err := os.Stat("build/CMakeCache.txt"); os.IsNotExist(err) {
-			cmakeFlags := []string{"-", "build", "-", "CMAKE_BUILD_TYPE=Debug"}
+			cmakeFlags := []string{"-B", "build", "-D", "CMAKE_BUILD_TYPE=Debug", "."}
 			if _, err := exec.LookPath("ccache"); err == nil {
-				cmakeFlags = append(cmakeFlags, "-", "CMAKE_CXX_COMPILER_LAUNCHER=ccache")
+				cmakeFlags = append(cmakeFlags, "-D", "CMAKE_CXX_COMPILER_LAUNCHER=ccache")
 			}
 
 			// We use a small range (0.0 - 0.2) for config

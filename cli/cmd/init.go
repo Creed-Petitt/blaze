@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -24,6 +25,13 @@ var initCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		projectName := args[0]
+
+		// Sanitize project name
+		if strings.Contains(projectName, "..") || strings.Contains(projectName, "/") || strings.Contains(projectName, "\\") {
+			fmt.Println(orangeStyle.Render("\n  [!] Error: Project name cannot contain path separators or '..'"))
+			os.Exit(1)
+		}
+
 		features := selectFeatures()
 
 		var frontend string

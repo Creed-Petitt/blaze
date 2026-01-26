@@ -150,11 +150,11 @@ func RunBlazeBuild(release bool, showLogo bool) error {
 	var buildErr error
 	doneChan := make(chan bool)
 
+	go func() {
+		ticker := time.NewTicker(time.Millisecond * 100)
+		fakePercent := 0.0
 		go func() {
-			ticker := time.NewTicker(time.Millisecond * 100)
-			fakePercent := 0.0
-			go func() {
-				for {
+			for {
 				select {
 				case <-doneChan:
 					ticker.Stop()
@@ -169,7 +169,7 @@ func RunBlazeBuild(release bool, showLogo bool) error {
 		}()
 
 		// Auto-Detect ccache
-		cmakeFlags := []string{" -B", "build", fmt.Sprintf("-DCMAKE_BUILD_TYPE=%s", buildMode)}
+		cmakeFlags := []string{"-B", "build", fmt.Sprintf("-DCMAKE_BUILD_TYPE=%s", buildMode), "."}
 		if _, err := exec.LookPath("ccache"); err == nil {
 			cmakeFlags = append(cmakeFlags, "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache")
 		}
@@ -214,7 +214,7 @@ func runCmdWithParsing(p *tea.Program, command string, args []string, startRange
 
 	go func() {
 		scanner := bufio.NewScanner(pr)
-		rePercent := regexp.MustCompile(`[\s*(\d+)%]`)
+		rePercent := regexp.MustCompile(`\[\s*(\d+)%\]`)
 		for scanner.Scan() {
 			line := scanner.Text()
 			outputLog.WriteString(line + "\n")
