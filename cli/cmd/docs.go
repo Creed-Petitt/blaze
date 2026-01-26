@@ -20,10 +20,10 @@ var docsCmd = &cobra.Command{
 		fmt.Println(textStyle.Render("  ------------------------------"))
 		fmt.Println(textStyle.Render("\n  Blaze automatically generates OpenAPI 3.0 specs for your API."))
 		fmt.Println(textStyle.Render("  No configuration or annotations are required.\n"))
-		
+
 		fmt.Println(textStyle.Render("  [+] Swagger UI:   ") + linkStyle.Render("http://localhost:8080/docs"))
 		fmt.Println(textStyle.Render("  [+] OpenAPI Spec: ") + linkStyle.Render("http://localhost:8080/openapi.json"))
-		
+
 		fmt.Println(textStyle.Render("\n  To include models in your docs, use the BLAZE_MODEL macro."))
 		fmt.Println(textStyle.Render("  To document path/query params, use the Path<T> and Query<T> wrappers.\n"))
 	},

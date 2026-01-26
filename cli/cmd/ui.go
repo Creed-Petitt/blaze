@@ -17,11 +17,11 @@ import (
 )
 
 var (
-	colorB = lipgloss.Color("202") // Blaze Orange
-	styleB = lipgloss.NewStyle().Foreground(colorB).Bold(true)
-	orangeStyle = lipgloss.NewStyle().Foreground(colorB).Bold(true)
-	blueStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#00A2FF"))
-	whiteStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Bold(true)
+	colorB       = lipgloss.Color("202") // Blaze Orange
+	styleB       = lipgloss.NewStyle().Foreground(colorB).Bold(true)
+	orangeStyle  = lipgloss.NewStyle().Foreground(colorB).Bold(true)
+	blueStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#00A2FF"))
+	whiteStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Bold(true)
 	percentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("246"))
 	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
@@ -49,12 +49,12 @@ type errMsg error
 type quitMsg struct{}
 
 type model struct {
-	spinner    spinner.Model
-	percent    float64
-	funnyMsg   string
-	err        error
-	quitting   bool
-	showLogo   bool
+	spinner  spinner.Model
+	percent  float64
+	funnyMsg string
+	err      error
+	quitting bool
+	showLogo bool
 }
 
 func initialModel(showLogo bool) model {
@@ -63,10 +63,10 @@ func initialModel(showLogo bool) model {
 	s.Style = lipgloss.NewStyle().Foreground(colorB)
 
 	return model{
-		spinner:    s,
-		funnyMsg:   loadingMessages[0],
-		percent:    0,
-		showLogo:   showLogo,
+		spinner:  s,
+		funnyMsg: loadingMessages[0],
+		percent:  0,
+		showLogo: showLogo,
 	}
 }
 
@@ -112,15 +112,19 @@ func (m model) View() string {
 
 	width := 30
 	full := int(m.percent * float64(width))
-	if full > width { full = width }
+	if full > width {
+		full = width
+	}
 	bar := styleB.Render(strings.Repeat("━", full)) + dimStyle.Render(strings.Repeat("━", width-full))
-	
-pct := int(m.percent * 100)
-	if pct > 100 { pct = 100 }
 
-	s += fmt.Sprintf("  %s %s %s %s\n", 
+	pct := int(m.percent * 100)
+	if pct > 100 {
+		pct = 100
+	}
+
+	s += fmt.Sprintf("  %s %s %s %s\n",
 		m.spinner.View(),
-		bar, 
+		bar,
 		percentStyle.Render(fmt.Sprintf("%3d%%", pct)),
 		m.funnyMsg,
 	)
@@ -138,7 +142,9 @@ func RunBlazeBuild(release bool, showLogo bool) error {
 	p := tea.NewProgram(m)
 
 	buildMode := "Debug"
-	if release { buildMode = "Release" }
+	if release {
+		buildMode = "Release"
+	}
 
 	var buildErr error
 	doneChan := make(chan bool)
@@ -221,7 +227,7 @@ func runCmdWithParsing(p *tea.Program, command string, args []string, startRange
 
 	err := cmd.Wait()
 	pw.Close()
-	
+
 	if err != nil {
 		return BeautifyError(outputLog.String())
 	}
@@ -238,16 +244,20 @@ func BeautifyError(raw string) error {
 	var errorLines []string
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "" { continue }
+		if trimmed == "" {
+			continue
+		}
 		if strings.Contains(line, "error:") || strings.Contains(line, "CMake Error") {
-			errorLines = append(errorLines, "  " + trimmed)
+			errorLines = append(errorLines, "  "+trimmed)
 		}
 	}
 
 	if len(errorLines) == 0 {
 		out += errStyle.Render("  [!] Build failed:") + "\n"
 		start := len(lines) - 8
-		if start < 0 { start = 0 }
+		if start < 0 {
+			start = 0
+		}
 		for i := start; i < len(lines); i++ {
 			if t := strings.TrimSpace(lines[i]); t != "" {
 				out += "  " + t + "\n"
@@ -256,11 +266,13 @@ func BeautifyError(raw string) error {
 	} else {
 		out += errStyle.Render("  [!] Error Details:") + "\n"
 		limit := 10
-		if len(errorLines) < limit { limit = len(errorLines) }
+		if len(errorLines) < limit {
+			limit = len(errorLines)
+		}
 		for i := 0; i < limit; i++ {
 			out += errorLines[i] + "\n"
 		}
 	}
-	
+
 	return fmt.Errorf("%s", out)
 }

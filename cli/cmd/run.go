@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -77,7 +78,12 @@ func runWithWatch(release bool) {
 	isFirstRun := true
 	projectName := getProjectName()
 	
+	var buildLock sync.Mutex
+
 	restart := func() {
+		if !buildLock.TryLock() { return }
+		defer buildLock.Unlock()
+
 		if currentCmd != nil && currentCmd.Process != nil {
 			currentCmd.Process.Kill()
 		}
@@ -104,20 +110,15 @@ func runWithWatch(release bool) {
 
 	restart()
 
-	// Debounce timer
 	var timer *time.Timer
-	
 	for {
 		select {
 		case event, ok := <-watcher.Events:
 			if !ok { return }
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				// Reset timer on every write event
-				if timer != nil {
-					timer.Stop()
-				}
+				if timer != nil { timer.Stop() }
 				timer = time.AfterFunc(100*time.Millisecond, func() {
-					restart()
+					go restart()
 				})
 			}
 		case err, ok := <-watcher.Errors:

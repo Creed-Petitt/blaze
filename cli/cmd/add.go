@@ -56,7 +56,9 @@ func init() {
 
 func addDriver(name, pkgName, libName string, silent bool) {
 	if _, err := os.Stat("CMakeLists.txt"); os.IsNotExist(err) {
-		if !silent { fmt.Println(blueStyle.Render("Error: No Blaze project found.")) }
+		if !silent {
+			fmt.Println(blueStyle.Render("Error: No Blaze project found."))
+		}
 		return
 	}
 
@@ -64,7 +66,8 @@ func addDriver(name, pkgName, libName string, silent bool) {
 	cmakeStr := string(content)
 
 	if strings.Contains(cmakeStr, libName) {
-		if !silent { fmt.Println(blueStyle.Render(fmt.Sprintf("  ✓ %s is already configured", name)))
+		if !silent {
+			fmt.Println(blueStyle.Render(fmt.Sprintf("  ✓ %s is already configured", name)))
 		}
 		return
 	}
@@ -91,7 +94,7 @@ func addTesting(silent bool) {
 
 	content, _ := os.ReadFile("CMakeLists.txt")
 	cmakeStr := string(content)
-	
+
 	if !strings.Contains(cmakeStr, "enable_testing()") {
 		// Detect existing drivers to inject into the test suite
 		existingDrivers := ""
@@ -139,16 +142,22 @@ func addFrontend() {
 	}
 	checkNpm()
 	framework := selectFrontend()
-	if framework == "" { return }
+	if framework == "" {
+		return
+	}
 
 	fmt.Println(blueStyle.Render(fmt.Sprintf("\n  ✓ Adding %s frontend...", framework)))
 
 	viteTemplate := "vanilla-ts"
 	switch framework {
-	case "React": viteTemplate = "react-ts"
-	case "Vue":   viteTemplate = "vue-ts"
-	case "Svelte": viteTemplate = "svelte-ts"
-	case "Solid":  viteTemplate = "solid-ts"
+	case "React":
+		viteTemplate = "react-ts"
+	case "Vue":
+		viteTemplate = "vue-ts"
+	case "Svelte":
+		viteTemplate = "svelte-ts"
+	case "Solid":
+		viteTemplate = "solid-ts"
 	}
 
 	cmd := exec.Command("npm", "create", "vite@latest", "frontend", "--", "--template", viteTemplate)

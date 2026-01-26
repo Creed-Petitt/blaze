@@ -79,9 +79,13 @@ func (m featureSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q", "esc":
 			return m, tea.Quit
 		case "up", "k":
-			if m.cursor > 0 { m.cursor-- }
+			if m.cursor > 0 {
+				m.cursor--
+			}
 		case "down", "j":
-			if m.cursor < len(m.choices) { m.cursor++ }
+			if m.cursor < len(m.choices) {
+				m.cursor++
+			}
 		case "enter", " ", "x":
 			if m.cursor == len(m.choices) {
 				m.done = true
@@ -94,15 +98,21 @@ func (m featureSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m featureSelectionModel) View() string {
-	if m.done { return "" }
+	if m.done {
+		return ""
+	}
 	s := fmt.Sprintf("\n%s\n\n", orangeStyle.Render("  Select Backend Features:"))
 
 	for i, choice := range m.choices {
 		cursor := "  "
-		if m.cursor == i { cursor = orangeStyle.Render("❯ ") }
+		if m.cursor == i {
+			cursor = orangeStyle.Render("❯ ")
+		}
 
 		checked := "[ ]"
-		if choice.selected { checked = blueStyle.Render("[x]") }
+		if choice.selected {
+			checked = blueStyle.Render("[x]")
+		}
 
 		s += fmt.Sprintf("%s%s %s\n", cursor, checked, choice.title)
 	}
@@ -120,13 +130,19 @@ func (m featureSelectionModel) View() string {
 func selectFeatures() []string {
 	p := tea.NewProgram(initialFeatureModel())
 	m, err := p.Run()
-	if err != nil { os.Exit(1) }
+	if err != nil {
+		os.Exit(1)
+	}
 
 	var selected []string
 	if finalModel, ok := m.(featureSelectionModel); ok {
-		if !finalModel.done { os.Exit(0) }
+		if !finalModel.done {
+			os.Exit(0)
+		}
 		for _, item := range finalModel.choices {
-			if item.selected { selected = append(selected, item.title) }
+			if item.selected {
+				selected = append(selected, item.title)
+			}
 		}
 	}
 	return selected
@@ -159,11 +175,16 @@ func (m selectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q": return m, tea.Quit
+		case "ctrl+c", "q":
+			return m, tea.Quit
 		case "up", "k":
-			if m.cursor > 0 { m.cursor-- }
+			if m.cursor > 0 {
+				m.cursor--
+			}
 		case "down", "j":
-			if m.cursor < len(m.choices)-1 { m.cursor++ }
+			if m.cursor < len(m.choices)-1 {
+				m.cursor++
+			}
 		case "enter", " ":
 			m.selected = m.choices[m.cursor]
 			return m, tea.Quit
@@ -187,14 +208,20 @@ func (m selectionModel) View() string {
 func selectFrontend() string {
 	p := tea.NewProgram(initialSelectionModel())
 	m, err := p.Run()
-	if err != nil { os.Exit(1) }
-	if f, ok := m.(selectionModel); ok { return f.selected }
+	if err != nil {
+		os.Exit(1)
+	}
+	if f, ok := m.(selectionModel); ok {
+		return f.selected
+	}
 	return ""
 }
 
 func createProject(name string, frontend string, features []string) {
-	dirs := []string{ name, filepath.Join(name, "src"), filepath.Join(name, "include") }
-	for _, dir := range dirs { os.MkdirAll(dir, 0755) }
+	dirs := []string{name, filepath.Join(name, "src"), filepath.Join(name, "include")}
+	for _, dir := range dirs {
+		os.MkdirAll(dir, 0755)
+	}
 
 	files := map[string]string{
 		"templates/main.cpp.tmpl":           filepath.Join(name, "src/main.cpp"),
@@ -216,23 +243,30 @@ func createProject(name string, frontend string, features []string) {
 	}
 
 	origDir, _ := os.Getwd()
-	os.Chdir(name) 
+	os.Chdir(name)
 	for _, f := range features {
 		switch f {
-		case "PostgreSQL": addDriver("postgres", "libpq-dev", "blaze::postgres", false)
-		case "MySQL":      addDriver("mysql", "libmariadb-dev", "blaze::mysql", false)
-		case "Catch2 Testing": addTesting(false)
+		case "PostgreSQL":
+			addDriver("postgres", "libpq-dev", "blaze::postgres", false)
+		case "MySQL":
+			addDriver("mysql", "libmariadb-dev", "blaze::mysql", false)
+		case "Catch2 Testing":
+			addTesting(false)
 		}
 	}
-	os.Chdir(origDir) 
+	os.Chdir(origDir)
 
 	if frontend != "" {
 		viteTemplate := "vanilla-ts"
 		switch frontend {
-		case "React": viteTemplate = "react-ts"
-		case "Vue":   viteTemplate = "vue-ts"
-		case "Svelte": viteTemplate = "svelte-ts"
-		case "Solid":  viteTemplate = "solid-ts"
+		case "React":
+			viteTemplate = "react-ts"
+		case "Vue":
+			viteTemplate = "vue-ts"
+		case "Svelte":
+			viteTemplate = "svelte-ts"
+		case "Solid":
+			viteTemplate = "solid-ts"
 		}
 		cmd := exec.Command("npm", "create", "vite@latest", "frontend", "--", "--template", viteTemplate)
 		cmd.Dir = name

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -57,7 +58,12 @@ func runDev() {
 	})
 
 	isFirstRun := true
+	var buildLock sync.Mutex
+
 	restartBackend := func() {
+		if !buildLock.TryLock() { return }
+		defer buildLock.Unlock()
+
 		if backendCmd != nil && backendCmd.Process != nil {
 			backendCmd.Process.Kill()
 		}
@@ -113,7 +119,7 @@ func runDev() {
 			if event.Op&fsnotify.Write == fsnotify.Write {
 				if timer != nil { timer.Stop() }
 				timer = time.AfterFunc(100*time.Millisecond, func() {
-					restartBackend()
+					go restartBackend()
 				})
 			}
 		case <-watcher.Errors:

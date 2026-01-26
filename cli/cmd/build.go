@@ -13,7 +13,7 @@ var buildCmd = &cobra.Command{
 	Short: "Compile the project without running it",
 	Run: func(cmd *cobra.Command, args []string) {
 		var (
-			titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF4C4C"))
+			titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF4C4C"))
 			successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))
 		)
 

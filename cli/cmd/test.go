@@ -31,7 +31,7 @@ func runTests() {
 
 	fmt.Println("\nRunning Blaze Test Suite...")
 
-	m := initialModel(false) 
+	m := initialModel(false)
 	p := tea.NewProgram(m)
 
 	go func() {
@@ -41,7 +41,7 @@ func runTests() {
 			if _, err := exec.LookPath("ccache"); err == nil {
 				cmakeFlags = append(cmakeFlags, "-", "CMAKE_CXX_COMPILER_LAUNCHER=ccache")
 			}
-			
+
 			// We use a small range (0.0 - 0.2) for config
 			if err := runCmdWithParsing(p, "cmake", cmakeFlags, 0, 0.2); err != nil {
 				p.Send(errMsg(err))
@@ -83,7 +83,7 @@ func runTests() {
 				break
 			}
 		}
-		
+
 		successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Bold(true)
 		fmt.Printf("\n  %s %s\n\n", successStyle.Render("[+]"), summary)
 	}

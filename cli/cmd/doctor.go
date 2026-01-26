@@ -69,18 +69,24 @@ func runDoctor(fix bool) {
 	if !checkCommand("g++", "G++ Compiler") && !checkCommand("clang++", "Clang++ Compiler") {
 		allGood = false
 	}
-	if !checkCommand("cmake", "CMake Build System") { allGood = false }
-	checkCommand("docker", "Docker Engine") 
+	if !checkCommand("cmake", "CMake Build System") {
+		allGood = false
+	}
+	checkCommand("docker", "Docker Engine")
 
 	fmt.Println("")
 	fmt.Println(sectionStyle.Render("  Libraries"))
 
 	if runtime.GOOS == "linux" {
-		if !checkLib("openssl", "OpenSSL Dev Libs", "libssl-dev") { allGood = false }
+		if !checkLib("openssl", "OpenSSL Dev Libs", "libssl-dev") {
+			allGood = false
+		}
 		checkLib("libpq", "PostgreSQL Libs", "libpq-dev")
 		checkLib("libmariadb", "MariaDB Connector", "libmariadb-dev")
 	} else if runtime.GOOS == "darwin" {
-		if !checkLib("openssl", "OpenSSL Dev Libs", "openssl") { allGood = false }
+		if !checkLib("openssl", "OpenSSL Dev Libs", "openssl") {
+			allGood = false
+		}
 		checkLib("libpq", "PostgreSQL Libs", "libpq")
 	}
 
