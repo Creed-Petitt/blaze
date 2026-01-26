@@ -226,7 +226,14 @@ func selectFrontend() string {
 }
 
 func createProject(name string, frontend string, features []string) {
-	dirs := []string{name, filepath.Join(name, "src"), filepath.Join(name, "include")}
+	dirs := []string{
+		name,
+		filepath.Join(name, "src"),
+		filepath.Join(name, "src", "controllers"),
+		filepath.Join(name, "include"),
+		filepath.Join(name, "include", "controllers"),
+		filepath.Join(name, "include", "models"),
+	}
 	for _, dir := range dirs {
 		os.MkdirAll(dir, 0755)
 	}

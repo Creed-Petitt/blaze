@@ -5,6 +5,9 @@ using namespace blaze;
 int main() {
     App app;
 
+    // Register Generated Controllers
+    // controllers::UserController::register_routes(app);
+
     // Welcome Route
     app.get("/", []() -> Async<Json> {
         co_return Json({

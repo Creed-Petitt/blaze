@@ -1,0 +1,15 @@
+#include "controllers/{{.FileName}}_controller.h"
+
+namespace controllers {
+
+void {{.ClassName}}::register_routes(blaze::App& app) {
+    // GET /{{.RoutePath}}
+    app.get("/{{.RoutePath}}", [](blaze::Context& ctx) -> blaze::Async<blaze::Json> {
+        co_return blaze::Json({
+            {"status", "ok"},
+            {"controller", "{{.ClassName}}"}
+        });
+    });
+}
+
+} // namespace controllers

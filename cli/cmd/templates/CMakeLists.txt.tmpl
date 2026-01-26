@@ -16,8 +16,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(blaze)
 
+# Automatically find all source files (Magic Builds)
+file(GLOB_RECURSE SOURCES "src/*.cpp")
+
 # Create the Executable
-add_executable({{ .ProjectName }} src/main.cpp)
+add_executable({{ .ProjectName }} ${SOURCES})
+
+# Map include directory
+target_include_directories({{ .ProjectName }} PRIVATE include)
 
 # Link Libraries
 target_link_libraries({{ .ProjectName }} PRIVATE 
