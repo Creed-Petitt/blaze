@@ -28,14 +28,16 @@ func init() {
 
 func runDoctor(fix bool) {
 	var (
-		titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF4C4C")) // Blaze Red
-		sectionStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")) // White
-		successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))            // Green
-		failStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C"))            // Red
+		whiteStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF"))
+		greenCheck   = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).SetString("✓")
+		redCross     = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")).SetString("✗")
+		greenText    = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))
+		redText      = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C"))
+		sectionStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("240")) // Grey for headers
 	)
 
-	fmt.Println(titleStyle.Render("\n  Blaze System Check"))
-	fmt.Println(sectionStyle.Render("  ------------------ "))
+	fmt.Println(whiteStyle.Render("\n  Blaze System Check"))
+	fmt.Println("")
 
 	allGood := true
 	missingPkgs := []string{}
@@ -43,29 +45,27 @@ func runDoctor(fix bool) {
 	checkCommand := func(name string, display string) bool {
 		path, err := exec.LookPath(name)
 		if err == nil {
-			fmt.Printf("  %s %s (%s)\n", successStyle.Render("[+]"), sectionStyle.Render(display), path)
+			fmt.Printf("  %s %s (%s)\n", greenCheck, display, path)
 			return true
 		}
-		fmt.Printf("  %s %s (Not found)\n", failStyle.Render("[!]"), sectionStyle.Render(display))
+		fmt.Printf("  %s %s (Not found)\n", redCross, display)
 		return false
 	}
 
 	checkLib := func(pkgName, display, installName string) bool {
 		cmd := exec.Command("pkg-config", "--exists", pkgName)
 		if err := cmd.Run(); err == nil {
-			fmt.Printf("  %s %s (Found via pkg-config)\n", successStyle.Render("[+]"), sectionStyle.Render(display))
+			fmt.Printf("  %s %s\n", greenCheck, display)
 			return true
 		}
-		fmt.Printf("  %s %s (Not found)\n", failStyle.Render("[!]"), sectionStyle.Render(display))
+		fmt.Printf("  %s %s (Not found)\n", redCross, display)
 		if installName != "" {
 			missingPkgs = append(missingPkgs, installName)
 		}
 		return false
 	}
 
-	fmt.Println("")
 	fmt.Println(sectionStyle.Render("  Core Tools"))
-
 	if !checkCommand("g++", "G++ Compiler") && !checkCommand("clang++", "Clang++ Compiler") {
 		allGood = false
 	}
@@ -85,7 +85,7 @@ func runDoctor(fix bool) {
 	}
 
 	if fix && len(missingPkgs) > 0 {
-		fmt.Println(titleStyle.Render("\n  Attempting to fix missing dependencies..."))
+		fmt.Println(whiteStyle.Render("\n  Attempting to fix missing dependencies..."))
 		var installCmd *exec.Cmd
 		if runtime.GOOS == "linux" {
 			args := append([]string{"apt-get", "install", "-y"}, missingPkgs...)
@@ -99,7 +99,7 @@ func runDoctor(fix bool) {
 			installCmd.Stdout = os.Stdout
 			installCmd.Stderr = os.Stderr
 			if err := installCmd.Run(); err == nil {
-				fmt.Println(successStyle.Render("\n  [+] Successfully installed dependencies. Run doctor again!"))
+				fmt.Println(greenText.Render("\n  Successfully installed dependencies. Run doctor again!"))
 				return
 			}
 		}
@@ -107,11 +107,11 @@ func runDoctor(fix bool) {
 
 	fmt.Println("")
 	if allGood {
-		fmt.Println(successStyle.Render("  [+] System Ready. You are good to go!"))
+		fmt.Println(greenText.Render("  System Ready. You are good to go!"))
 	} else {
-		fmt.Println(failStyle.Render("  [!] Some requirements are missing."))
+		fmt.Println(redText.Render("  Some requirements are missing."))
 		if !fix {
-			fmt.Println(sectionStyle.Render("      Tip: Run 'blaze doctor --fix' to auto-install missing libs."))
+			fmt.Println(whiteStyle.Render("  Tip: Run 'blaze doctor --fix' to auto-install missing libs."))
 		}
 	}
 	fmt.Println("")

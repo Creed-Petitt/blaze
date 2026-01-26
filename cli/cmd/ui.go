@@ -161,7 +161,13 @@ func RunBlazeBuild(release bool, showLogo bool) error {
 			}
 		}()
 
-		if err := runCmdWithParsing(p, "cmake", []string{"-B", "build", fmt.Sprintf("-DCMAKE_BUILD_TYPE=%s", buildMode)}, 0, 0.15); err != nil {
+		// Auto-Detect ccache
+		cmakeFlags := []string{"-B", "build", fmt.Sprintf("-DCMAKE_BUILD_TYPE=%s", buildMode)}
+		if _, err := exec.LookPath("ccache"); err == nil {
+			cmakeFlags = append(cmakeFlags, "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache")
+		}
+
+		if err := runCmdWithParsing(p, "cmake", cmakeFlags, 0, 0.15); err != nil {
 			close(doneChan)
 			buildErr = err
 			p.Send(errMsg(err))
@@ -225,32 +231,22 @@ func runCmdWithParsing(p *tea.Program, command string, args []string, startRange
 func BeautifyError(raw string) error {
 	headerStyle := lipgloss.NewStyle().Background(colorB).Foreground(lipgloss.Color("#FFFFFF")).Padding(0, 1).Bold(true)
 	errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4C4C")).Bold(true)
-	tipStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00A2FF")).Italic(true)
 
 	out := "\n" + headerStyle.Render(" COMPILER ERROR ") + "\n\n"
 
-	if strings.Contains(raw, "undefined reference to `mysql_") {
-		out += errStyle.Render("  [!] Driver Missing\n")
-		out += "  MySQL functions used but driver isn't linked.\n"
-		out += tipStyle.Render("  Tip: Run 'blaze add mysql' to fix this.")
-		return fmt.Errorf(out)
-	}
-
-	// Extract lines containing errors or CMake issues
 	lines := strings.Split(raw, "\n")
 	var errorLines []string
 	for _, line := range lines {
-		t := strings.TrimSpace(line)
-		if t == "" { continue }
-		if strings.Contains(line, "error:") || strings.Contains(line, "CMake Error") || strings.Contains(line, "note:") {
-			errorLines = append(errorLines, "  "+t)
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" { continue }
+		if strings.Contains(line, "error:") || strings.Contains(line, "CMake Error") {
+			errorLines = append(errorLines, "  " + trimmed)
 		}
 	}
 
 	if len(errorLines) == 0 {
-		// Fallback: show last 10 lines of raw output
-		out += errStyle.Render("  [!] Build failed:\n")
-		start := len(lines) - 10
+		out += errStyle.Render("  [!] Build failed:") + "\n"
+		start := len(lines) - 8
 		if start < 0 { start = 0 }
 		for i := start; i < len(lines); i++ {
 			if t := strings.TrimSpace(lines[i]); t != "" {
@@ -258,11 +254,13 @@ func BeautifyError(raw string) error {
 			}
 		}
 	} else {
-		out += errStyle.Render("  [!] Error Details:\n")
-		limit := 15
+		out += errStyle.Render("  [!] Error Details:") + "\n"
+		limit := 10
 		if len(errorLines) < limit { limit = len(errorLines) }
-		out += strings.Join(errorLines[:limit], "\n") + "\n"
+		for i := 0; i < limit; i++ {
+			out += errorLines[i] + "\n"
+		}
 	}
 	
-	return fmt.Errorf(out)
+	return fmt.Errorf("%s", out)
 }

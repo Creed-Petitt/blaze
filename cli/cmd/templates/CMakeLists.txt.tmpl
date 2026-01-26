@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD 20)
 
 include(FetchContent)
 
+# Use Global Blaze Cache (Instant Builds)
+set(FETCHCONTENT_BASE_DIR "$ENV{HOME}/.blaze/cache")
+
 # Download Blaze Framework
 FetchContent_Declare(
     blaze
@@ -17,7 +20,6 @@ FetchContent_MakeAvailable(blaze)
 add_executable({{ .ProjectName }} src/main.cpp)
 
 # Link Libraries
-# Blaze is modular. You only link what you need.
 target_link_libraries({{ .ProjectName }} PRIVATE 
     blaze::core
     # [[BLAZE_DRIVERS_START]]
