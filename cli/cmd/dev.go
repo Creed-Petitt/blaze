@@ -3,9 +3,11 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,8 +44,36 @@ func runDev() {
 
 	// Setup Processes
 	var backendCmd *exec.Cmd
+
 	frontendCmd := exec.Command("npm", "run", "dev")
 	frontendCmd.Dir = "frontend"
+	
+	// Pipe BOTH streams to our parser to swallow the noise
+	frontendOut, _ := frontendCmd.StdoutPipe()
+	frontendErr, _ := frontendCmd.StderrPipe()
+	
+	frontendCmd.Start()
+
+	// Parse Frontend URL asynchronously
+	parseStream := func(stream io.Reader) {
+		scanner := bufio.NewScanner(stream)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, "Local:") && strings.Contains(line, "http") {
+				parts := strings.Fields(line)
+				for _, p := range parts {
+					if strings.HasPrefix(p, "http") {
+						// Wait a tiny bit to ensure backend logs print first
+						time.Sleep(100 * time.Millisecond)
+						fmt.Printf("Frontend: %s\n\n", greenStyle.Render(p))
+					}
+				}
+			}
+		}
+	}
+
+	go parseStream(frontendOut)
+	go parseStream(frontendErr)
 
 	// Watcher for Backend
 	watcher, _ := fsnotify.NewWatcher()
@@ -79,8 +109,9 @@ func runDev() {
 		isFirstRun = false
 
 		fmt.Printf("Launching %s\n", projectName)
-		fmt.Printf("Local: http://localhost:8080\n")
-		fmt.Printf("Docs:  http://localhost:8080/docs\n\n")
+		fmt.Printf("Local:    http://localhost:8080\n")
+		fmt.Printf("Docs:     http://localhost:8080/docs\n")
+		// Frontend URL will be printed by the goroutine above
 
 		backendCmd = exec.Command(backendPath)
 		stdout, _ := backendCmd.StdoutPipe()
@@ -102,13 +133,6 @@ func runDev() {
 	}
 
 	restartBackend()
-
-	// Frontend Process
-	go func() {
-		frontendCmd.Stdout = os.Stdout
-		frontendCmd.Stderr = os.Stderr
-		frontendCmd.Run()
-	}()
 
 	// Watch Loop with Debounce
 	var timer *time.Timer
