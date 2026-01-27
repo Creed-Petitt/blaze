@@ -1,0 +1,11 @@
+#pragma once
+#include <blaze/model.h>
+#include <string>
+
+struct {{.ClassName}} {
+    int id;
+    // std::string name;
+
+    // BLAZE_MODEL enables JSON and Database mapping
+    BLAZE_MODEL({{.ClassName}}, id)
+};
