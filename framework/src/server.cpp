@@ -121,7 +121,12 @@ void WebSocketSession<Stream>::on_read(beast::error_code ec, std::size_t bytes_t
 
     if(ec) {
         // Log real errors but don't spam for normal disconnects
-        if (ec != net::error::operation_aborted) {
+        // 107 = Transport endpoint is not connected (Linux)
+        // 104 = Connection reset by peer
+        if (ec != net::error::operation_aborted && 
+            ec != net::error::connection_reset &&
+            ec != beast::error::timeout && // Silence timeout logs
+            ec.value() != 107) {
             std::cerr << "[WS] Session Error: " << ec.message() << "\n";
         }
         return;

@@ -43,6 +43,13 @@ struct SearchRequest {
 };
 BLAZE_MODEL(SearchRequest, name)
 
+// NEW: Model without table_name override to test inference
+struct AuditLog {
+    int id;
+    std::string action;
+};
+BLAZE_MODEL(AuditLog, id, action)
+
 class UserService {
 public:
     BLAZE_DEPS(Database)
@@ -189,6 +196,22 @@ int main() {
     app.get("/health", [](Response& res) -> Async<void> {
         res.send("OK");
         co_return;
+    });
+
+    // NEW: Test Implicit JSON Conversion
+    app.get("/modern-json", []() -> Async<Json> {
+        co_return Json{{"status", "modern"}, {"version", 2}};
+    });
+
+    // NEW: Test Service Locator in Handler
+    app.get("/locator", [](Request& req) -> Async<Json> {
+        auto db = req.resolve<Database>();
+        co_return Json{{"has_db", (bool)db}};
+    });
+
+    // NEW: Test inferred table name (AuditLog -> audit_log)
+    app.get("/audit", [](Repository<AuditLog> repo) -> Async<Json> {
+        co_return Json{{"table", repo.table_name()}};
     });
 
     std::cout << "Integration App running on :8080" << std::endl;

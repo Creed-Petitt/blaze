@@ -19,27 +19,39 @@ TEST_CASE("Crypto: Base64 and Hex", "[crypto]") {
 }
 
 TEST_CASE("Crypto: JWT Signing and Verification", "[crypto]") {
-    boost::json::value payload = {{"user_id", 123}, {"role", "admin"}};
+    // New: Use blaze::Json
+    blaze::Json payload = {{"user_id", 123}, {"role", "admin"}};
     std::string secret = "super-secret-key";
 
     SECTION("Valid Token") {
         std::string token = jwt_sign(payload, secret, 3600);
         auto verified = jwt_verify(token, secret);
         
-        REQUIRE(verified.is_object());
-        CHECK(verified.as_object().at("user_id").as_int64() == 123);
+        REQUIRE(verified.is_ok());
+        CHECK(verified["user_id"].as<int>() == 123);
+    }
+
+    SECTION("Inline Syntax (Clean Look)") {
+        // This tests explicit implicit conversion from initializer_list to Json
+        std::string token = jwt_sign({
+            {"id", 999},
+            {"role", "superadmin"}
+        }, secret);
+        
+        auto verified = jwt_verify(token, secret);
+        CHECK(verified["id"].as<int>() == 999);
     }
 
     SECTION("Invalid Secret") {
         std::string token = jwt_sign(payload, secret, 3600);
         auto verified = jwt_verify(token, "wrong-secret");
-        CHECK(verified.is_null());
+        CHECK_FALSE(verified.is_ok());
     }
 
     SECTION("Expired Token") {
         std::string token = jwt_sign(payload, secret, -10); // Expired 10s ago
         auto verified = jwt_verify(token, secret);
-        CHECK(verified.is_null());
+        CHECK_FALSE(verified.is_ok());
     }
 }
 

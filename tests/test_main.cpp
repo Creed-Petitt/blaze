@@ -132,7 +132,7 @@ TEST_CASE("Repository: SQL Generation", "[db]") {
         }, boost::asio::detached);
         ioc.run_one();
 
-        CHECK(db->last_sql.find("DELETE FROM \"UserProfile\"") != std::string::npos);
+        CHECK(db->last_sql.find("DELETE FROM \"user_profiles\"") != std::string::npos);
         CHECK(db->last_params[0] == "999");
     }
 
@@ -143,7 +143,7 @@ TEST_CASE("Repository: SQL Generation", "[db]") {
         }, boost::asio::detached);
         ioc.run_one();
         
-        CHECK(db->last_sql.find("SELECT COUNT(*) FROM \"UserProfile\"") != std::string::npos);
+        CHECK(db->last_sql.find("SELECT COUNT(*) FROM \"user_profiles\"") != std::string::npos);
     }
 
     SECTION("find_where()") {
@@ -153,7 +153,7 @@ TEST_CASE("Repository: SQL Generation", "[db]") {
         }, boost::asio::detached);
         ioc.run_one();
 
-        CHECK(db->last_sql.find("SELECT \"id\", \"name\" FROM \"UserProfile\" WHERE name = $1") != std::string::npos);
+        CHECK(db->last_sql.find("SELECT \"id\", \"name\" FROM \"user_profiles\" WHERE name = $1") != std::string::npos);
         CHECK(db->last_params[0] == "test");
     }
 
