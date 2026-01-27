@@ -46,6 +46,13 @@ Json Json::operator[](std::string_view key) const {
     return Json();
 }
 
+bool Json::has(std::string_view key) const {
+    if (data_.type == Type::BOOST_VAL && data_.boost_ptr->is_object()) {
+        return data_.boost_ptr->as_object().contains(key);
+    }
+    return false;
+}
+
 template<>
 std::string Json::as<std::string>() const {
     if (data_.type == Type::BOOST_VAL) {
