@@ -20,7 +20,7 @@ To get the most out of Blaze, explore our detailed guides:
 
 ## Framework Philosophy
 
-Blaze was built to solve the "Performance vs. Productivity" dilemma in C++.
+Blaze was built to solve the "Performance vs. Productivity" dilemma in C++. 
 
 ### 1. Zero Manual Memory Management
 We believe `new` and `delete` should be relics of the past. Blaze uses `std::shared_ptr` and `std::move` semantics internally to guarantee memory safety without garbage collection pauses.
@@ -38,4 +38,22 @@ Blaze uses `co_await` to let you write asynchronous, non-blocking code that look
 // This looks blocking, but it suspends!
 auto user = co_await db.query("SELECT * FROM users");
 auto data = co_await http.get("https://api.example.com");
+```
+
+The diagram below goes into detail on exactly how Blaze works under the hood.
+
+```mermaid
+sequenceDiagram
+    participant T as Worker Thread
+    participant R1 as Request A (DB Heavy)
+    participant R2 as Request B (Quick)
+    
+    T->>R1: Start Handler
+    R1->>T: co_await DB (Suspend)
+    Note over T: Thread is now free!
+    T->>R2: Start Handler
+    R2->>T: co_return (Finish)
+    Note over T: Thread picks up A again
+    T->>R1: Resume Handler
+    R1->>T: co_return (Finish)
 ```
