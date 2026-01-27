@@ -99,6 +99,42 @@ int main() {
 }
 ```
 
+### Request Lifecycle
+
+```mermaid
+graph LR
+    %% Node Definitions
+    Client((Client))
+    Socket[Boost.Asio Socket]
+    Parser[HTTP Parser]
+    
+    subgraph Blaze [Blaze Core Engine]
+        Middleware{Middleware Chain}
+        Auth[JWT / Auth]
+        Injector[DI / Type Injection]
+    end
+
+    Handler(fa:fa-code Your co_await Handler)
+    Result[JSON Serialization]
+
+    %% Flow
+    Client -->|TCP/SSL| Socket
+    Socket --> Parser
+    Parser --> Middleware
+    Middleware --> Auth
+    Auth --> Injector
+    Injector --> Handler
+    Handler --> Result
+    Result --> Socket
+
+    %% Styling
+    style Blaze fill:#1a1a1a,stroke:#ff4500,stroke-width:2px,color:#fff
+    style Handler fill:#ff4500,stroke:#333,stroke-width:2px,color:#fff
+    style Client fill:#333,color:#fff
+    style Socket fill:#333,color:#fff
+    style Result fill:#333,color:#fff
+```
+
 ## CLI Reference
 
 Blaze comes with a powerful CLI to manage your entire development lifecycle. See the **[Full CLI Reference](docs/CLI.md)** for more details.
