@@ -151,6 +151,16 @@ public:
     }
 
     /**
+     * @brief Registers a singleton service by constructing it with arguments.
+     * usage: app.provide<JwtSecret>("my-secret");
+     * SFINAE: Disables if T is abstract (e.g. Database) or if first arg is a shared_ptr to T.
+     */
+    template<typename T, typename... Args, typename = std::enable_if_t<!std::is_abstract_v<T>>>
+    void provide(Args&&... args) {
+        services_.provide<T>(std::make_shared<T>(std::forward<Args>(args)...));
+    }
+
+    /**
      * @brief Registers an auto-wired transient service (new instance every time).
      */
     template<typename T>
