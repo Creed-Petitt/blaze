@@ -1,17 +1,36 @@
 # Dependency Injection (IoC)
 
-Blaze features a type-safe, thread-safe Dependency Injection (DI) container. This allows you to write decoupled code that is easy to test.
+Blaze features a type-safe, thread-safe Dependency Injection container, allowing you to write decoupled code that is easy to test. The diagram below showcases how a database service is implemented and managed by the framework.
+
+```mermaid
+graph LR
+    subgraph Services [Service Layer]
+        DB[(Database Pool)]
+        Repo[Repository<T>]
+        Svc[UserService]
+    end
+
+    subgraph AppCore [Blaze Core]
+        App[App Instance]
+        Router[App Router]
+    end
+
+    DB --> Repo
+    Repo --> Svc
+    Svc -.-> Router
+    Router --> App
+```
 
 ## 1. Registering Services
 Services are registered in the `App` instance during startup.
 
 ### Singleton (One instance for the whole app)
 ```cpp
-// Auto-wire (Blaze creates the instance)
+// Blaze creates the instance
 app.provide<EmailService>();
 
-// Manual (You provide the instance)
-app.service(std::make_shared<Config>("config.json"));
+// With arguments
+app.provide<Config>("config.json");
 ```
 
 ### Interface Mapping
