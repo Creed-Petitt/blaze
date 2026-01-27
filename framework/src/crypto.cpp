@@ -99,10 +99,10 @@ namespace blaze::crypto {
         return hex_encode(res);
     }
 
-    std::string jwt_sign(const boost::json::value& payload, std::string_view secret, int expires_in) {
+    std::string jwt_sign(const Json& payload, std::string_view secret, int expires_in) {
         std::string header = R"({"alg":"HS256","typ":"JWT"})";
         
-        boost::json::value full_payload = payload;
+        boost::json::value full_payload = (boost::json::value)payload;
         if (full_payload.is_object()) {
             full_payload.as_object()["exp"] = std::time(nullptr) + expires_in;
         }
@@ -116,11 +116,11 @@ namespace blaze::crypto {
         return data + "." + base64url_encode(signature);
     }
 
-    boost::json::value jwt_verify(std::string_view token, std::string_view secret) {
+    Json jwt_verify(std::string_view token, std::string_view secret) {
         size_t first_dot = token.find('.');
         size_t last_dot = token.rfind('.');
         if(first_dot == std::string::npos || last_dot == std::string::npos || first_dot == last_dot) 
-            return nullptr;
+            return blaze::Json();
 
         std::string_view data = token.substr(0, last_dot);
         std::string_view sig_b64 = token.substr(last_dot + 1);
@@ -130,7 +130,7 @@ namespace blaze::crypto {
 
         if (expected_sig.size() != received_sig.size() ||
             CRYPTO_memcmp(expected_sig.data(), received_sig.data(), expected_sig.size()) != 0) {
-            return nullptr;
+            return blaze::Json();
         }
 
         try {
@@ -141,14 +141,14 @@ namespace blaze::crypto {
                 auto& exp_val = payload.at("exp");
                 if (exp_val.is_number()) {
                     if (std::time(nullptr) > exp_val.to_number<std::int64_t>()) {
-                        return nullptr; 
+                        return blaze::Json(); 
                     }
                 }
             }
             
-            return payload;
+            return blaze::Json(payload);
         } catch (...) {
-            return nullptr;
+            return blaze::Json();
         }
     }
 

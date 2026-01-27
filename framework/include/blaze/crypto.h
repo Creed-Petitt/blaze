@@ -5,6 +5,7 @@
 #include <string_view>
 #include <vector>
 #include <boost/json.hpp>
+#include <blaze/json.h>
 
 namespace blaze::crypto {
 
@@ -20,8 +21,8 @@ namespace blaze::crypto {
     std::string hex_encode(std::string_view input);
     std::string random_token(size_t length = 32);
 
-    std::string jwt_sign(const boost::json::value& payload, std::string_view secret, int expires_in = 3600);
-    boost::json::value jwt_verify(std::string_view token, std::string_view secret);
+    std::string jwt_sign(const Json& payload, std::string_view secret, int expires_in = 3600);
+    Json jwt_verify(std::string_view token, std::string_view secret);
 
     std::string hash_password(std::string_view password);
     bool verify_password(std::string_view password, std::string_view hash);
