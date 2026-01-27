@@ -118,6 +118,15 @@ public:
     ServiceProvider& services() { return services_; }
 
     /**
+     * @brief Resolves a service from the internal DI container.
+     * Shortcut for app.services().resolve<T>().
+     */
+    template<typename T>
+    std::shared_ptr<T> resolve() {
+        return services_.resolve<T>();
+    }
+
+    /**
      * @brief Registers an auto-wired singleton service in the DI container.
      */
     template<typename T>
@@ -226,6 +235,15 @@ public:
 
     /** @brief Creates a route group with a common prefix. */
     RouteGroup group(const std::string& prefix);
+
+    /**
+     * @brief Auto-registers multiple controllers.
+     * Requires static void register_routes(App& app) in each controller.
+     */
+    template<typename... Controllers>
+    void register_controllers() {
+        (Controllers::register_routes(*this), ...);
+    }
 
     /** @brief Access the internal router. */
     Router& get_router();

@@ -11,6 +11,7 @@
 #include <any>
 #include <blaze/json.h>
 #include <blaze/exceptions.h>
+#include <blaze/di.h>
 
 namespace blaze {
 
@@ -92,7 +93,20 @@ struct Request {
         }
     }
 
+    // Resolves a service from the DI container manually
+    template<typename T>
+    std::shared_ptr<T> resolve() const {
+        if (!services_) {
+            throw std::runtime_error("DI container not attached to request");
+        }
+        return services_->resolve<T>();
+    }
+
+    // Internal use only
+    void _set_services(ServiceProvider* sp) { services_ = sp; }
+
 private:
+    ServiceProvider* services_ = nullptr;
     std::optional<blaze::Json> user_context_;
     std::unordered_map<std::string, std::any> context_;
 };

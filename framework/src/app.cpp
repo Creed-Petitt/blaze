@@ -93,6 +93,7 @@ boost::asio::awaitable<std::string> App::handle_request(Request& req, const std:
 
     try {
         req.set("client_ip", client_ip);
+        req._set_services(&services_);
         const auto match = router_.match(req.method, req.path);
         
         Handler handler;
