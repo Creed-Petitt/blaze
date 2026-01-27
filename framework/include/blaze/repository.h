@@ -87,6 +87,34 @@ struct has_table_name : std::false_type {};
 template <typename T>
 struct has_table_name<T, std::void_t<decltype(T::table_name)>> : std::true_type {};
 
+namespace detail {
+
+    inline std::string to_snake_case(std::string_view name) {
+        std::string result;
+        for (size_t i = 0; i < name.size(); ++i) {
+            if (i > 0 && std::isupper(name[i])) {
+                // Check if we need an underscore (handles ACROnymphs correctly)
+                if (!std::isupper(name[i-1]) || (i + 1 < name.size() && std::islower(name[i+1]))) {
+                    result += '_';
+                }
+            }
+            result += static_cast<char>(std::tolower(name[i]));
+        }
+        return result;
+    }
+
+    inline std::string pluralize(std::string name) {
+        if (name.empty()) return name;
+        if (name.back() == 'y') {
+            return name.substr(0, name.size() - 1) + "ies";
+        } else if (name.back() == 's') {
+            return name + "es";
+        }
+        return name + "s";
+    }
+
+} // namespace detail
+
 template <typename T>
 class Repository {
 protected:
@@ -99,7 +127,7 @@ protected:
             return std::string(T::table_name);
         }
         std::string name = boost::core::demangle(typeid(T).name());
-        return name;
+        return detail::pluralize(detail::to_snake_case(name));
     }
 
     // Helper to get column list: "id, name, email" -> "\"id\", \"name\", \"email\""
@@ -237,7 +265,7 @@ public:
         co_return val.empty() ? 0 : std::stoi(val);
     }
 
-    // Flexible Finder: find_where("age > $1", 18)
+    // find_where("age > $1", 18)
     template<typename... Args>
     boost::asio::awaitable<std::vector<T>> find_where(const std::string& condition, Args&&... args) {
         std::string sql = "SELECT " + get_columns() + " FROM \"" + table_name_ + "\" WHERE " + condition;
