@@ -2,6 +2,7 @@
 #include <blaze/app.h>
 #include <blaze/request.h>
 #include <blaze/response.h>
+#include <blaze/exceptions.h>
 #include <iostream>
 
 namespace blaze {
@@ -31,6 +32,16 @@ namespace {
 
         try {
             response_str = co_await app.handle_request(req, client_ip, keep_alive);
+        } catch (const HttpError& e) {
+            // Structured error response for Validation/Auth failures
+            std::string json_err = "{\"error\": \"" + std::string(e.what()) + "\"}";
+            response_str = 
+                "HTTP/1.1 " + std::to_string(e.status()) + " Error\r\n"
+                "Content-Type: application/json\r\n"
+                "Content-Length: " + std::to_string(json_err.size()) + "\r\n"
+                "Connection: close\r\n\r\n" +
+                json_err;
+            keep_alive = false;
         } catch (const boost::system::system_error& e) {
             if (e.code() != boost::asio::error::bad_descriptor && 
                 e.code() != boost::asio::error::operation_aborted) {
