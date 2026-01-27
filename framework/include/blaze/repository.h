@@ -87,18 +87,27 @@ struct has_table_name : std::false_type {};
 template <typename T>
 struct has_table_name<T, std::void_t<decltype(T::table_name)>> : std::true_type {};
 
+template <typename T, typename = void>
+struct has_pk_name : std::false_type {};
+
+template <typename T>
+struct has_pk_name<T, std::void_t<decltype(T::pk_name)>> : std::true_type {};
+
 namespace detail {
 
     inline std::string to_snake_case(std::string_view name) {
+        // Strip namespace if present (e.g. "blaze::User" -> "User")
+        size_t last_colon = name.find_last_of(':');
+        std::string_view clean_name = (last_colon == std::string_view::npos) ? name : name.substr(last_colon + 1);
+
         std::string result;
-        for (size_t i = 0; i < name.size(); ++i) {
-            if (i > 0 && std::isupper(name[i])) {
-                // Check if we need an underscore (handles ACROnymphs correctly)
-                if (!std::isupper(name[i-1]) || (i + 1 < name.size() && std::islower(name[i+1]))) {
+        for (size_t i = 0; i < clean_name.size(); ++i) {
+            if (i > 0 && std::isupper(clean_name[i])) {
+                if (!std::isupper(clean_name[i-1]) || (i + 1 < clean_name.size() && std::islower(clean_name[i+1]))) {
                     result += '_';
                 }
             }
-            result += static_cast<char>(std::tolower(name[i]));
+            result += static_cast<char>(std::tolower(clean_name[i]));
         }
         return result;
     }
@@ -143,8 +152,12 @@ protected:
         return ss.str();
     }
 
-    // Helper to get primary key name (Assumes first field is PK)
+    // Helper to get primary key name (Assumes first field is PK, unless override exists)
     std::string get_pk_name() {
+        if constexpr (has_pk_name<T>::value) {
+            return std::string(T::pk_name);
+        }
+
         std::string pk;
         using Members = boost::describe::describe_members<T, boost::describe::mod_any_access>;
         boost::mp11::mp_for_each<Members>([&](auto meta) {
