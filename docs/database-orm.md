@@ -1,0 +1,148 @@
+# Database & ORM
+
+Blaze provides a modular database layer that combines high-performance asynchronous drivers with a reflection-based ORM (Object-Relational Mapper).
+
+---
+
+## 1. Modular Drivers
+
+To keep your application as light as possible, database drivers are not included by default. You can add them using the Blaze CLI:
+
+```bash
+blaze add postgres  # Adds PostgreSQL driver
+blaze add mysql     # Adds MySQL/MariaDB driver
+```
+
+---
+
+## 2. Defining Models (`BLAZE_MODEL`)
+
+A "Model" is a simple C++ struct that represents a table in your database. By using the `BLAZE_MODEL` macro, you enable Blaze to automatically map database rows to your struct.
+
+```cpp
+struct Product {
+    int id;
+    std::string name;
+    double price;
+};
+
+// This macro creates the "bridge" between C++ and SQL
+BLAZE_MODEL(Product, id, name, price)
+```
+
+---
+
+## 3. The Smart Repository
+
+The **Repository** is your primary tool for interacting with the database. It provides a clean, type-safe API for CRUD (Create, Read, Update, Delete) operations.
+
+### Automatic Naming
+Blaze is smart about table names. If you have a struct named `UserAccount`, Blaze will look for a table named `user_accounts` (Snake Case + Pluralized).
+
+### Basic Usage
+You can request a repository for any model directly in your route handler.
+
+```cpp
+app.get("/products/:id", [](Path<int> id, Repository<Product> repo) -> Async<Product> {
+    // 1. Fetch by Primary Key
+    auto p = co_await repo.find(id);
+    
+    // 2. Return the object (Automatically converted to JSON)
+    co_return p;
+});
+```
+
+### Standard API:
+*   **`find(id)`**: Fetches a single record. Throws `NotFound` if missing.
+*   **`all()`**: Returns all records as a `std::vector<T>`.
+*   **`save(model)`**: Inserts a new record.
+*   **`update(model)`**: Updates an existing record (uses the first field as the ID).
+*   **`remove(id)`**: Deletes a record.
+*   **`count()`**: Returns the total number of rows.
+
+---
+
+## 4. The Fluent Query Builder
+
+For more complex logic, use the `.query()` method to start a fluent chain.
+
+```cpp
+app.get("/search", [](Query<SearchParams> s, Repository<Product> repo) -> Async<Json> {
+    auto results = co_await repo.query()
+        .where("price", ">", s.min_price)
+        .where("active", "=", true)
+        .order_by("price", "DESC")
+        .limit(10)
+        .all();
+        
+    co_return Json(results);
+});
+```
+
+Blaze automatically handles **SQL Injection** protection by using parameterized queries under the hood.
+
+---
+
+## 5. Raw Queries & Transactions
+
+Sometimes you need to write raw SQL for performance, complex joins, or transactions. You can use the `Database` service directly.
+
+```cpp
+app.get("/stats", [](Database& db) -> Async<Json> {
+    // Parameterized for safety!
+    auto res = co_await db.query("SELECT count(*) as total FROM products WHERE price > $1", 100.0);
+    
+    int total = res[0]["total"].as<int>();
+    co_return Json({{"high_value_items", total}});
+});
+```
+
+### Transactions
+Blaze does not currently enforce a specific transaction abstraction, giving you full control via raw SQL.
+
+```cpp
+app.post("/transfer", [](Database& db) -> Async<void> {
+    try {
+        // 1. Start Transaction
+        co_await db.query("BEGIN");
+
+        // 2. Perform Operations
+        co_await db.query("UPDATE accounts SET balance = balance - 100 WHERE id = 1");
+        co_await db.query("UPDATE accounts SET balance = balance + 100 WHERE id = 2");
+
+        // 3. Commit
+        co_await db.query("COMMIT");
+    } catch (...) {
+        // 4. Rollback on error
+        co_await db.query("ROLLBACK");
+        throw; // Re-throw to inform client
+    }
+    co_return;
+});
+```
+
+---
+
+## 6. Connection Management
+
+Register your database pool in the `main()` function.
+
+```cpp
+int main() {
+    App app;
+
+    // Open a pool with 10 connections
+    auto pool = Postgres::open(app, "postgresql://user:pass@localhost/db", 10);
+    
+    // Register it as the 'Database' service for the whole app
+    app.service(pool).as<Database>();
+
+    app.listen(8080);
+}
+```
+
+### Fault Tolerance (Circuit Breaker)
+Database drivers in Blaze are protected by an automatic **Circuit Breaker**. 
+*   **Behavior**: If the database fails 5 times in a row, the breaker "trips".
+*   **Safety**: For the next 5 seconds, all database requests will immediately fail without attempting to connect. This prevents your application from overwhelming a struggling database or hanging threads on dead sockets.
+*   **Recovery**: After 5 seconds, it allows one "probe" request. If successful, the breaker resets.
