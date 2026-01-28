@@ -41,6 +41,8 @@ template<typename T>
 T convert_string(const std::string& s) {
     if constexpr (std::is_same_v<T, std::string>) {
         return s;
+    } else if constexpr (std::is_same_v<T, bool>) {
+        return (s == "true" || s == "1" || s == "yes");
     } else if constexpr (std::is_integral_v<T>) {
         T val;
         auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
