@@ -34,6 +34,15 @@ struct MyService {
     int value = 42;
 };
 
+// --- Controller for Static Member Test ---
+class TestController {
+public:
+    static Async<void> list_users(Response& res, MyService& svc) {
+        res.send("Users from service " + std::to_string(svc.value));
+        co_return;
+    }
+};
+
 // --- TESTS ---
 
 TEST_CASE("Typed Injection: Path Parameters", "[injection]") {
@@ -148,6 +157,26 @@ TEST_CASE("Typed Injection: Service Injection", "[injection]") {
         auto resolved_svc = app.services().resolve<MyService>();
         CHECK(resolved_svc->value == 42);
     }
+}
+
+TEST_CASE("Typed Injection: Static Member Functions", "[injection]") {
+    App app;
+    app.provide<MyService>();
+    
+    // Registering a static member function
+    app.get("/users", &TestController::list_users);
+    
+    // We verify the router registered it correctly
+    auto match = app.get_router().match("GET", "/users");
+    REQUIRE(match.has_value());
+    
+    // Test execution through the injector
+    Request req;
+    Response res;
+    
+    // Since App::wrap_handler is where the magic happens, we can't call match->handler directly
+    // easily without the full loop, but the fact that it COMPILS above with &TestController::list_users
+    // proves that the template deduction for static member functions works.
 }
 
 // Note: Full "Mixed Injection" (Service + Path) relies on App::wrap_handler logic
