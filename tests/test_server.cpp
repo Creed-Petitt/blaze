@@ -130,6 +130,59 @@ TEST_CASE("Server: Async Return Types", "[app]") {
     if (server_thread.joinable()) server_thread.join();
 }
 
+TEST_CASE("Server: Body Size Limits", "[integration]") {
+    App app;
+    app.log_to("/dev/null");
+    app.max_body_size(100); // 100 bytes limit
+
+    app.post("/small", [](Response& res) -> Async<void> {
+        res.send("Received");
+        co_return;
+    });
+
+    std::thread server_thread([&]() {
+        app.listen(9996);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    net::io_context ioc;
+    tcp::resolver resolver(ioc);
+    auto const results = resolver.resolve("127.0.0.1", "9996");
+
+    SECTION("Small body should be accepted") {
+        tcp::socket socket(ioc);
+        net::connect(socket, results);
+        std::string body = "small";
+        std::string req = "POST /small HTTP/1.1\r\nHost: localhost\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body;
+        net::write(socket, net::buffer(req));
+        
+        boost::beast::http::response<boost::beast::http::string_body> res;
+        boost::beast::flat_buffer buffer;
+        boost::beast::http::read(socket, buffer, res);
+        CHECK(res.result_int() == 200);
+    }
+
+    SECTION("Large body should be rejected") {
+        tcp::socket socket(ioc);
+        net::connect(socket, results);
+        std::string body(200, 'x'); // 200 bytes > 100 bytes limit
+        std::string req = "POST /small HTTP/1.1\r\nHost: localhost\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body;
+        
+        boost::beast::error_code ec;
+        net::write(socket, net::buffer(req), ec);
+        
+        boost::beast::http::response<boost::beast::http::string_body> res;
+        boost::beast::flat_buffer buffer;
+        boost::beast::http::read(socket, buffer, res, ec);
+        
+        // Boost.Beast returns 413 Payload Too Large automatically when limit is exceeded
+        CHECK(res.result() == boost::beast::http::status::payload_too_large);
+    }
+
+    app.engine().stop();
+    if (server_thread.joinable()) server_thread.join();
+}
+
 TEST_CASE("Server: Auth & Cookies", "[integration]") {
     App app;
     app.log_to("/dev/null");

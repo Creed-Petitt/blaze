@@ -23,6 +23,8 @@ add_executable(blaze_tests
     test_request_di.cpp
     test_snake_case.cpp
     test_app.cpp
+    test_multipart.cpp
+    test_client_smart.cpp
 )
 
 target_link_libraries(blaze_tests 
