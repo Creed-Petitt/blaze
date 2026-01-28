@@ -99,6 +99,10 @@ public:
         }
     }
 
+    friend Json tag_invoke(boost::json::value_to_tag<Json>, const boost::json::value& jv) {
+        return Json(jv);
+    }
+
 private:
     struct Internal {
         Type type = Type::NONE;
@@ -111,6 +115,7 @@ private:
 
 template<> std::string Json::as<std::string>() const;
 template<> int Json::as<int>() const;
+template<> Json Json::as<Json>() const;
 
 } // namespace blaze
 
