@@ -73,6 +73,11 @@ int Json::as<int>() const {
     try { return std::stoi(s); } catch (...) { return 0; }
 }
 
+template<>
+Json Json::as<Json>() const {
+    return *this;
+}
+
 Json::operator std::string() const { return as<std::string>(); }
 Json::operator int() const { return as<int>(); }
 
