@@ -233,6 +233,22 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
         return;
     }
     if (ec) {
+        if (ec == http::error::body_limit) {
+            auto res = std::make_shared<http::response<http::string_body>>(
+                http::status::payload_too_large, parser_->get().version());
+            res->set(http::field::content_type, "text/plain");
+            res->body() = "Payload Too Large";
+            res->prepare_payload();
+            
+            http::async_write(stream_, *res, [self = shared_from_this(), res](beast::error_code ec, std::size_t) {
+                beast::error_code ignored;
+                if constexpr (std::is_same_v<decltype(self->stream_), beast::tcp_stream>) {
+                    self->stream_.socket().shutdown(tcp::socket::shutdown_send, ignored);
+                }
+            });
+            return;
+        }
+
         if (ec != net::error::connection_reset && ec != net::error::eof && ec != beast::error::timeout) {
             std::cerr << "read error: " << ec.message() << std::endl;
         }
@@ -329,6 +345,19 @@ void SslSession::on_read(beast::error_code ec, std::size_t bytes_transferred) {
         return;
     }
     if(ec) {
+        if (ec == http::error::body_limit) {
+            auto res = std::make_shared<http::response<http::string_body>>(
+                http::status::payload_too_large, parser_->get().version());
+            res->set(http::field::content_type, "text/plain");
+            res->body() = "Payload Too Large";
+            res->prepare_payload();
+            
+            http::async_write(stream_, *res, [self = shared_from_this(), res](beast::error_code ec, std::size_t) {
+                self->do_shutdown();
+            });
+            return;
+        }
+
         if (ec != net::error::connection_reset && 
             ec != net::error::eof && 
             ec != ssl::error::stream_truncated && 
