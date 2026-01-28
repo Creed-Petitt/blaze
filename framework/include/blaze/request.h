@@ -12,6 +12,7 @@
 #include <blaze/json.h>
 #include <blaze/exceptions.h>
 #include <blaze/di.h>
+#include <blaze/multipart.h>
 
 namespace blaze {
 
@@ -32,7 +33,6 @@ struct Request {
     // Returns parsed JSON body wrapper
     blaze::Json json() const;
 
-
     // Typed JSON Extraction
     // Automatically converts request body to T (std::vector, std::map, etc.)
     template<typename T>
@@ -44,6 +44,10 @@ struct Request {
             throw BadRequest(std::string("Invalid JSON body: ") + e.what());
         }
     }
+
+    // Multipart Form Data
+    const MultipartFormData& form() const;
+    std::vector<const MultipartPart*> files() const;
 
     // Helper methods for safe parameter and header access
     std::string get_query(const std::string& key, const std::string& default_val = "") const;
@@ -109,7 +113,9 @@ private:
     ServiceProvider* services_ = nullptr;
     std::optional<blaze::Json> user_context_;
     std::unordered_map<std::string, std::any> context_;
+    mutable std::optional<MultipartFormData> cached_form_;
 };
+
 
 } // namespace blaze
 

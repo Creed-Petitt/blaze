@@ -21,6 +21,7 @@ public:
 
     Response& status(int code);
     Response& header(const std::string& key, const std::string& value);
+    Response& add_header(const std::string& key, const std::string& value);
 
     Response& headers(std::initializer_list<std::pair<std::string, std::string>> headers) {
         for (const auto& [key, value] : headers) {

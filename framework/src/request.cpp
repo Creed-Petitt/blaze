@@ -115,4 +115,34 @@ std::string Request::cookie(const std::string& name) const {
     return "";
 }
 
+const MultipartFormData& Request::form() const {
+    if (cached_form_) return *cached_form_;
+
+    std::string_view content_type = get_header("Content-Type");
+    if (content_type.find("multipart/form-data") == std::string_view::npos) {
+        cached_form_ = MultipartFormData();
+        return *cached_form_;
+    }
+
+    auto boundary_pos = content_type.find("boundary=");
+    if (boundary_pos == std::string_view::npos) {
+        cached_form_ = MultipartFormData();
+        return *cached_form_;
+    }
+
+    std::string_view boundary = content_type.substr(boundary_pos + 9);
+    // Boundary might be quoted
+    if (boundary.size() >= 2 && boundary.front() == '"' && boundary.back() == '"') {
+        boundary.remove_prefix(1);
+        boundary.remove_suffix(1);
+    }
+
+    cached_form_ = multipart::parse(body, boundary);
+    return *cached_form_;
+}
+
+std::vector<const MultipartPart*> Request::files() const {
+    return form().files();
+}
+
 } // namespace blaze

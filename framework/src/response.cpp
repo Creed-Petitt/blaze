@@ -17,6 +17,11 @@ Response& Response::header(const std::string& key, const std::string& value) {
     return *this;
 }
 
+Response& Response::add_header(const std::string& key, const std::string& value) {
+    headers_.insert(key, value);
+    return *this;
+}
+
 Response& Response::send(const std::string& text) {
     body_ = text;
     return *this;
