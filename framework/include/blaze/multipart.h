@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <deque>
 #include <map>
 #include <optional>
 
@@ -36,6 +37,15 @@ public:
     void add_part(MultipartPart part) {
         parts_.push_back(std::move(part));
     }
+
+    void add_field(std::string name, std::string value);
+    void add_file(std::string name, std::string filename, std::string data, std::string content_type = "application/octet-stream");
+
+    /**
+     * @brief Encodes the form data into a body and boundary string.
+     * Returns {body, boundary}
+     */
+    std::pair<std::string, std::string> encode() const;
 
     const std::vector<MultipartPart>& parts() const { return parts_; }
 
@@ -72,6 +82,7 @@ public:
 
 private:
     std::vector<MultipartPart> parts_;
+    mutable std::deque<std::string> buffers_; // Owns data for parts added via builders
 };
 
 namespace multipart {

@@ -1,6 +1,7 @@
 #include <blaze/multipart.h>
 #include <fstream>
 #include <algorithm>
+#include <ctime>
 
 namespace blaze {
 
@@ -9,6 +10,47 @@ bool MultipartPart::save_to(const std::string& path) const {
     if (!file.is_open()) return false;
     file.write(data.data(), data.size());
     return true;
+}
+
+void MultipartFormData::add_field(std::string name, std::string value) {
+    buffers_.push_back(std::move(value));
+    MultipartPart part;
+    part.name = std::move(name);
+    part.data = buffers_.back();
+    parts_.push_back(std::move(part));
+}
+
+void MultipartFormData::add_file(std::string name, std::string filename, std::string data, std::string content_type) {
+    buffers_.push_back(std::move(data));
+    MultipartPart part;
+    part.name = std::move(name);
+    part.filename = std::move(filename);
+    part.content_type = std::move(content_type);
+    part.data = buffers_.back();
+    parts_.push_back(std::move(part));
+}
+
+std::pair<std::string, std::string> MultipartFormData::encode() const {
+    std::string boundary = "BlazeBoundary" + std::to_string(std::time(nullptr));
+    std::string body;
+
+    for (const auto& part : parts_) {
+        body += "--" + boundary + "\r\n";
+        body += "Content-Disposition: form-data; name=\"" + part.name + "\"";
+        if (part.is_file()) {
+            body += "; filename=\"" + part.filename + "\"";
+        }
+        body += "\r\n";
+        if (!part.content_type.empty()) {
+            body += "Content-Type: " + part.content_type + "\r\n";
+        }
+        body += "\r\n";
+        body.append(part.data.data(), part.data.size());
+        body += "\r\n";
+    }
+
+    body += "--" + boundary + "--\r\n";
+    return {body, boundary};
 }
 
 namespace multipart {
