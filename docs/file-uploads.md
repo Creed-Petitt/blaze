@@ -70,3 +70,24 @@ Blaze uses an **In-Memory** parser. This means the entire file is held in RAM du
     app.max_body_size(50 * 1024 * 1024); // Limit to 50MB
     ```
 3.  **Zero-Copy**: The parser uses `std::string_view`, meaning it doesn't copy the file data during parsing—it points directly to the already-downloaded request body.
+
+---
+
+## 5. Client-Side Uploads
+
+You can also use the `MultipartFormData` class to **send** files using the Blaze Async Client.
+
+```cpp
+#include <blaze/client.h>
+#include <blaze/multipart.h>
+
+// Create the form
+MultipartFormData form;
+form.add_field("user_id", "101");
+form.add_file("document", "report.pdf", file_content, "application/pdf");
+
+// Send via POST
+auto res = co_await blaze::fetch("http://example.com/upload", form);
+```
+
+For more details, see the [HTTP Client Documentation](http-client.md).

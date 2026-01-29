@@ -246,3 +246,5 @@ app.get("/proxy", []() -> Async<Json> {
     throw InternalServerError("Upstream API failed");
 });
 ```
+
+For advanced usage (Timeouts, Redirects, File Uploads), check out the [HTTP Client Documentation](http-client.md).
