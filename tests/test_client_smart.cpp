@@ -78,11 +78,15 @@ TEST_CASE("Client: Case-Insensitive Headers & Multi-Values", "[client]") {
             FetchResponse res;
             int retries = 5;
             while(retries--) {
+                bool retry = false;
                 try {
                     res = co_await blaze::fetch("http://localhost:" + std::to_string(port) + "/headers");
                     break;
                 } catch(...) {
                     if(retries == 0) throw;
+                    retry = true;
+                }
+                if (retry) {
                     co_await blaze::delay(std::chrono::milliseconds(100));
                 }
             }
