@@ -4,9 +4,9 @@
 
 
 [![Blaze CI](https://github.com/Creed-Petitt/blaze/actions/workflows/ci.yml/badge.svg)](https://github.com/Creed-Petitt/blaze/actions/workflows/ci.yml)
-![License](https://img.shields.io/badge/license-MIT-orange)
+![License](https://img.shields.io/badge/license-MIT-red)
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos-red)
-![Standard](https://img.shields.io/badge/c%2B%2B-20-yellow)
+![Standard](https://img.shields.io/badge/c%2B%2B-20-red)
 
 </div>
 
@@ -67,7 +67,8 @@ curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh 
 ## Documentation
 
 ### Project Setup
-- **[Getting Started & CLI](docs/getting-started.md)**: Installation, scaffolding, and CLI reference.
+- **[Getting Started](docs/getting-started.md)**: Installation and project setup.
+- **[CLI Reference](docs/cli.md)**: Complete guide to all Blaze CLI commands.
 - **[Architecture & Design](docs/architecture.md)**: Deep dive into the framework's core engine and design patterns.
 - **[Testing & Security](docs/testing.md)**: CI/CD, sanitizers, and performance benchmarking.
 
@@ -75,6 +76,8 @@ curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh 
 - **[Routing & Request Handling](docs/routing.md)**: Methods, parameters, and typed injection.
 - **[Dependency Injection](docs/dependency-injection.md)**: Auto-wiring, lifetimes, and service registration.
 - **[Database & ORM](docs/database-orm.md)**: Drivers, BLAZE_MODEL, and Repository pattern.
+- **[HTTP Client](docs/http-client.md)**: Async requests, timeouts, and redirects.
+- **[File Uploads](docs/file-uploads.md)**: Multipart forms and client-side uploads.
 - **[Middleware & Security](docs/middleware.md)**: JWT Auth, CORS, and the middleware chain.
 - **[WebSockets](docs/websockets.md)**: Real-time broadcasting and background tasks.
 
