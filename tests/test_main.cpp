@@ -36,6 +36,7 @@ public:
     
     bool is_ok() const override { return true; }
     std::string error_message() const override { return ""; }
+    int64_t affected_rows() const override { return 1; }
 };
 
 // Mock Database for capturing params
@@ -51,6 +52,10 @@ public:
         last_params = params;
         last_sql = sql;
         co_return DbResult(std::make_shared<MockResult>());
+    }
+
+    Async<void> execute_transaction(std::function<Async<void>(Database&)> block) override {
+        co_await block(*this);
     }
 };
 
