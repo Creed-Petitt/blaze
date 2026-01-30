@@ -35,6 +35,25 @@ int main() {
     try {
         auto db = Postgres::open(app, "postgresql://postgres:blaze_secret@127.0.0.1:5432/postgres", 10);
         app.service(db).as<Database>();
+
+        // Init Schema & Seed Data
+        app.spawn([](App& a) -> Async<void> {
+            auto db = a.resolve<Database>();
+            co_await db->query("CREATE TABLE IF NOT EXISTS products (id SERIAL PRIMARY KEY, name TEXT, price DOUBLE PRECISION, active BOOLEAN)");
+            
+            // Seed if empty
+            auto res = co_await db->query("SELECT count(*) as cnt FROM products");
+            if (res[0]["cnt"].as<int>() == 0) {
+                co_await db->query("INSERT INTO products (name, price, active) VALUES "
+                    "('Gaming Laptop', 1500.0, true), "
+                    "('Office Mouse', 20.0, true), "
+                    "('Broken Monitor', 50.0, false), "
+                    "('Mechanical Keyboard', 100.0, true), "
+                    "('USB Cable', 5.0, true)"
+                );
+                std::cout << "Seeded demo data." << std::endl;
+            }
+        }(app));
     } catch (...) {}
 
     // GET /products/search?min_price=10.0&active=true
