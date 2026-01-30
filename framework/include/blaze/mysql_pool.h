@@ -31,10 +31,11 @@ public:
         app.service(open(app, std::move(url), size)).template as<Database>();
     }
 
-    void connect();
-    boost::asio::awaitable<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) override;
+        void connect();
+        boost::asio::awaitable<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) override;
+        boost::asio::awaitable<void> execute_transaction(std::function<boost::asio::awaitable<void>(Database&)> block) override;
 
-    std::string placeholder(const int index) const override {
+        std::string placeholder(const int index) const override {
         return "?";
     }
 

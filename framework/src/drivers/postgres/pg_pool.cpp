@@ -4,6 +4,29 @@
 
 namespace blaze {
 
+    // Proxy class to expose a single PgConnection as a Database
+    class PgConnectionProxy : public Database {
+    public:
+        explicit PgConnectionProxy(PgConnection* conn) : conn_(conn) {}
+
+        boost::asio::awaitable<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) override {
+            PgResult res = co_await conn_->query(sql, params);
+            co_return DbResult(std::make_shared<PgResult>(std::move(res)));
+        }
+
+        std::string placeholder(int index) const override {
+            return "$" + std::to_string(index);
+        }
+
+        boost::asio::awaitable<void> execute_transaction(std::function<boost::asio::awaitable<void>(Database&)> block) override {
+            // Nested transactions (SAVEPOINT) could be implemented here
+            throw std::runtime_error("Nested transactions not yet supported");
+        }
+
+    private:
+        PgConnection* conn_;
+    };
+
     PgPool::PgPool(boost::asio::io_context& ctx, std::string conn_str, int size)
         : ctx_(ctx), conn_str_(std::move(conn_str)), size_(size) {}
 
@@ -111,6 +134,46 @@ namespace blaze {
         // Should be unreachable
         release(conn);
         throw std::runtime_error("Postgres Query Failed");
+    }
+
+    boost::asio::awaitable<void> PgPool::execute_transaction(std::function<boost::asio::awaitable<void>(Database&)> block) {
+        if (!breaker_.allow_request()) {
+            throw std::runtime_error("Postgres Circuit Open");
+        }
+
+        PgConnection* conn = co_await acquire();
+        PgConnectionProxy proxy(conn);
+        std::exception_ptr error = nullptr;
+
+        try {
+            // 1. BEGIN
+            co_await conn->query("BEGIN");
+
+            // 2. Run Block
+            try {
+                co_await block(proxy);
+                // 3. Commit on success
+                co_await conn->query("COMMIT");
+            } catch (...) {
+                error = std::current_exception();
+            }
+        } catch (...) {
+            // BEGIN failed
+            error = std::current_exception();
+        }
+
+        if (error) {
+            // 4. Rollback on error (Outside catch block)
+            try { co_await conn->query("ROLLBACK"); } catch (...) {}
+            
+            conn->force_close(); // Safest option on error
+            release(conn);
+            breaker_.record_failure();
+            std::rethrow_exception(error);
+        }
+
+        release(conn);
+        breaker_.record_success();
     }
 
 } // namespace blaze

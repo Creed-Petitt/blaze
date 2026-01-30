@@ -33,6 +33,7 @@ namespace blaze {
 
         void connect();
         boost::asio::awaitable<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) override;
+        boost::asio::awaitable<void> execute_transaction(std::function<boost::asio::awaitable<void>(Database&)> block) override;
         
         std::string placeholder(const int index) const override {
             return "$" + std::to_string(index);

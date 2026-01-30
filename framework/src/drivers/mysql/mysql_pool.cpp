@@ -5,6 +5,28 @@
 
 namespace blaze {
 
+    // Proxy class to expose a single MySqlConnection as a Database
+    class MySqlConnectionProxy : public Database {
+    public:
+        explicit MySqlConnectionProxy(MySqlConnection* conn) : conn_(conn) {}
+
+        boost::asio::awaitable<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) override {
+            MySqlResult res = co_await conn_->query(sql, params);
+            co_return DbResult(std::make_shared<MySqlResult>(std::move(res)));
+        }
+
+        std::string placeholder(int index) const override {
+            return "?";
+        }
+
+        boost::asio::awaitable<void> execute_transaction(std::function<boost::asio::awaitable<void>(Database&)> block) override {
+            throw std::runtime_error("Nested transactions not yet supported");
+        }
+
+    private:
+        MySqlConnection* conn_;
+    };
+
 MySqlPool::MySqlPool(boost::asio::io_context& ctx, std::string url, int size)
     : ctx_(ctx), url_(std::move(url)), size_(size) {
     parse_url();
@@ -123,6 +145,46 @@ boost::asio::awaitable<DbResult> MySqlPool::query(const std::string& sql, const 
 
     release(conn);
     throw std::runtime_error("MySQL Query Failed");
+}
+
+boost::asio::awaitable<void> MySqlPool::execute_transaction(std::function<boost::asio::awaitable<void>(Database&)> block) {
+    if (!breaker_.allow_request()) {
+        throw std::runtime_error("MySQL Circuit Open");
+    }
+
+    auto* conn = co_await acquire();
+    MySqlConnectionProxy proxy(conn);
+    std::exception_ptr error = nullptr;
+
+    try {
+        // 1. START TRANSACTION
+        co_await conn->query("START TRANSACTION");
+
+        // 2. Run Block
+        try {
+            co_await block(proxy);
+            // 3. Commit on success
+            co_await conn->query("COMMIT");
+        } catch (...) {
+            error = std::current_exception();
+        }
+    } catch (...) {
+        // START failed
+        error = std::current_exception();
+    }
+
+    if (error) {
+        // 4. Rollback on error (Outside catch block)
+        try { co_await conn->query("ROLLBACK"); } catch (...) {}
+
+        conn->force_close();
+        release(conn);
+        breaker_.record_failure();
+        std::rethrow_exception(error);
+    }
+
+    release(conn);
+    breaker_.record_success();
 }
 
 } // namespace blaze
