@@ -77,6 +77,12 @@ struct Request {
         context_[key] = std::make_any<T>(std::forward<T>(value));
     }
 
+    // Set context value by Type (for Context<T> injection)
+    template<typename T>
+    void set(T&& value) {
+        context_[typeid(std::remove_cvref_t<T>).name()] = std::make_any<std::remove_cvref_t<T>>(std::forward<T>(value));
+    }
+
     template<typename T>
     T get(const std::string& key) const {
         auto it = context_.find(key);
