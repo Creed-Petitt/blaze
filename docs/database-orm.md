@@ -4,14 +4,51 @@ Blaze provides a modular database layer that combines high-performance asynchron
 
 ---
 
-## 1. Modular Drivers
+## 1. Setup & Connection
 
+### Installing Drivers
 To keep your application as light as possible, database drivers are not included by default. You can add them using the Blaze CLI:
 
 ```bash
 blaze add postgres  # Adds PostgreSQL driver
 blaze add mysql     # Adds MySQL/MariaDB driver
 ```
+
+### Establishing a Connection
+The easiest way to connect is using the static `install()` helper in your `main()` function. This automatically creates a connection pool and registers it as the default `Database` service.
+
+```cpp
+#include <blaze/postgres.h> // or <blaze/mysql.h>
+
+int main() {
+    App app;
+
+    // Connect to Postgres (Pool size defaults to 10)
+    Postgres::install(app, "postgresql://user:pass@localhost/db");
+    
+    // Or Connect to MySQL
+    // MySql::install(app, "mysql://user:pass@localhost/db");
+
+    app.listen(8080);
+}
+```
+
+### Advanced: Manual Registration
+If you need to manage the pool lifetime yourself or connect to multiple databases, you can use the manual service registration API.
+
+```cpp
+// Open a pool with 10 connections (but don't register it yet)
+auto pool = Postgres::open(app, "postgresql://user:pass@localhost/db", 10);
+
+// Register it as the 'Database' service for the whole app
+app.service(pool).as<Database>();
+```
+
+### Fault Tolerance (Circuit Breaker)
+Database drivers in Blaze are protected by an automatic **Circuit Breaker**. 
+*   **Behavior**: If the database fails 5 times in a row, the breaker "trips".
+*   **Safety**: For the next 5 seconds, all database requests will immediately fail without attempting to connect. This prevents your application from overwhelming a struggling database or hanging threads on dead sockets.
+*   **Recovery**: After 5 seconds, it allows one "probe" request. If successful, the breaker resets.
 
 ---
 
@@ -120,29 +157,3 @@ app.post("/transfer", [](Database& db) -> Async<void> {
     co_return;
 });
 ```
-
----
-
-## 6. Connection Management
-
-Register your database pool in the `main()` function.
-
-```cpp
-int main() {
-    App app;
-
-    // Open a pool with 10 connections
-    auto pool = Postgres::open(app, "postgresql://user:pass@localhost/db", 10);
-    
-    // Register it as the 'Database' service for the whole app
-    app.service(pool).as<Database>();
-
-    app.listen(8080);
-}
-```
-
-### Fault Tolerance (Circuit Breaker)
-Database drivers in Blaze are protected by an automatic **Circuit Breaker**. 
-*   **Behavior**: If the database fails 5 times in a row, the breaker "trips".
-*   **Safety**: For the next 5 seconds, all database requests will immediately fail without attempting to connect. This prevents your application from overwhelming a struggling database or hanging threads on dead sockets.
-*   **Recovery**: After 5 seconds, it allows one "probe" request. If successful, the breaker resets.
