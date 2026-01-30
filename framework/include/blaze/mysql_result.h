@@ -49,8 +49,8 @@ namespace blaze {
         bool is_ok() const override { return ok_; }
         std::string error_message() const override { return error_; }
         
-        // MySQL returns 64-bit counts (my_ulonglong). We cast to int for API consistency.
-        int affected_rows() const override { return static_cast<int>(affected_rows_); }
+        // MySQL returns 64-bit counts (my_ulonglong).
+        int64_t affected_rows() const override { return static_cast<int64_t>(affected_rows_); }
         void set_affected_rows(uint64_t rows) { affected_rows_ = rows; }
 
     private:

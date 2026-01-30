@@ -85,7 +85,7 @@ public:
     virtual std::shared_ptr<RowImpl> get_row(size_t index) const = 0;
     virtual bool is_ok() const = 0;
     virtual std::string error_message() const = 0;
-    virtual int affected_rows() const = 0;
+    virtual int64_t affected_rows() const = 0;
 };
 
 // Value Wrapper for the Result Set
@@ -96,7 +96,7 @@ public:
 
     size_t size() const { return impl_ ? impl_->size() : 0; }
     bool empty() const { return size() == 0; }
-    int affected_rows() const { return impl_ ? impl_->affected_rows() : 0; }
+    int64_t affected_rows() const { return impl_ ? impl_->affected_rows() : 0; }
     
     // Returns Row by Value
     Row operator[](size_t index) const {

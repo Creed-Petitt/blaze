@@ -44,7 +44,7 @@ namespace blaze {
         std::shared_ptr<RowImpl> get_row(size_t row_idx) const override;
 
         // Metadata
-        [[nodiscard]] int affected_rows() const override;
+        [[nodiscard]] int64_t affected_rows() const override;
 
         // Check if query succeeded
         bool is_ok() const override;
