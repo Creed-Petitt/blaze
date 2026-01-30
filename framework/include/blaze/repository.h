@@ -171,7 +171,11 @@ public:
         table_name_ = infer_table_name();
     }
 
-    // --- Accessors for QueryBuilder ---
+    // Constructor for Transactional scope (Aliasing shared_ptr)
+    Repository(Database& db) : db_(std::shared_ptr<Database>(&db, [](Database*){})) {
+        table_name_ = infer_table_name();
+    }
+
     std::shared_ptr<Database> database() { return db_; }
     std::string table_name() const { return table_name_; }
     std::string select_base() { return "SELECT " + get_columns() + " FROM \"" + table_name_ + "\""; }
@@ -210,17 +214,28 @@ public:
         std::ostringstream cols, vals;
         std::vector<std::string> params;
         int idx = 1;
+        
+        std::string pk_name = get_pk_name();
 
         using Members = boost::describe::describe_members<T, boost::describe::mod_any_access>;
         bool first = true;
         
         boost::mp11::mp_for_each<Members>([&](auto meta) {
+            std::string col_name = meta.name;
+            std::string val_str = to_string_param(model.*meta.pointer);
+
+            // Skip PK if it's "0" (Auto-Increment convention)
+            // This allows the DB to generate the ID
+            if (col_name == pk_name && (val_str == "0" || val_str.empty())) {
+                return; 
+            }
+
             if (!first) { cols << ", "; vals << ", "; }
             cols << "\"" << meta.name << "\"";
             vals << db_->placeholder(idx++);
             
             // Convert member to string param
-            params.push_back(to_string_param(model.*meta.pointer));
+            params.push_back(val_str);
             first = false;
         });
 
