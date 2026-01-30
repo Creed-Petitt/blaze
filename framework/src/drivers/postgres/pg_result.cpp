@@ -75,10 +75,10 @@ namespace blaze {
         return PQresultErrorMessage(res_);
     }
 
-    int PgResult::affected_rows() const {
+    int64_t PgResult::affected_rows() const {
         if (!res_) return 0;
         const char* val = PQcmdTuples(res_);
-        return (val[0] == '\0') ? 0 : std::stoi(val);
+        return (val[0] == '\0') ? 0 : std::stoll(val);
     }
 
         std::shared_ptr<RowImpl> PgResult::get_row(const size_t row_idx) const {
