@@ -44,7 +44,7 @@ app.use(middleware::static_files("public")); // Serves assets from the 'public' 
 Middleware often generates data that your routes need (like a User ID or a Trace ID). Blaze provides two ways to pass this data:
 
 ### Type-Safe Context (`Context<T>`)
-Blaze uses a **Type-Based** injection system. Instead of using string keys which are prone to typos, you store data by its C++ type.
+Blaze uses a **Type-Based** injection system. To use injection, you must store data using the C++ type as the key.
 
 ```cpp
 // 1. Define a unique struct for your data
@@ -52,9 +52,10 @@ struct RequestTrace {
     std::string id;
 };
 
-// 2. In Middleware
+// 2. In Middleware (Set by Type)
 app.use([](Request& req, Response& res, Next next) -> Async<void> {
-    req.set<RequestTrace>({"uuid-123"});
+    // This stores the object using RequestTrace as the key
+    req.set(RequestTrace{"uuid-123"});
     co_await next();
 });
 
@@ -63,6 +64,17 @@ app.get("/", [](Context<RequestTrace> trace) {
     // 'trace' acts like RequestTrace*
     std::cout << "Trace: " << trace->id << std::endl;
 });
+```
+
+### Key-Value Context
+If you prefer manual control or simple string keys, you can set and get values manually. Note that these **cannot** be injected via `Context<T>`.
+
+```cpp
+// Set
+req.set("session_id", "abc-123");
+
+// Get
+std::string session = req.get<std::string>("session_id");
 ```
 
 ### User Identity & `is_authenticated()`
