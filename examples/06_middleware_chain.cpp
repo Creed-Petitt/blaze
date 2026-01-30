@@ -36,8 +36,8 @@ int main() {
         // Generate a simple trace ID
         std::string trace_id = "trace-" + std::to_string(std::time(nullptr));
         
-        // Store it in the request context
-        req.set("trace_id", trace_id);
+        // Store it in the request context using Type Key (Automatic deduction)
+        req.set(trace_id);
 
         co_await next();
         co_return;
