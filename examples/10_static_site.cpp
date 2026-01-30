@@ -14,6 +14,13 @@
 using namespace blaze;
 
 int main() {
+    // Create the folder and a sample file automatically for this demo
+    // We do this BEFORE registering middleware so canonical path resolution works
+    std::filesystem::create_directories("./public");
+    std::ofstream out("./public/index.html");
+    out << "<html><body><h1>Welcome to Blaze Static Site</h1><p>Served from RAM cache!</p></body></html>";
+    out.close();
+
     App app;
 
     // 1. Register the static files middleware
@@ -30,12 +37,6 @@ int main() {
     // Instructions for the user
     std::cout << "Static Site demo running on :8080" << std::endl;
     std::cout << "Create a './public' folder and add an 'index.html' to see it in action!" << std::endl;
-
-    // Create the folder and a sample file automatically for this demo
-    std::filesystem::create_directories("./public");
-    std::ofstream out("./public/index.html");
-    out << "<html><body><h1>Welcome to Blaze Static Site</h1><p>Served from RAM cache!</p></body></html>";
-    out.close();
 
     app.listen(8080);
 
