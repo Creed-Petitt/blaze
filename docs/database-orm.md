@@ -92,7 +92,8 @@ app.get("/products/:id", [](Path<int> id, Repository<Product> repo) -> Async<Pro
 ### Standard API:
 *   **`find(id)`**: Fetches a single record. Throws `NotFound` if missing.
 *   **`all()`**: Returns all records as a `std::vector<T>`.
-*   **`save(model)`**: Inserts a new record.
+*   **`save(model)`**: Inserts a new record. 
+    *   *Note:* If the Primary Key is `0` (int) or empty (string), it is excluded from the query to allow the database to auto-increment/generate the ID.
 *   **`update(model)`**: Updates an existing record (uses the first field as the ID).
 *   **`remove(id)`**: Deletes a record.
 *   **`count()`**: Returns the total number of rows.
@@ -135,25 +136,39 @@ app.get("/stats", [](Database& db) -> Async<Json> {
 ```
 
 ### Transactions
-Blaze does not currently enforce a specific transaction abstraction, giving you full control via raw SQL.
+Blaze provides a managed Transaction API that handles rollbacks automatically using RAII (Resource Acquisition Is Initialization) concepts.
 
 ```cpp
-app.post("/transfer", [](Database& db) -> Async<void> {
-    try {
-        // 1. Start Transaction
-        co_await db.query("BEGIN");
+app.post("/transfer", [](Database& db) -> Async<Json> {
+    // Start a transaction scope
+    // "tx" is a special connection wrapper locked to this transaction
+    co_await db.transaction([](Database& tx) -> Async<void> {
+        
+        // Use 'tx' for all queries in this block
+        co_await tx.query("UPDATE accounts SET balance = balance - 100 WHERE id = 1");
+        co_await tx.query("UPDATE accounts SET balance = balance + 100 WHERE id = 2");
 
-        // 2. Perform Operations
-        co_await db.query("UPDATE accounts SET balance = balance - 100 WHERE id = 1");
-        co_await db.query("UPDATE accounts SET balance = balance + 100 WHERE id = 2");
+        // If any exception is thrown here, the transaction automatically ROLLBACKs.
+        // If the block completes successfully, it automatically COMMITs.
+    });
 
-        // 3. Commit
-        co_await db.query("COMMIT");
-    } catch (...) {
-        // 4. Rollback on error
-        co_await db.query("ROLLBACK");
-        throw; // Re-throw to inform client
-    }
-    co_return;
+    co_return Json({{"status", "success"}});
+});
+```
+
+#### Auto-Injection in Transactions
+For a cleaner syntax, you can ask for Repositories directly in the transaction lambda. Blaze will automatically bind them to the transaction's connection.
+
+```cpp
+app.post("/create-order", [](Database& db, Body<Order> order) -> Async<void> {
+    
+    // Inject Repositories directly!
+    co_await db.transaction([&](Repository<Order> orders, Repository<Log> logs) -> Async<void> {
+        
+        // 'orders' and 'logs' are already connected to the transaction
+        co_await orders.save(order);
+        co_await logs.save({.msg = "Order created"});
+        
+    });
 });
 ```
