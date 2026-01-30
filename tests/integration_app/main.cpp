@@ -91,11 +91,8 @@ int main() {
     std::cout << "--- REGISTERING ABSTRACT SERVICES ---" << std::endl;
     
     try {
-        app.service(MySql::open(app, "mysql://root:blaze_secret@127.0.0.1:3306/blaze", 10))
-           .as<Database>();
-
-        app.service(Postgres::open(app, "postgresql://postgres:blaze_secret@127.0.0.1:5432/postgres", 10))
-           .as<Database>();
+        MySql::install(app, "mysql://root:blaze_secret@127.0.0.1:3306/blaze", 10);
+        Postgres::install(app, "postgresql://postgres:blaze_secret@127.0.0.1:5432/postgres", 10);
     } catch (const std::exception& e) {
         std::cerr << "Warning: Failed to connect to one or more databases: " << e.what() << std::endl;
     }

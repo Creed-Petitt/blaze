@@ -11,11 +11,10 @@
 #include <blaze/json.h>
 #include <blaze/db_common.h>
 #include <blaze/database.h>
+#include <blaze/app.h>
 #include "pg_connection.h"
 
 namespace blaze {
-
-    class App;
 
     class PgPool : public Database, public std::enable_shared_from_this<PgPool> {
     public:
@@ -26,6 +25,10 @@ namespace blaze {
             auto pool = std::make_shared<PgPool>(app, std::move(conn_str), size);
             pool->connect();
             return pool;
+        }
+
+        static void install(App& app, std::string conn_str, int size = 10) {
+            app.service(open(app, std::move(conn_str), size)).template as<Database>();
         }
 
         void connect();

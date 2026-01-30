@@ -12,10 +12,9 @@
 #include <blaze/db_common.h>
 #include <blaze/database.h>
 #include <blaze/mysql_connection.h>
+#include <blaze/app.h>
 
 namespace blaze {
-
-class App;
 
 class MySqlPool : public Database, public std::enable_shared_from_this<MySqlPool> {
 public:
@@ -26,6 +25,10 @@ public:
         auto pool = std::make_shared<MySqlPool>(app, std::move(url), size);
         pool->connect();
         return pool;
+    }
+
+    static void install(App& app, std::string url, int size = 10) {
+        app.service(open(app, std::move(url), size)).template as<Database>();
     }
 
     void connect();
