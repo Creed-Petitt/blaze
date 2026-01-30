@@ -204,6 +204,8 @@ blaze run --watch
 
 This command will compile your code, start the server, and automatically reload it whenever you save a change.
 
+> **Tip:** For advanced commands like Docker integration (`blaze docker`) or Code Generators (`blaze generate`), check out the **[CLI Reference](cli.md)**.
+
 ---
 
 ## Advanced Essentials
