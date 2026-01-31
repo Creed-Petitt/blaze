@@ -25,6 +25,8 @@ add_executable(blaze_tests
     test_app.cpp
     test_multipart.cpp
     test_client_smart.cpp
+    test_request.cpp
+    test_response.cpp
 )
 
 target_link_libraries(blaze_tests 
