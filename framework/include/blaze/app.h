@@ -71,6 +71,7 @@ private:
     ServiceProvider services_;
     std::vector<std::shared_ptr<ListenerBase>> listeners_;
     std::unique_ptr<net::signal_set> signals_;
+    std::atomic<bool> stopping_{false};
 
 public:
     App();

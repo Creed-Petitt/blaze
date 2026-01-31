@@ -212,6 +212,10 @@ void App::_register_docs() {
 }
 
 void App::stop() {
+    if (stopping_.exchange(true)) {
+        return; // Already stopping
+    }
+
     // Cancel signal waiting
     if (signals_) {
         signals_->cancel();
