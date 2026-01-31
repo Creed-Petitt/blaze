@@ -9,6 +9,7 @@
 #include <blaze/wrappers.h>
 #include <blaze/repository.h>
 #include <blaze/traits.h>
+#include <blaze/util/string.h>
 #include <tuple>
 #include <functional>
 #include <type_traits>
@@ -17,31 +18,6 @@
 #include <boost/mp11.hpp>
 
 namespace blaze {
-
-// String to Type conversion helper
-template<typename T>
-T convert_string(const std::string& s) {
-    if constexpr (std::is_same_v<T, std::string>) {
-        return s;
-    } else if constexpr (std::is_same_v<T, bool>) {
-        if (s == "true" || s == "1" || s == "yes") return true;
-        if (s == "false" || s == "0" || s == "no") return false;
-        throw HttpError(400, "Invalid boolean format: " + s);
-    } else if constexpr (std::is_integral_v<T>) {
-        T val;
-        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
-        if (ec != std::errc()) throw HttpError(400, "Invalid integer format: " + s);
-        return val;
-    } else if constexpr (std::is_floating_point_v<T>) {
-        try {
-            return static_cast<T>(std::stod(s));
-        } catch (...) {
-            throw HttpError(400, "Invalid floating point format: " + s);
-        }
-    } else {
-        return T{};
-    }
-}
 
 // Detects if T has a void validate() method
 template <typename T, typename = void>

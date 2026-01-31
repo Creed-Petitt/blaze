@@ -6,8 +6,11 @@
 #include <vector>
 #include <boost/json.hpp>
 #include <blaze/json.h>
+#include <blaze/util/string.h>
 
 namespace blaze::crypto {
+
+    using util::hex_encode;
 
     std::string sha256(std::string_view input);
     std::string hmac_sha256(std::string_view key, std::string_view data);
@@ -18,7 +21,6 @@ namespace blaze::crypto {
     std::string base64url_encode(std::string_view input);
     std::string base64url_decode(std::string_view input);
 
-    std::string hex_encode(std::string_view input);
     std::string random_token(size_t length = 32);
 
     enum class JwtError {
@@ -35,5 +37,11 @@ namespace blaze::crypto {
     bool verify_password(std::string_view password, std::string_view hash);
 
 } // namespace blaze::crypto
+
+namespace blaze {
+    using crypto::jwt_sign;
+    using crypto::jwt_verify;
+    using crypto::JwtError;
+}
 
 #endif

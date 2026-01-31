@@ -3,6 +3,7 @@
 
 #include <blaze/db_result.h>
 #include <blaze/traits.h>
+#include <blaze/util/string.h>
 #include <boost/asio/awaitable.hpp>
 #include <string>
 #include <memory>
@@ -13,13 +14,6 @@
 #include <any>
 
 namespace blaze {
-
-template<typename T>
-std::string to_string_param(const T& val) {
-    if constexpr (std::is_same_v<T, std::string>) return val;
-    else if constexpr (std::is_constructible_v<std::string, T>) return std::string(val);
-    else return std::to_string(val);
-}
 
 /**
  * @brief Abstract interface for database drivers (Postgres, MySQL, etc).

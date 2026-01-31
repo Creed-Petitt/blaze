@@ -4,6 +4,7 @@
 #include <blaze/database.h>
 #include <blaze/exceptions.h>
 #include <blaze/model.h>
+#include <blaze/util/string.h>
 #include <string>
 #include <vector>
 #include <memory>
@@ -93,37 +94,6 @@ struct has_pk_name : std::false_type {};
 template <typename T>
 struct has_pk_name<T, std::void_t<decltype(T::pk_name)>> : std::true_type {};
 
-namespace detail {
-
-    inline std::string to_snake_case(std::string_view name) {
-        // Strip namespace if present (e.g. "blaze::User" -> "User")
-        size_t last_colon = name.find_last_of(':');
-        std::string_view clean_name = (last_colon == std::string_view::npos) ? name : name.substr(last_colon + 1);
-
-        std::string result;
-        for (size_t i = 0; i < clean_name.size(); ++i) {
-            if (i > 0 && std::isupper(clean_name[i])) {
-                if (!std::isupper(clean_name[i-1]) || (i + 1 < clean_name.size() && std::islower(clean_name[i+1]))) {
-                    result += '_';
-                }
-            }
-            result += static_cast<char>(std::tolower(clean_name[i]));
-        }
-        return result;
-    }
-
-    inline std::string pluralize(std::string name) {
-        if (name.empty()) return name;
-        if (name.back() == 'y') {
-            return name.substr(0, name.size() - 1) + "ies";
-        } else if (name.back() == 's') {
-            return name + "es";
-        }
-        return name + "s";
-    }
-
-} // namespace detail
-
 template <typename T>
 class Repository {
 protected:
@@ -136,7 +106,7 @@ protected:
             return std::string(T::table_name);
         }
         std::string name = boost::core::demangle(typeid(T).name());
-        return detail::pluralize(detail::to_snake_case(name));
+        return util::pluralize(util::to_snake_case(name));
     }
 
     // Helper to get column list: "id, name, email" -> "\"id\", \"name\", \"email\""
