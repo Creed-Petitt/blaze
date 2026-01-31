@@ -3,7 +3,11 @@
 
 #include <string>
 #include <string_view>
+#include <cstdint>
+#include <boost/beast/http/message.hpp>
+#include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/fields.hpp>
+#include <boost/beast/http/status.hpp>
 #include <boost/json.hpp>
 #include <blaze/json.h>
 
@@ -11,10 +15,7 @@ namespace blaze {
 
 class Response {
 private:
-    int status_code_ = 0;
-    boost::beast::http::fields headers_;
-    std::string body_;
-    static std::string get_status_text(int code);
+    boost::beast::http::response<boost::beast::http::string_body> res_;
 
 public:
     Response();

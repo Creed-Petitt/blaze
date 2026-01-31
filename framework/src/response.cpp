@@ -1,68 +1,65 @@
 #include <blaze/response.h>
 #include <boost/json/src.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/core/buffers_to_string.hpp>
 #include <sstream>
+#include <string_view>
 
 namespace blaze {
 
-Response::Response() : status_code_(200) {
+Response::Response() {
+    res_.version(11); // HTTP/1.1
+    res_.result(boost::beast::http::status::ok);
 }
 
 Response& Response::status(int code) {
-    status_code_ = code;
+    res_.result(code);
     return *this;
 }
 
 Response& Response::header(const std::string& key, const std::string& value) {
-    headers_.set(key, value);
+    res_.set(key, value);
     return *this;
 }
 
 Response& Response::add_header(const std::string& key, const std::string& value) {
-    headers_.insert(key, value);
+    res_.insert(key, value);
     return *this;
 }
 
 Response& Response::send(const std::string& text) {
-    body_ = text;
+    res_.body() = text;
+    res_.prepare_payload();
     return *this;
 }
 
 Response& Response::json(const boost::json::value& data) {
-    header("Content-Type", "application/json");
-    body_ = boost::json::serialize(data);
+    res_.set(boost::beast::http::field::content_type, "application/json");
+    res_.body() = boost::json::serialize(data);
+    res_.prepare_payload();
     return *this;
 }
 
 Response& Response::json_raw(std::string_view body) {
-    header("Content-Type", "application/json");
-    body_ = std::string(body);
+    res_.set(boost::beast::http::field::content_type, "application/json");
+    res_.body() = std::string(body);
+    res_.prepare_payload();
     return *this;
 }
 
 std::string Response::build_response() const {
     std::ostringstream oss;
-    oss << "HTTP/1.1 " << status_code_ << " " << get_status_text(status_code_) << "\r\n";
-    
-    for (const auto& field : headers_) {
-        oss << field.name_string() << ": " << field.value() << "\r\n";
-    }
-
-    if (headers_.find("Content-Length") == headers_.end()) {
-        oss << "Content-Length: " << body_.length() << "\r\n";
-    }
-
-    oss << "\r\n";
-    oss << body_;
+    oss << res_;
     return oss.str();
 }
 
 int Response::get_status() const {
-    return status_code_;
+    return static_cast<int>(res_.result());
 }
 
 Response& Response::redirect(const std::string& url, int code) {
-    status(code);
-    header("Location", url);
+    res_.result(code);
+    res_.set(boost::beast::http::field::location, url);
     return *this;
 }
 
@@ -73,66 +70,48 @@ Response& Response::set_cookie(const std::string& name, const std::string& value
     if (secure) cookie += "; Secure";
     cookie += "; Path=/";
     
-    headers_.insert(boost::beast::http::field::set_cookie, cookie);
+    res_.insert(boost::beast::http::field::set_cookie, cookie);
     return *this;
 }
 
 Response& Response::no_content() {
-    status(204);
-    body_.clear();
+    res_.result(boost::beast::http::status::no_content);
+    res_.body().clear();
+    res_.prepare_payload();
     return *this;
 }
 
 Response& Response::created(const std::string& location) {
-    status(201);
+    res_.result(boost::beast::http::status::created);
     if (!location.empty()) {
-        header("Location", location);
+        res_.set(boost::beast::http::field::location, location);
     }
     return *this;
 }
 
 Response& Response::accepted() {
-    status(202);
+    res_.result(boost::beast::http::status::accepted);
     return *this;
 }
 
 Response& Response::bad_request(const std::string& message) {
-    status(400);
+    res_.result(boost::beast::http::status::bad_request);
     return json({{"error", "Bad Request"}, {"message", message}});
 }
 
 Response& Response::unauthorized(const std::string& message) {
-    status(401);
+    res_.result(boost::beast::http::status::unauthorized);
     return json({{"error", "Unauthorized"}, {"message", message}});
 }
 
 Response& Response::forbidden(const std::string& message) {
-    status(403);
+    res_.result(boost::beast::http::status::forbidden);
     return json({{"error", "Forbidden"}, {"message", message}});
 }
 
 Response& Response::not_found(const std::string& message) {
-    status(404);
+    res_.result(boost::beast::http::status::not_found);
     return json({{"error", "Not Found"}, {"message", message}});
-}
-
-std::string Response::get_status_text(int code) {
-    switch (code) {
-        case 200: return "OK";
-        case 201: return "Created";
-        case 202: return "Accepted";
-        case 204: return "No Content";
-        case 301: return "Moved Permanently";
-        case 302: return "Found";
-        case 400: return "Bad Request";
-        case 401: return "Unauthorized";
-        case 403: return "Forbidden";
-        case 404: return "Not Found";
-        case 413: return "Payload Too Large";
-        case 429: return "Too Many Requests";
-        case 500: return "Internal Server Error";
-        default: return "Unknown Status";
-    }
 }
 
 } // namespace blaze
