@@ -16,8 +16,12 @@ int main() {
     App app;
 
     // 1. Configure for production
-    app.log_to("production.log"); // Log to file instead of stdout
-    app.max_body_size(50 * 1024 * 1024); // Allow 50MB uploads
+    app.server_name("Blaze-Secure/1.1")
+       .log_to("production.log")
+       .log_level(LogLevel::INFO)
+       .max_body_size(50 * 1024 * 1024)
+       .timeout(30)
+       .num_threads(8);
 
     app.get("/", [](Response& res) -> Async<void> {
         res.send("This is a secure HTTPS connection!");
