@@ -122,8 +122,17 @@ Protect your API from abuse by limiting the number of requests per IP address.
 app.use(middleware::rate_limit(100, 60));
 ```
 
-### Static File Caching
-The `static_files` middleware includes a thread-safe cache. This means that after the first time a file (like `logo.png`) is read from the disk, it is served directly from RAM for all future users, drastically increasing performance.
+### Zero-Copy File Streaming
+The `static_files` middleware uses high-performance **Zero-Copy Streaming**. Unlike traditional frameworks that read a file into a memory buffer before sending it, Blaze uses `boost::beast::http::file_body`.
+
+**Benefits:**
+*   **Zero RAM Overhead**: Whether you serve a 1KB icon or a 10GB video, Blaze consumes virtually no additional memory.
+*   **Kernel-Level Efficiency**: The OS handles the data transfer directly from the disk cache to the network socket.
+*   **Automatic MIME Detection**: Blaze automatically detects and caches MIME types for all common web formats.
+
+```cpp
+app.use(middleware::static_files("public"));
+```
 
 ---
 

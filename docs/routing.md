@@ -286,7 +286,7 @@ Json data = {{"id", 1}, {"name", "Blaze"}};
 
 // Access (Type-safe)
 std::string name = data["name"].as<std::string>();
-int id = data["id"].as<int>();
+int id = data["id"].as<int>(); // Throws BadRequest(400) if not a valid integer
 
 // Serialization
 std::string raw_json = data.dump();

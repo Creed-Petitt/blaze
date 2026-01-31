@@ -45,8 +45,9 @@ app.service(pool).as<Database>();
 ```
 
 ### Fault Tolerance (Circuit Breaker)
-Database drivers in Blaze are protected by an automatic **Circuit Breaker**. 
+Database drivers in Blaze are protected by an automatic, high-concurrency **Circuit Breaker**. 
 *   **Behavior**: If the database fails 5 times in a row, the breaker "trips".
+*   **Concurrency**: Uses Acquire/Release memory barriers to ensure all worker threads immediately see the tripped state.
 *   **Safety**: For the next 5 seconds, all database requests will immediately fail without attempting to connect. This prevents your application from overwhelming a struggling database or hanging threads on dead sockets.
 *   **Recovery**: After 5 seconds, it allows one "probe" request. If successful, the breaker resets.
 
@@ -130,6 +131,7 @@ app.get("/stats", [](Database& db) -> Async<Json> {
     // Parameterized for safety!
     auto res = co_await db.query("SELECT count(*) as total FROM products WHERE price > $1", 100.0);
     
+    // .as<int>() will throw InternalServerError if parsing fails
     int total = res[0]["total"].as<int>();
     co_return Json({{"high_value_items", total}});
 });

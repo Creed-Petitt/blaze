@@ -78,3 +78,33 @@ Blaze is designed with a "Secure-by-Default" philosophy:
 *   **SQL Injection**: Every query in the `Repository` and `Database` classes is parameterized. You never concatenate strings to build SQL.
 *   **Memory Safety**: Blaze uses RAII and smart pointers throughout. Raw `new` and `delete` are virtually non-existent in the codebase.
 *   **Buffer Safety**: Powered by `boost::beast`, the HTTP parser handles malformed or oversized requests gracefully, preventing common overflow attacks.
+
+---
+
+## 5. Lifecycle & Graceful Shutdown
+
+Blaze ensures that your application shuts down cleanly without dropping in-flight requests.
+
+### The Shutdown Sequence
+1.  **Signal Trap**: The server listens for `SIGINT` (Ctrl+C) and `SIGTERM`.
+2.  **Listener Stop**: The server immediately stops accepting new connections.
+3.  **In-flight Completion**: Existing requests are allowed to finish their execution loop.
+4.  **Safety Timeout**: A configurable `shutdown_timeout` (default 30s) ensures that if a session is hung (e.g., a massive upload or a slow database query), the process eventually force-stops.
+
+```cpp
+app.config().shutdown_timeout = 5; // Allow 5 seconds for cleanup
+```
+
+---
+
+## 6. Zero-Copy I/O
+
+Blaze is designed to be "Memory-Transparent" when handling large assets. This is achieved through a specialized response pipeline that distinguishes between dynamic and static content.
+
+### The Response Pipeline
+When a request is processed, `App::handle_request` returns a `Response` object rather than a raw string. The `HttpSession` then performs an architectural optimization:
+
+1.  **Dynamic Content**: If the response contains a body (JSON, HTML), it uses `http::string_body`.
+2.  **Static Assets**: If the response points to a file path (via `res.file()`), Blaze swaps the body type to `http::file_body`.
+
+This allows the operating system to stream the file directly from the file system to the network interface, bypassing the application's memory space entirely and avoiding expensive data copies.

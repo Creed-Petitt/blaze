@@ -70,25 +70,47 @@ int main() {
 
 Blaze uses **OpenSSL** internally to handle the encryption. The framework automatically configures modern TLS defaults (TLS 1.2+) to ensure your data is secure during transit.
 
-### Logging
+### Application Configuration
 
-Blaze features an asynchronous, thread-safe logger that won't slow down your request handling.
+Blaze provides a fluent "Builder" API to configure your server's behavior. You should apply these settings before calling `listen()`.
 
 ```cpp
 int main() {
     App app;
 
-    // 1. Redirect logs to a file (Defaults to stdout)
-    app.log_to("server.log");
+    app.server_name("MyBlazeApp/1.0")  // Custom 'Server' header
+       .max_body_size(5 * 1024 * 1024) // Limit uploads to 5MB
+       .timeout(60)                    // 60s request timeout
+       .num_threads(8)                 // Specify thread pool size
+       .enable_docs(false);            // Disable Swagger UI (/docs)
 
-    // 2. Disable logging entirely
+    app.listen(8080);
+}
+```
+
+For a full list of settings and best practices, see the **[Configuration Guide](configuration.md)**.
+
+---
+
+### Logging
+
+Blaze features an asynchronous, thread-safe logger that won't slow down your request handling. You can configure the destination and the detail level.
+
+```cpp
+int main() {
+    App app;
+
+    app.log_to("server.log")           // Redirect logs to a file
+       .log_level(LogLevel::DEBUG);    // Set minimum level (DEBUG, INFO, WARN, ERROR)
+
+    // Disable logging entirely
     // app.log_to("/dev/null");
 
     app.listen(8080);
 }
 ```
 
-By default, Blaze logs every incoming request with the client's IP, method, path, status code, and response time in milliseconds.
+By default, Blaze logs every incoming request with an `ACCESS` prefix, including the client's IP, method, path, status code, and response time.
 
 ---
 
