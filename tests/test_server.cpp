@@ -24,16 +24,28 @@ TEST_CASE("Server: End-to-End Request", "[integration]") {
     });
 
     std::thread server_thread([&]() {
-        app.listen(9999);
+        try {
+            app.listen(9999);
+        } catch (...) {}
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
+    
+    // Robust Connection Loop
     net::io_context ioc;
     tcp::resolver resolver(ioc);
     tcp::socket socket(ioc);
-
     auto const results = resolver.resolve("127.0.0.1", "9999");
-    net::connect(socket, results);
+    
+    bool connected = false;
+    for(int i = 0; i < 20; ++i) { // Try for 2 seconds (20 * 100ms)
+        try {
+            net::connect(socket, results);
+            connected = true;
+            break;
+        } catch (...) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    if (!connected) FAIL("Could not connect to test server");
 
     SECTION("Real TCP request should return 200 OK") {
         std::string req = 
@@ -77,13 +89,28 @@ TEST_CASE("Server: Async Return Types", "[app]") {
     });
 
     std::thread server_thread([&]() {
-        app.listen(9998);
+        try {
+            app.listen(9998);
+        } catch (...) {}
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
+    
+    // Robust Connection
     net::io_context ioc;
     tcp::resolver resolver(ioc);
     auto const results = resolver.resolve("127.0.0.1", "9998");
+    
+    bool connected = false;
+    for(int i=0; i<20; ++i) {
+        try {
+            tcp::socket sock(ioc);
+            net::connect(sock, results);
+            connected = true;
+            break;
+        } catch(...) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    if (!connected) FAIL("Could not connect to test server");
 
     SECTION("Async<Json>") {
         tcp::socket socket(ioc);
@@ -142,13 +169,28 @@ TEST_CASE("Server: Body Size Limits", "[integration]") {
     });
 
     std::thread server_thread([&]() {
-        app.listen(9996);
+        try {
+            app.listen(9996);
+        } catch (...) {}
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
+    
+    // Robust Connection
     net::io_context ioc;
     tcp::resolver resolver(ioc);
     auto const results = resolver.resolve("127.0.0.1", "9996");
+    
+    bool connected = false;
+    for(int i=0; i<20; ++i) {
+        try {
+            tcp::socket sock(ioc);
+            net::connect(sock, results);
+            connected = true;
+            break;
+        } catch(...) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    if (!connected) FAIL("Could not connect to test server");
 
     SECTION("Small body should be accepted") {
         tcp::socket socket(ioc);
@@ -204,13 +246,28 @@ TEST_CASE("Server: Auth & Cookies", "[integration]") {
     });
 
     std::thread server_thread([&]() {
-        app.listen(9997);
+        try {
+            app.listen(9997);
+        } catch (...) {}
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
+    
+    // Robust Connection
     net::io_context ioc;
     tcp::resolver resolver(ioc);
     auto const results = resolver.resolve("127.0.0.1", "9997");
+    
+    bool connected = false;
+    for(int i=0; i<20; ++i) {
+        try {
+            tcp::socket sock(ioc);
+            net::connect(sock, results);
+            connected = true;
+            break;
+        } catch(...) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    if (!connected) FAIL("Could not connect to test server");
 
     SECTION("Auth: Invalid Token") {
         tcp::socket socket(ioc);

@@ -51,7 +51,18 @@ TEST_CASE("WebSocket: Connection and Echo", "[websocket]") {
         websocket::stream<tcp::socket> ws(ioc);
 
         auto const results = resolver.resolve("127.0.0.1", "8890");
-        net::connect(ws.next_layer(), results);
+        
+        bool success = false;
+        for(int i=0; i<20; ++i) {
+            try {
+                net::connect(ws.next_layer(), results);
+                success = true;
+                break;
+            } catch(...) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+        if(!success) FAIL("Could not connect to WS server");
 
         ws.handshake("127.0.0.1", "/chat");
         
@@ -97,13 +108,29 @@ TEST_CASE("WebSocket: Automated Broadcasting", "[websocket]") {
         // Connect Client 1
         websocket::stream<tcp::socket> ws1(ioc);
         auto const res1 = resolver.resolve("127.0.0.1", "8891");
-        net::connect(ws1.next_layer(), res1);
+        
+        // Retry Loop 1
+        bool s1 = false;
+        for(int i=0; i<20; ++i) {
+            try { net::connect(ws1.next_layer(), res1); s1=true; break; }
+            catch(...) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); }
+        }
+        if(!s1) FAIL("Client 1 failed to connect");
+        
         ws1.handshake("127.0.0.1", "/broadcast");
 
         // Connect Client 2
         websocket::stream<tcp::socket> ws2(ioc);
         auto const res2 = resolver.resolve("127.0.0.1", "8891");
-        net::connect(ws2.next_layer(), res2);
+        
+        // Retry Loop 2
+        bool s2 = false;
+        for(int i=0; i<20; ++i) {
+            try { net::connect(ws2.next_layer(), res2); s2=true; break; }
+            catch(...) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); }
+        }
+        if(!s2) FAIL("Client 2 failed to connect");
+        
         ws2.handshake("127.0.0.1", "/broadcast");
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
