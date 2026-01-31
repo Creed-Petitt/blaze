@@ -1,0 +1,24 @@
+---
+Checks:          'clang-diagnostic-*,clang-analyzer-*,modernize-*,performance-*,bugprone-*,readability-*'
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'
+FormatStyle:     file
+CheckOptions:
+  # Relaxed Naming (we don't want to rename every variable yet)
+  - key:             readability-identifier-naming.VariableCase
+    value:           'aNy_CasE' 
+  
+  # Modernize
+  - key:             modernize-use-nullptr.NullMacros
+    value:           'NULL'
+  
+  # Ignore specific annoyances
+  - key:             modernize-use-trailing-return-type
+    value:           'false' # We stick to standard 'int foo()'
+  - key:             readability-function-cognitive-complexity.Threshoadd ld
+    value:           50      # Allow somewhat complex functions
+  - key:             bugprone-easily-swappable-parameters.MinimumLength
+    value:           5       # Only complain if param names are very short
+  - key:             readability-magic-numbers.IgnoredIntegerValues
+    value:           '0;1;2;3;4;200;201;400;401;403;404;500'
+...
