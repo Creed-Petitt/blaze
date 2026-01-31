@@ -243,7 +243,7 @@ public:
     /**
      * @brief Internal: WebSocket session management (used by server).
      */
-    void _register_ws(const std::string& path, std::shared_ptr<WebSocket> ws);
+    void _register_ws(const std::string& path, const std::shared_ptr<WebSocket>& ws);
 
     /** @brief Starts a background task (coroutine) in the event loop. */
     void spawn(Async<void> task);

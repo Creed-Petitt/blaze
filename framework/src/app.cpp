@@ -9,8 +9,7 @@
 
 namespace blaze {
 
-App::App() {
-}
+App::App() = default;
 
 App::~App() {
     if(!ioc_.stopped()) {
@@ -32,7 +31,7 @@ void App::spawn(Async<void> task) {
     boost::asio::co_spawn(ioc_.get_executor(), std::move(task), boost::asio::detached);
 }
 
-void App::_register_ws(const std::string& path, std::shared_ptr<WebSocket> ws) {
+void App::_register_ws(const std::string& path, const std::shared_ptr<WebSocket>& ws) {
     std::lock_guard<std::mutex> lock(ws_mtx_);
     ws_sessions_[path].push_back(ws);
 }
@@ -263,7 +262,7 @@ void App::listen(const int port, int num_threads) {
     }
 
     if (num_threads <= 0) {
-        num_threads = std::thread::hardware_concurrency();
+        num_threads = static_cast<int>(std::thread::hardware_concurrency());
         if (num_threads == 0) num_threads = 4;
     }
 
@@ -308,7 +307,7 @@ void App::listen_ssl(const int port, const std::string& cert_path, const std::st
     }
 
     if (num_threads <= 0) {
-        num_threads = std::thread::hardware_concurrency();
+        num_threads = static_cast<int>(std::thread::hardware_concurrency());
         if (num_threads == 0) num_threads = 4; // Fallback
     }
 
