@@ -27,6 +27,9 @@ private:
     bool enabled_{true};
     LogLevel level_{LogLevel::INFO};
     
+    // Config Mutex (protects file_stream_, use_stdout_, enabled_, level_)
+    std::mutex config_mutex_;
+
     // Async Queue
     std::queue<std::string> queue_;
     std::mutex queue_mutex_;

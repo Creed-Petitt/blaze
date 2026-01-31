@@ -59,6 +59,7 @@ void Logger::process_queue() {
         output << "[" << get_timestamp() << "] " << msg << "\n";
         std::string out_str = output.str();
 
+        std::lock_guard<std::mutex> config_lock(config_mutex_);
         if (use_stdout_) {
             if (msg.find("ERROR") != std::string::npos) {
                 std::cerr << out_str;
@@ -67,8 +68,6 @@ void Logger::process_queue() {
             }
         } else if (file_stream_.is_open()) {
             file_stream_ << out_str;
-            // Flush on errors or during shutdown if we want to be safe, 
-            // but for performance we mostly let the OS buffer.
             if (msg.find("ERROR") != std::string::npos) {
                 file_stream_.flush();
             }
@@ -77,6 +76,8 @@ void Logger::process_queue() {
 }
 
 void Logger::configure(const std::string& path) {
+    std::lock_guard<std::mutex> lock(config_mutex_);
+    
     if (path == "/dev/null") {
         enabled_ = false;
         return;
@@ -101,7 +102,10 @@ void Logger::configure(const std::string& path) {
 }
 
 void Logger::log(LogLevel level, std::string_view message) {
-    if (!enabled_ || level < level_) return;
+    {
+        std::lock_guard<std::mutex> config_lock(config_mutex_);
+        if (!enabled_ || level < level_) return;
+    }
 
     std::string level_str;
     switch (level) {
@@ -124,7 +128,10 @@ void Logger::log_access(std::string_view client_ip,
                        std::string_view path,
                        int status_code,
                        long long response_time_ms) {
-    if (!enabled_ || LogLevel::INFO < level_) return;
+    {
+        std::lock_guard<std::mutex> config_lock(config_mutex_);
+        if (!enabled_ || LogLevel::INFO < level_) return;
+    }
 
     std::stringstream ss;
     ss << "ACCESS: " << client_ip << " " << method << " " << path << " " 

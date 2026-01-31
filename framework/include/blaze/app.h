@@ -60,6 +60,9 @@ private:
     // Session tracking for path-based broadcasting
     std::map<std::string, std::vector<std::weak_ptr<WebSocket>>> ws_sessions_;
     std::mutex ws_mtx_;
+    
+    // Lifecycle Mutex (protects listeners_, signals_)
+    std::mutex lifecycle_mtx_;
 
     void broadcast_raw(const std::string& path, const std::string& payload);
 

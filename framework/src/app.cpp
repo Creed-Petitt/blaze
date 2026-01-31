@@ -212,14 +212,17 @@ void App::stop() {
         return; // Already stopping
     }
 
-    // Cancel signal waiting
-    if (signals_) {
-        signals_->cancel();
-    }
+    {
+        std::lock_guard lock(lifecycle_mtx_);
+        // Cancel signal waiting
+        if (signals_) {
+            signals_->cancel();
+        }
 
-    // Close listener
-    for (auto& listener : listeners_) {
-        listener->stop();
+        // Close listeners
+        for (auto& listener : listeners_) {
+            listener->stop();
+        }
     }
     
     // Close WebSockets
@@ -270,7 +273,10 @@ void App::listen(const int port, int num_threads) {
     try {
         // Create and launch listening port
         auto listener = std::make_shared<Listener>(ioc_, endpoint, *this);
-        listeners_.push_back(listener);
+        {
+            std::lock_guard<std::mutex> lock(lifecycle_mtx_);
+            listeners_.push_back(listener);
+        }
         listener->run();
     } catch (const std::exception& e) {
         std::cerr << "[Blaze] FATAL: Could not start listener: " << e.what() << std::endl;
@@ -278,10 +284,13 @@ void App::listen(const int port, int num_threads) {
     }
 
     // (Ctrl+C) to stop cleanly
-    signals_ = std::make_unique<net::signal_set>(ioc_, SIGINT, SIGTERM);
-    signals_->async_wait([this](boost::system::error_code const&, int) {
-        this->stop();
-    });
+    {
+        std::lock_guard<std::mutex> lock(lifecycle_mtx_);
+        signals_ = std::make_unique<net::signal_set>(ioc_, SIGINT, SIGTERM);
+        signals_->async_wait([this](boost::system::error_code const&, int) {
+            this->stop();
+        });
+    }
 
     _run_server(num_threads);
 }
@@ -316,14 +325,20 @@ void App::listen_ssl(const int port, const std::string& cert_path, const std::st
 
     // Create and launch SSL listening port
     auto listener = std::make_shared<SslListener>(ioc_, ssl_ctx_, endpoint, *this);
-    listeners_.push_back(listener);
+    {
+        std::lock_guard<std::mutex> lock(lifecycle_mtx_);
+        listeners_.push_back(listener);
+    }
     listener->run();
 
     // (Ctrl+C) to stop cleanly
-    signals_ = std::make_unique<net::signal_set>(ioc_, SIGINT, SIGTERM);
-    signals_->async_wait([this](boost::system::error_code const&, int) {
-        this->stop();
-    });
+    {
+        std::lock_guard<std::mutex> lock(lifecycle_mtx_);
+        signals_ = std::make_unique<net::signal_set>(ioc_, SIGINT, SIGTERM);
+        signals_->async_wait([this](boost::system::error_code const&, int) {
+            this->stop();
+        });
+    }
 
     std::cout << "[App] Starting HTTPS on port " << port << " with " << num_threads << " threads\n";
 
