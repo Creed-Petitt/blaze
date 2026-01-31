@@ -287,7 +287,7 @@ public:
 
     /** @brief Returns the internal io_context engine. */
     net::io_context& engine() { return ioc_; }
-    boost::asio::awaitable<std::string> handle_request(Request& req, const std::string& client_ip, bool keep_alive);
+    boost::asio::awaitable<Response> handle_request(Request& req, const std::string& client_ip, bool keep_alive);
 
 private:
     void _register_docs();
