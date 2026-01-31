@@ -5,38 +5,29 @@
 #include <string_view>
 #include <vector>
 #include <memory>
-#include <stdexcept>
-#include <boost/lexical_cast.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <blaze/util/string.h>
 #include <blaze/model.h>
 
 namespace blaze {
 
-class ResultImpl;
+class RowImpl;
 
+/**
+ * @brief Represents a single field value in a database row.
+ */
 class Cell {
 public:
     Cell(std::string_view v, bool is_null) : val_(v), null_(is_null) {}
 
+    /**
+     * @brief Converts the cell value to the target type T.
+     */
     template<typename T>
     T as() const {
         if (null_) return T{};
-        
-        // Handle Boolean specifically (Postgres uses "t"/"f")
-        if constexpr (std::is_same_v<T, bool>) {
-            if (val_ == "t" || val_ == "true" || val_ == "1" || val_ == "y") return true;
-            return false;
-        }
-
-        if constexpr (std::is_same_v<T, std::string>) {
-            return std::string(val_);
-        } else if constexpr (std::is_integral_v<T>) {
-            if (val_.empty()) return T{};
-            return boost::lexical_cast<T>(val_);
-        } else if constexpr (std::is_floating_point_v<T>) {
-            if (val_.empty()) return T{};
-            return boost::lexical_cast<T>(val_);
-        }
-        return T{};
+        return convert_string<T>(val_);
     }
 
 private:
@@ -44,7 +35,6 @@ private:
     bool null_;
 };
 
-// Abstract Interface for the Implementation (Internal Use Only)
 class RowImpl {
 public:
     virtual ~RowImpl() = default;
@@ -54,20 +44,16 @@ public:
     virtual bool is_null(std::string_view name) const = 0;
 };
 
-// Value Wrapper for a Row
+/**
+ * @brief Value wrapper for a single row in a result set.
+ */
 class Row {
 public:
     Row(std::shared_ptr<RowImpl> impl) : impl_(std::move(impl)) {}
 
-    Cell operator[](size_t index) const {
-        return Cell(impl_->get_column(index), impl_->is_null(index));
-    }
+    Cell operator[](size_t index) const;
+    Cell operator[](std::string_view name) const;
 
-    Cell operator[](std::string_view name) const {
-        return Cell(impl_->get_column(name), impl_->is_null(name));
-    }
-
-    // Mini ORM Hook
     template<typename T>
     T as() const {
         return row_to_struct<T>(*this);
@@ -77,7 +63,6 @@ private:
     std::shared_ptr<RowImpl> impl_;
 };
 
-// Abstract Interface for Result Implementation (Internal Use Only)
 class ResultImpl {
 public:
     virtual ~ResultImpl() = default;
@@ -88,24 +73,22 @@ public:
     virtual int64_t affected_rows() const = 0;
 };
 
-// Value Wrapper for the Result Set
+/**
+ * @brief Value wrapper for a complete database result set.
+ */
 class DbResult {
 public:
     DbResult() = default;
     DbResult(std::shared_ptr<ResultImpl> impl) : impl_(std::move(impl)) {}
 
-    size_t size() const { return impl_ ? impl_->size() : 0; }
-    bool empty() const { return size() == 0; }
-    int64_t affected_rows() const { return impl_ ? impl_->affected_rows() : 0; }
+    size_t size() const;
+    bool empty() const;
+    int64_t affected_rows() const;
     
-    // Returns Row by Value
-    Row operator[](size_t index) const {
-        if (!impl_) throw std::runtime_error("Empty DbResult");
-        return Row(impl_->get_row(index));
-    }
+    Row operator[](size_t index) const;
     
-    bool is_ok() const { return impl_ ? impl_->is_ok() : false; }
-    std::string error_message() const { return impl_ ? impl_->error_message() : "Empty Result"; }
+    bool is_ok() const;
+    std::string error_message() const;
 
 private:
     std::shared_ptr<ResultImpl> impl_;
@@ -113,4 +96,4 @@ private:
 
 } // namespace blaze
 
-#endif
+#endif // BLAZE_DB_RESULT_H

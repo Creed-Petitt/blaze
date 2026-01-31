@@ -9,7 +9,7 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <blaze/json.h>
-#include <blaze/db_common.h>
+#include <blaze/util/circuit_breaker.h>
 #include <blaze/database.h>
 #include <blaze/mysql_connection.h>
 #include <blaze/app.h>

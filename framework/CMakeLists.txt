@@ -75,6 +75,8 @@ set(CORE_SOURCES
     src/multipart.cpp
     src/logger.cpp
     src/util/string.cpp
+    src/util/circuit_breaker.cpp
+    src/db_result.cpp
     src/middleware.cpp
 )
 
