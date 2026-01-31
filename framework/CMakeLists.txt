@@ -74,6 +74,8 @@ set(CORE_SOURCES
     src/client.cpp
     src/multipart.cpp
     src/logger.cpp
+    src/util/string.cpp
+    src/middleware.cpp
 )
 
 add_library(blaze_core STATIC ${CORE_SOURCES})
