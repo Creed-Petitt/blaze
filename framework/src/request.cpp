@@ -1,38 +1,38 @@
 #include <blaze/request.h>
-#include <stdexcept>
+#include <blaze/util/string.h>
+#include <sstream>
 #include <algorithm>
-#include <cctype>
 #include <charconv>
+#include <map>
+#include <unordered_map>
 
 namespace blaze {
 
-void Request::set_target(std::string_view target) {
-    query.clear();
-    params.clear();
-    const size_t query_pos = target.find('?');
-
-    if (query_pos != std::string_view::npos) {
-        path = target.substr(0, query_pos);
-        std::string_view query_str = target.substr(query_pos + 1);
-
-        // Parse Query Params
-        size_t pos = 0;
-        while (pos < query_str.size()) {
-            size_t amp_pos = query_str.find('&', pos);
-            if (amp_pos == std::string_view::npos) amp_pos = query_str.size();
-
-            std::string_view pair = query_str.substr(pos, amp_pos - pos);
-            const size_t eq_pos = pair.find('=');
-
-            if (eq_pos != std::string_view::npos) {
-                auto key = url_decode(pair.substr(0, eq_pos));
-                auto value = url_decode(pair.substr(eq_pos + 1));
-                query[std::move(key)] = std::move(value);
-            }
-            pos = amp_pos + 1;
+static std::unordered_map<std::string, std::string> parse_query_params(std::string_view query) {
+    std::unordered_map<std::string, std::string> params;
+    size_t pos = 0;
+    while (pos < query.size()) {
+        size_t amp = query.find('&', pos);
+        std::string_view pair = query.substr(pos, amp - pos);
+        size_t eq = pair.find('=');
+        if (eq != std::string_view::npos) {
+            std::string key = util::url_decode(pair.substr(0, eq));
+            std::string value = util::url_decode(pair.substr(eq + 1));
+            params[key] = value;
         }
+        if (amp == std::string_view::npos) break;
+        pos = amp + 1;
+    }
+    return params;
+}
+
+void Request::set_target(std::string_view target) {
+    size_t query_pos = target.find('?');
+    if (query_pos != std::string_view::npos) {
+        path = std::string(target.substr(0, query_pos));
+        query = parse_query_params(target.substr(query_pos + 1));
     } else {
-        path = target;
+        path = std::string(target);
     }
 }
 
@@ -103,28 +103,21 @@ std::string Request::cookie(const std::string& name) const {
 
         std::string_view pair = cookie_header.substr(pos, end - pos);
         
-        // Trim leading space
-        while (!pair.empty() && std::isspace(pair.front()))
-            pair.remove_prefix(1);
-        // Trim trailing space
-        while (!pair.empty() && std::isspace(pair.back()))
-            pair.remove_suffix(1);
+        while (!pair.empty() && std::isspace(pair.front())) pair.remove_prefix(1);
+        while (!pair.empty() && std::isspace(pair.back())) pair.remove_suffix(1);
 
         size_t eq = pair.find('=');
         if (eq != std::string_view::npos) {
             std::string_view key = pair.substr(0, eq);
             std::string_view value = pair.substr(eq + 1);
 
-            // Trim key
             while (!key.empty() && std::isspace(key.front())) key.remove_prefix(1);
             while (!key.empty() && std::isspace(key.back())) key.remove_suffix(1);
 
             if (key == name) {
-                // Trim value
                 while (!value.empty() && std::isspace(value.front())) value.remove_prefix(1);
                 while (!value.empty() && std::isspace(value.back())) value.remove_suffix(1);
 
-                // Handle quoted values
                 if (value.size() >= 2 && value.front() == '\"' && value.back() == '\"') {
                     value.remove_prefix(1);
                     value.remove_suffix(1);
@@ -132,37 +125,13 @@ std::string Request::cookie(const std::string& name) const {
                 return std::string(value);
             }
         }
-
         pos = end + 1;
     }
-
     return "";
 }
 
 std::string Request::url_decode(std::string_view str) {
-    std::string result;
-    result.reserve(str.size());
-    for (size_t i = 0; i < str.size(); ++i) {
-        if (str[i] == '%') {
-            if (i + 2 < str.size()) {
-                int value;
-                auto [ptr, ec] = std::from_chars(str.data() + i + 1, str.data() + i + 3, value, 16);
-                if (ec == std::errc()) {
-                    result += static_cast<char>(value);
-                    i += 2;
-                } else {
-                    result += '%';
-                }
-            } else {
-                result += '%';
-            }
-        } else if (str[i] == '+') {
-            result += ' ';
-        } else {
-            result += str[i];
-        }
-    }
-    return result;
+    return util::url_decode(str);
 }
 
 const MultipartFormData& Request::form() const {
@@ -181,7 +150,6 @@ const MultipartFormData& Request::form() const {
     }
 
     std::string_view boundary = content_type.substr(boundary_pos + 9);
-    // Boundary might be quoted
     if (boundary.size() >= 2 && boundary.front() == '"' && boundary.back() == '"') {
         boundary.remove_prefix(1);
         boundary.remove_suffix(1);

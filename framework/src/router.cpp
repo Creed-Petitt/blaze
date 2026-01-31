@@ -1,9 +1,10 @@
 #include <blaze/router.h>
-#include <vector>
+#include <blaze/util/string.h>
+#include <iostream>
+#include <algorithm>
 
 namespace blaze {
 
-// RouteGroup implementation
 RouteGroup::RouteGroup(Router& router, const std::string& prefix)
     : router_(router), prefix_(prefix) {}
 
@@ -27,32 +28,30 @@ RouteGroup RouteGroup::group(const std::string& subpath) const {
     return {router_, prefix_ + subpath};
 }
 
-// Router implementation
-void Router::add_route(const std::string& method, const std::string& path,
-                        const Handler &handler) {
+void Router::add_route(const std::string& method, const std::string& path, const Handler &handler) {
     routes_.push_back({method, path, split(path), handler});
 }
 
 std::optional<RouteMatch> Router::match(std::string_view method, std::string_view path) const {
-    if (path.size() > 1 && path.back() == '/') {
-        path.remove_suffix(1);
+    // Separate path from query string
+    size_t query_pos = path.find('?');
+    std::string_view pure_path = path.substr(0, query_pos);
+
+    // Normalize: remove trailing slash if not root
+    if (pure_path.size() > 1 && pure_path.back() == '/') {
+        pure_path.remove_suffix(1);
     }
 
-    const std::vector<std::string_view> request_segments = split_view(path);
+    const std::vector<std::string_view> request_segments = split_view(pure_path);
 
     for (const auto& route : routes_) {
-        if (route.method != method) {
-            continue;
-        }
-
-        if (route.segments.size() != request_segments.size()) {
-            continue;
-        }
+        if (route.method != method) continue;
+        if (route.segments.size() != request_segments.size()) continue;
 
         std::unordered_map<std::string, std::string> params;
         std::vector<std::string> path_values;
         if (matches(route.segments, request_segments, params, path_values)) {
-            return RouteMatch{route.handler, params, path_values};
+            return RouteMatch{route.handler, std::move(params), std::move(path_values)};
         }
     }
 
@@ -69,7 +68,7 @@ bool Router::matches(const std::vector<std::string>& route_segments,
 
         if (!route_seg.empty() && route_seg[0] == ':') {
             std::string param_name = route_seg.substr(1);
-            std::string param_value = Request::url_decode(request_seg);
+            std::string param_value = util::url_decode(request_seg);
             params[param_name] = param_value;
             path_values.push_back(param_value);
         } else {
@@ -78,7 +77,6 @@ bool Router::matches(const std::vector<std::string>& route_segments,
             }
         }
     }
-
     return true;
 }
 
@@ -94,28 +92,24 @@ std::vector<std::string> Router::split(const std::string& str) {
 
 std::vector<std::string_view> Router::split_view(std::string_view str) {
     std::vector<std::string_view> segments;
-    if (str.empty()) {
+    if (str.empty() || str == "/") {
         segments.emplace_back("");
         return segments;
     }
 
     size_t start = 0;
-    while (start <= str.size()) {
+    while (start < str.size()) {
+        if (str[start] == '/') {
+            start++;
+            continue;
+        }
         size_t end = str.find('/', start);
         if (end == std::string_view::npos) {
             end = str.size();
         }
         
-        std::string_view seg = str.substr(start, end - start);
-        // Only push non-empty segments, OR the root segment if it's the only one
-        if (!seg.empty() || (segments.empty() && end == str.size())) {
-            segments.push_back(seg);
-        }
-
-        if (end == str.size()) {
-            break;
-        }
-        start = end + 1;
+        segments.push_back(str.substr(start, end - start));
+        start = end;
     }
 
     if (segments.empty()) {
