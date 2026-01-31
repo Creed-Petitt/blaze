@@ -55,12 +55,12 @@ namespace detail {
             try_validate(model);
             return std::make_shared<PureType>(std::move(model));
         } else if constexpr (is_instantiation_of<Query, PureType>::value) {
-            using InnerT = PureType::value_type;
+            using InnerT = typename PureType::value_type;
             InnerT model{};
             using Members = boost::describe::describe_members<InnerT, boost::describe::mod_any_access>;
             boost::mp11::mp_for_each<Members>([&](auto meta) {
                 std::string key = meta.name;
-                if (req.query.count(key)) {
+                if (req.query.contains(key)) {
                     using FieldT = std::remove_cvref_t<decltype(model.*meta.pointer)>;
                     model.*meta.pointer = convert_string<FieldT>(req.query.at(key));
                 }
