@@ -33,6 +33,11 @@ Response& Response::send(const std::string& text) {
     return *this;
 }
 
+Response& Response::file(const std::string& path) {
+    file_path_ = path;
+    return *this;
+}
+
 Response& Response::json(const boost::json::value& data) {
     res_.set(boost::beast::http::field::content_type, "application/json");
     res_.body() = boost::json::serialize(data);

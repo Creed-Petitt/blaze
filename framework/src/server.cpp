@@ -3,6 +3,7 @@
 #include <blaze/request.h>
 #include <blaze/response.h>
 #include <blaze/exceptions.h>
+#include <boost/beast/http/file_body.hpp>
 #include <iostream>
 
 namespace blaze {
@@ -57,12 +58,12 @@ namespace {
         std::string client_ip,
         bool keep_alive
     ) {
-        std::string response_str;
+        Response blaze_res;
         bool error_occurred = false;
         std::optional<std::pair<http::status, std::string>> pending_error;
 
         try {
-            response_str = co_await app.handle_request(req, client_ip, keep_alive);
+            blaze_res = co_await app.handle_request(req, client_ip, keep_alive);
         } catch (const HttpError& e) {
             pending_error = std::make_pair(static_cast<http::status>(e.status()), std::string(e.what()));
             keep_alive = false;
@@ -83,15 +84,46 @@ namespace {
             } catch (...) {
                 error_occurred = true;
             }
-        }
+        } else if (blaze_res.is_file()) {
+            // Handle file streaming
+            beast::error_code ec;
+            http::file_body::value_type body;
+            body.open(blaze_res.get_file_path().c_str(), beast::file_mode::scan, ec);
 
-        if (!response_str.empty()) {
+            if (ec) {
+                co_await send_error(stream, http::status::not_found, "File not found", 11);
+            } else {
+                auto const size = body.size();
+                http::response<http::file_body> res{
+                    std::piecewise_construct,
+                    std::make_tuple(std::move(body)),
+                    std::make_tuple(static_cast<http::status>(blaze_res.get_status()), 11)
+                };
+
+                // Copy headers from blaze_res to our file response
+                auto& beast_res = blaze_res.get_beast_response();
+                for (auto const& field : beast_res) {
+                    res.set(field.name(), field.value());
+                }
+                
+                res.content_length(size);
+                res.keep_alive(keep_alive);
+                res.prepare_payload();
+
+                try {
+                    co_await http::async_write(stream, res, net::use_awaitable);
+                } catch (...) {
+                    error_occurred = true;
+                }
+            }
+        } else {
+            // Handle standard string response
+            auto& beast_res = blaze_res.get_beast_response();
+            beast_res.keep_alive(keep_alive);
+            beast_res.prepare_payload();
+
             try {
-                co_await boost::asio::async_write(
-                    stream,
-                    boost::asio::buffer(response_str),
-                    boost::asio::use_awaitable
-                );
+                co_await http::async_write(stream, beast_res, net::use_awaitable);
             } catch (...) {
                 error_occurred = true;
             }

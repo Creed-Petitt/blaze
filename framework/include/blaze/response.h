@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <cstdint>
+#include <optional>
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/http/fields.hpp>
@@ -16,6 +17,7 @@ namespace blaze {
 class Response {
 private:
     boost::beast::http::response<boost::beast::http::string_body> res_;
+    std::optional<std::string> file_path_;
 
 public:
     Response();
@@ -32,6 +34,7 @@ public:
     }
 
     Response& send(const std::string& text);
+    Response& file(const std::string& path);
     
     // Boost.JSON overload
     Response& json(const boost::json::value& data);
@@ -51,6 +54,11 @@ public:
 
     std::string build_response() const;
     int get_status() const;
+
+    bool is_file() const { return file_path_.has_value(); }
+    const std::string& get_file_path() const { return *file_path_; }
+    const boost::beast::http::response<boost::beast::http::string_body>& get_beast_response() const { return res_; }
+    boost::beast::http::response<boost::beast::http::string_body>& get_beast_response() { return res_; }
 
     // Helper methods for common response patterns
     Response& redirect(const std::string& url, int code = 302);
