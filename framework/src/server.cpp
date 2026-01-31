@@ -7,6 +7,27 @@
 
 namespace blaze {
 
+// Helper to handle stream-specific operations
+template<class Stream>
+struct StreamTraits {
+    static void shutdown(Stream& stream) {
+        beast::error_code ec;
+        if constexpr (std::is_same_v<Stream, beast::tcp_stream>) {
+            stream.socket().shutdown(tcp::socket::shutdown_send, ec);
+        } else {
+            beast::get_lowest_layer(stream).socket().shutdown(tcp::socket::shutdown_send, ec);
+        }
+    }
+    
+    static tcp::socket& get_socket(Stream& stream) {
+        if constexpr (std::is_same_v<Stream, beast::tcp_stream>) {
+            return stream.socket();
+        } else {
+            return beast::get_lowest_layer(stream).socket();
+        }
+    }
+};
+
 namespace {
 
     Request from_beast(http::request<http::string_body>&& req) {
@@ -16,6 +37,15 @@ namespace {
         blaze_req.body = std::move(req.body());
         blaze_req.set_fields(std::move(req.base()));
         return blaze_req;
+    }
+
+    template <typename Stream>
+    boost::asio::awaitable<void> send_error(Stream& stream, http::status status, std::string_view msg, unsigned version) {
+        http::response<http::string_body> res{status, version};
+        res.set(http::field::content_type, "application/json");
+        res.body() = "{\"error\": \"" + std::string(msg) + "\"}";
+        res.prepare_payload();
+        co_await http::async_write(stream, res, net::use_awaitable);
     }
 
     template <typename Stream, typename SessionPtr>
@@ -29,34 +59,30 @@ namespace {
     ) {
         std::string response_str;
         bool error_occurred = false;
+        std::optional<std::pair<http::status, std::string>> pending_error;
 
         try {
             response_str = co_await app.handle_request(req, client_ip, keep_alive);
         } catch (const HttpError& e) {
-            // Structured error response for Validation/Auth failures
-            std::string json_err = "{\"error\": \"" + std::string(e.what()) + "\"}";
-            response_str = 
-                "HTTP/1.1 " + std::to_string(e.status()) + " Error\r\n"
-                "Content-Type: application/json\r\n"
-                "Content-Length: " + std::to_string(json_err.size()) + "\r\n"
-                "Connection: close\r\n\r\n" +
-                json_err;
+            pending_error = std::make_pair(static_cast<http::status>(e.status()), std::string(e.what()));
             keep_alive = false;
         } catch (const boost::system::system_error& e) {
-            if (e.code() != boost::asio::error::bad_descriptor && 
-                e.code() != boost::asio::error::operation_aborted) {
+            if (e.code() != net::error::operation_aborted) {
                 std::cerr << "Async Handler Error: " << e.what() << "\n";
             }
             error_occurred = true;
         } catch (const std::exception& e) {
             std::cerr << "Async Handler Error: " << e.what() << "\n";
-            response_str = 
-                "HTTP/1.1 500 Internal Server Error\r\n"
-                "Content-Type: text/plain\r\n"
-                "Content-Length: 21\r\n"
-                "Connection: close\r\n\r\n"
-                "Internal Server Error";
+            pending_error = std::make_pair(http::status::internal_server_error, "Internal Server Error");
             keep_alive = false;
+        }
+
+        if (pending_error) {
+            try {
+                co_await send_error(stream, pending_error->first, pending_error->second, 11);
+            } catch (...) {
+                error_occurred = true;
+            }
         }
 
         if (!response_str.empty()) {
@@ -72,10 +98,7 @@ namespace {
         }
 
         if (error_occurred || !keep_alive) {
-            beast::error_code ec;
-            if constexpr (std::is_same_v<Stream, beast::tcp_stream>) {
-                stream.socket().shutdown(tcp::socket::shutdown_send, ec);
-            }
+            StreamTraits<Stream>::shutdown(stream);
         } else {
             self->do_read();
         }
@@ -131,12 +154,9 @@ void WebSocketSession<Stream>::on_read(beast::error_code ec, std::size_t bytes_t
     }
 
     if(ec) {
-        // Log real errors but don't spam for normal disconnects
-        // 107 = Transport endpoint is not connected (Linux)
-        // 104 = Connection reset by peer
         if (ec != net::error::operation_aborted && 
             ec != net::error::connection_reset &&
-            ec != beast::error::timeout && // Silence timeout logs
+            ec != beast::error::timeout &&
             ec.value() != 107) {
             std::cerr << "[WS] Session Error: " << ec.message() << "\n";
         }
@@ -202,18 +222,35 @@ void WebSocketSession<Stream>::close() {
 template class WebSocketSession<beast::tcp_stream>;
 template class WebSocketSession<ssl::stream<beast::tcp_stream>>; 
 
+template<class Stream>
+template<typename... Args>
+HttpSession<Stream>::HttpSession(App& app, Args&&... args)
+    : stream_(std::forward<Args>(args)...), app_(app) {}
 
-
-Session::Session(tcp::socket&& socket, App& app)
-    : stream_(std::move(socket)), app_(app) {}
-
-void Session::run() {
-    net::dispatch(
-        stream_.get_executor(),
-        beast::bind_front_handler(&Session::do_read, shared_from_this()));
+template<class Stream>
+void HttpSession<Stream>::run() {
+    if constexpr (std::is_same_v<Stream, beast::tcp_stream>) {
+        net::dispatch(
+            stream_.get_executor(),
+            beast::bind_front_handler(&HttpSession::do_read, this->shared_from_this()));
+    } else {
+        // SSL Handshake
+        beast::get_lowest_layer(stream_).expires_after(std::chrono::seconds(30));
+        stream_.async_handshake(
+            ssl::stream_base::server,
+            beast::bind_front_handler(
+                [self = this->shared_from_this()](beast::error_code ec) {
+                    if(ec) {
+                        std::cerr << "SSL handshake error: " << ec.message() << "\n";
+                        return;
+                    }
+                    self->do_read();
+                }));
+    }
 }
 
-void Session::do_read() {
+template<class Stream>
+void HttpSession<Stream>::do_read() {
     parser_.emplace();
     parser_->body_limit(app_.get_config().max_body_size);
     
@@ -222,64 +259,44 @@ void Session::do_read() {
     );
 
     http::async_read(stream_, buffer_, *parser_,
-        beast::bind_front_handler(&Session::on_read, shared_from_this()));
+        beast::bind_front_handler(&HttpSession::on_read, this->shared_from_this()));
 }
 
-void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred) {
+template<class Stream>
+void HttpSession<Stream>::on_read(beast::error_code ec, std::size_t bytes_transferred) {
     boost::ignore_unused(bytes_transferred);
 
     if (ec == http::error::end_of_stream) {
-        stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
+        do_shutdown();
         return;
     }
+    
     if (ec) {
         if (ec == http::error::body_limit) {
-            auto res = std::make_shared<http::response<http::string_body>>(
-                http::status::payload_too_large, parser_->get().version());
-            res->set(http::field::content_type, "text/plain");
-            res->body() = "Payload Too Large";
-            res->prepare_payload();
-            
-            http::async_write(stream_, *res, [self = shared_from_this(), res](beast::error_code ec, std::size_t) {
-                beast::error_code ignored;
-                if constexpr (std::is_same_v<decltype(self->stream_), beast::tcp_stream>) {
-                    self->stream_.socket().shutdown(tcp::socket::shutdown_send, ignored);
-                }
-            });
+            send_error_response(http::status::payload_too_large, "Payload Too Large");
             return;
         }
 
-        if (ec != net::error::connection_reset && ec != net::error::eof && ec != beast::error::timeout) {
+        if (ec != net::error::connection_reset && ec != net::error::eof && ec != beast::error::timeout && ec != ssl::error::stream_truncated) {
             std::cerr << "read error: " << ec.message() << std::endl;
         }
         return;
     }
 
-    if (websocket::is_upgrade(parser_->get())) {
-        std::string target(parser_->get().target());
-        const WebSocketHandlers* handlers = app_.get_ws_handler(target);
-        
-        if (handlers) {
-            std::make_shared<WebSocketSession<beast::tcp_stream>>(
-                std::move(stream_), *handlers, app_, target
-            )->run(parser_->release());
-            return;
-        }
+    if (try_websocket_upgrade()) {
+        return;
     }
 
     auto beast_req = parser_->release();
     bool keep_alive = beast_req.keep_alive();
     
-    std::string client_ip = "unknown";
-    try {
-        client_ip = stream_.socket().remote_endpoint().address().to_string();
-    } catch (...) {}
+    std::string client_ip = get_client_ip();
 
     boost::asio::co_spawn(
         stream_.get_executor(),
         handle_session(
             stream_, 
-            shared_from_this(), 
+            this->shared_from_this(), 
             app_, 
             from_beast(std::move(beast_req)), 
             client_ip, 
@@ -289,138 +306,72 @@ void Session::on_read(beast::error_code ec, const std::size_t bytes_transferred)
     );
 }
 
-void Session::on_write(const bool keep_alive, beast::error_code ec, const std::size_t bytes_transferred) {
+template<class Stream>
+void HttpSession<Stream>::on_write(bool keep_alive, beast::error_code ec, std::size_t bytes_transferred) {
     boost::ignore_unused(bytes_transferred);
     if (ec) return;
     if (!keep_alive) {
-        stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
-        return;
-    }
-    do_read();
-}
-
-
-
-SslSession::SslSession(tcp::socket&& socket, ssl::context& ctx, App& app)
-    : stream_(std::move(socket), ctx), app_(app) {}
-
-void SslSession::run() {
-    net::dispatch(
-        stream_.get_executor(),
-        beast::bind_front_handler(&SslSession::on_run, shared_from_this()));
-}
-
-void SslSession::on_run() {
-    beast::get_lowest_layer(stream_).expires_after(std::chrono::seconds(30));
-    stream_.async_handshake(
-        ssl::stream_base::server,
-        beast::bind_front_handler(&SslSession::on_handshake, shared_from_this()));
-}
-
-void SslSession::on_handshake(beast::error_code ec) {
-    if(ec) {
-        std::cerr << "SSL handshake error: " << ec.message() << std::endl;
-        return;
-    }
-    do_read();
-}
-
-void SslSession::do_read() {
-    parser_.emplace();
-    parser_->body_limit(app_.get_config().max_body_size);
-
-    beast::get_lowest_layer(stream_).expires_after(
-        std::chrono::seconds(app_.get_config().timeout_seconds)
-    );
-
-    http::async_read(stream_, buffer_, *parser_,
-        beast::bind_front_handler(&SslSession::on_read, shared_from_this()));
-}
-
-void SslSession::on_read(beast::error_code ec, std::size_t bytes_transferred) {
-    boost::ignore_unused(bytes_transferred);
-
-    if(ec == http::error::end_of_stream) {
         do_shutdown();
         return;
     }
-    if(ec) {
-        if (ec == http::error::body_limit) {
-            auto res = std::make_shared<http::response<http::string_body>>(
-                http::status::payload_too_large, parser_->get().version());
-            res->set(http::field::content_type, "text/plain");
-            res->body() = "Payload Too Large";
-            res->prepare_payload();
-            
-            http::async_write(stream_, *res, [self = shared_from_this(), res](beast::error_code ec, std::size_t) {
-                self->do_shutdown();
-            });
-            return;
-        }
+    do_read();
+}
 
-        if (ec != net::error::connection_reset && 
-            ec != net::error::eof && 
-            ec != ssl::error::stream_truncated && 
-            ec != beast::error::timeout) {
-            std::cerr << "SSL read error: " << ec.message() << std::endl;
-        }
-        return;
+template<class Stream>
+void HttpSession<Stream>::do_shutdown() {
+    beast::get_lowest_layer(stream_).expires_after(std::chrono::seconds(30));
+    if constexpr (std::is_same_v<Stream, beast::tcp_stream>) {
+        beast::error_code ec;
+        stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
+    } else {
+        stream_.async_shutdown(
+            beast::bind_front_handler(
+                [self = this->shared_from_this()](beast::error_code ec) {
+                    boost::ignore_unused(ec);
+                }));
     }
+}
 
+template<class Stream>
+std::string HttpSession<Stream>::get_client_ip() {
+    try {
+        return StreamTraits<Stream>::get_socket(stream_).remote_endpoint().address().to_string();
+    } catch (...) {
+        return "unknown";
+    }
+}
+
+template<class Stream>
+void HttpSession<Stream>::send_error_response(http::status status, std::string_view message) {
+    auto res = std::make_shared<http::response<http::string_body>>(status, parser_->get().version());
+    res->set(http::field::content_type, "text/plain");
+    res->body() = std::string(message);
+    res->prepare_payload();
+    
+    http::async_write(stream_, *res, [self = this->shared_from_this(), res](beast::error_code, std::size_t) {
+        self->do_shutdown();
+    });
+}
+
+template<class Stream>
+bool HttpSession<Stream>::try_websocket_upgrade() {
     if (websocket::is_upgrade(parser_->get())) {
         std::string target(parser_->get().target());
         const WebSocketHandlers* handlers = app_.get_ws_handler(target);
         
         if (handlers) {
-            std::make_shared<WebSocketSession<ssl::stream<beast::tcp_stream>>>(
+            std::make_shared<WebSocketSession<Stream>>(
                 std::move(stream_), *handlers, app_, target
             )->run(parser_->release());
-            return;
+            return true;
         }
     }
-
-    auto beast_req = parser_->release();
-    bool keep_alive = beast_req.keep_alive();
-    
-    std::string client_ip = "unknown";
-    try {
-        client_ip = beast::get_lowest_layer(stream_).socket().remote_endpoint().address().to_string();
-    } catch (...) {}
-
-    boost::asio::co_spawn(
-        stream_.get_executor(),
-        handle_session(
-            stream_, 
-            shared_from_this(), 
-            app_, 
-            from_beast(std::move(beast_req)), 
-            client_ip, 
-            keep_alive
-        ),
-        boost::asio::detached
-    );
+    return false;
 }
 
-void SslSession::on_write(bool keep_alive, beast::error_code ec, std::size_t bytes_transferred) {
-    boost::ignore_unused(bytes_transferred);
-    if(ec) return;
-    if(!keep_alive) {
-        do_shutdown();
-        return;
-    }
-    do_read();
-}
-
-void SslSession::do_shutdown() {
-    beast::get_lowest_layer(stream_).expires_after(std::chrono::seconds(30));
-    stream_.async_shutdown(
-        beast::bind_front_handler(&SslSession::on_shutdown, shared_from_this()));
-}
-
-void SslSession::on_shutdown(beast::error_code ec) {
-    boost::ignore_unused(ec);
-}
-
+// Explicit Instantiations
+template class HttpSession<beast::tcp_stream>;
+template class HttpSession<ssl::stream<beast::tcp_stream>>;
 
 Listener::Listener(net::io_context& ioc, const tcp::endpoint &endpoint, App& app)
     : ioc_(ioc), acceptor_(ioc), app_(app) {
@@ -448,25 +399,33 @@ void Listener::do_accept() {
 
 void Listener::on_accept(const beast::error_code ec, tcp::socket socket) {
     if(ec) {
+        if (ec == net::error::operation_aborted)
+            return; // Shutdown in progress
+        
         if (ec != net::error::bad_descriptor && ec != net::error::invalid_argument)
             std::cerr << "accept error: " << ec.message() << std::endl;
     } else {
-        std::make_shared<Session>(std::move(socket), app_)->run();
+        std::make_shared<Session>(app_, std::move(socket))->run();
     }
     do_accept();
+}
+
+void Listener::stop() {
+    beast::error_code ec;
+    acceptor_.close(ec);
 }
 
 SslListener::SslListener(net::io_context& ioc, ssl::context& ctx, const tcp::endpoint &endpoint, App& app)
     : ioc_(ioc), ctx_(ctx), acceptor_(ioc), app_(app) {
     beast::error_code ec;
     acceptor_.open(endpoint.protocol(), ec);
-    if(ec) { std::cerr << "Open error: " << ec.message() << std::endl; return; }
+    if(ec) throw std::runtime_error("SSL Acceptor open failed: " + ec.message());
     acceptor_.set_option(net::socket_base::reuse_address(true), ec);
-    if(ec) { std::cerr << "Set option error: " << ec.message() << std::endl; return; }
+    if(ec) throw std::runtime_error("SSL Acceptor set_option failed: " + ec.message());
     acceptor_.bind(endpoint, ec);
-    if(ec) { std::cerr << "Bind error: " << ec.message() << std::endl; return; }
+    if(ec) throw std::runtime_error("SSL Acceptor bind failed: " + ec.message());
     acceptor_.listen(net::socket_base::max_listen_connections, ec);
-    if(ec) { std::cerr << "Listen error: " << ec.message() << std::endl; return; }
+    if(ec) throw std::runtime_error("SSL Acceptor listen failed: " + ec.message());
 }
 
 void SslListener::run() { do_accept(); }
@@ -479,12 +438,20 @@ void SslListener::do_accept() {
 
 void SslListener::on_accept(const beast::error_code ec, tcp::socket socket) {
     if(ec) {
+        if (ec == net::error::operation_aborted)
+            return; // Shutdown in progress
+
         if (ec != net::error::bad_descriptor && ec != net::error::invalid_argument)
             std::cerr << "accept error: " << ec.message() << std::endl;
     } else {
-        std::make_shared<SslSession>(std::move(socket), ctx_, app_)->run();
+        std::make_shared<SslSession>(app_, std::move(socket), ctx_)->run();
     }
     do_accept();
+}
+
+void SslListener::stop() {
+    beast::error_code ec;
+    acceptor_.close(ec);
 }
 
 } // namespace blaze

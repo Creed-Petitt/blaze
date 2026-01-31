@@ -11,6 +11,8 @@
 #include <memory>
 #include <queue>
 #include <mutex>
+#include <optional>
+#include <utility>
 #include <blaze/websocket.h>
 
 namespace beast = boost::beast;
@@ -54,42 +56,48 @@ public:
     void on_write(beast::error_code ec, std::size_t bytes_transferred);
 };
 
-// Handles HTTP server connection
-class Session : public std::enable_shared_from_this<Session> {
-    beast::tcp_stream stream_;
+// Handles HTTP server connection (templated for TCP or SSL)
+template<class Stream>
+class HttpSession : public std::enable_shared_from_this<HttpSession<Stream>> {
+    Stream stream_;
     beast::flat_buffer buffer_;
     std::optional<http::request_parser<http::string_body>> parser_;
     App& app_;
 
 public:
-    Session(tcp::socket&& socket, App& app);
+    template<typename... Args>
+    HttpSession(App& app, Args&&... args);
+    
     void run();
     void do_read();
     void on_read(beast::error_code ec, std::size_t bytes_transferred);
     void on_write(bool keep_alive, beast::error_code ec, std::size_t bytes_transferred);
-};
-
-// Handles HTTPS server connection
-class SslSession : public std::enable_shared_from_this<SslSession> {
-    ssl::stream<beast::tcp_stream> stream_;
-    beast::flat_buffer buffer_;
-    std::optional<http::request_parser<http::string_body>> parser_;
-    App& app_;
-
-public:
-    SslSession(tcp::socket&& socket, ssl::context& ctx, App& app);
-    void run();
-    void on_run();
-    void on_handshake(beast::error_code ec);
-    void do_read();
-    void on_read(beast::error_code ec, std::size_t bytes_transferred);
-    void on_write(bool keep_alive, beast::error_code ec, std::size_t bytes_transferred);
+    
+    // SSL-specific shutdown handling
     void do_shutdown();
     void on_shutdown(beast::error_code ec);
+
+    Stream& stream() { return stream_; }
+
+private:
+    std::string get_client_ip();
+    void send_error_response(http::status status, std::string_view message);
+    bool try_websocket_upgrade();
+};
+
+// Type aliases for cleaner usage in listeners
+using Session = HttpSession<beast::tcp_stream>;
+using SslSession = HttpSession<ssl::stream<beast::tcp_stream>>;
+
+// Base class for listeners to allow polymorphic tracking for shutdown
+class ListenerBase {
+public:
+    virtual ~ListenerBase() = default;
+    virtual void stop() = 0;
 };
 
 // Accepts incoming connections and launches the sessions
-class Listener : public std::enable_shared_from_this<Listener> {
+class Listener : public ListenerBase, public std::enable_shared_from_this<Listener> {
     net::io_context& ioc_;
     tcp::acceptor acceptor_;
     App& app_;
@@ -99,10 +107,11 @@ public:
     void run();
     void do_accept();
     void on_accept(beast::error_code ec, tcp::socket socket);
+    void stop() override;
 };
 
 // Accepts incoming HTTPS connections
-class SslListener : public std::enable_shared_from_this<SslListener> {
+class SslListener : public ListenerBase, public std::enable_shared_from_this<SslListener> {
     net::io_context& ioc_;
     ssl::context& ctx_;
     tcp::acceptor acceptor_;
@@ -113,6 +122,7 @@ public:
     void run();
     void do_accept();
     void on_accept(beast::error_code ec, tcp::socket socket);
+    void stop() override;
 };
 
 } // namespace blaze

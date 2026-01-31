@@ -20,6 +20,8 @@ namespace ssl = boost::asio::ssl;
 
 namespace blaze {
 
+class ListenerBase;
+
 template<typename T>
 struct extract_async_type {
     using type = void;
@@ -62,10 +64,17 @@ private:
     std::vector<Middleware> middleware_;
     AppConfig config_;
     ServiceProvider services_;
+    std::vector<std::shared_ptr<ListenerBase>> listeners_;
 
 public:
     App();
     ~App();
+
+    /**
+     * @brief Stops the application gracefully.
+     * Closes listeners and notifies WebSockets.
+     */
+    void stop();
 
     /**
      * @brief Helper class for fluent service registration.
@@ -270,6 +279,7 @@ public:
 
 private:
     void _register_docs();
+    void _run_server(int num_threads);
     boost::asio::awaitable<void> run_middleware(size_t index, Request& req, Response& res, const Handler& final_handler);
 
     // Takes lambda and converts it into a standard (Request, Response) handler

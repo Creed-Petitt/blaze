@@ -209,6 +209,34 @@ void App::_register_docs() {
     });
 }
 
+void App::stop() {
+    // Close listener
+    for (auto& listener : listeners_) {
+        listener->stop();
+    }
+    
+    // Close WebSockets
+    {
+        std::lock_guard<std::mutex> lock(ws_mtx_);
+        for (auto& [path, sessions] : ws_sessions_) {
+            for (auto& weak_ws : sessions) {
+                if (auto ws = weak_ws.lock()) {
+                    ws->close();
+                }
+            }
+        }
+    }
+
+    // Safety timeout
+    std::thread([this]() {
+        std::this_thread::sleep_for(std::chrono::seconds(30));
+        if (!ioc_.stopped()) {
+            std::cerr << "[Blaze] Shutdown timeout reached. Force stopping..." << std::endl;
+            ioc_.stop();
+        }
+    }).detach();
+}
+
 void App::listen(const int port, int num_threads) {
     logger_.configure(config_.log_path);
     _register_docs();
@@ -224,6 +252,7 @@ void App::listen(const int port, int num_threads) {
     try {
         // Create and launch listening port
         auto listener = std::make_shared<Listener>(ioc_, endpoint, *this);
+        listeners_.push_back(listener);
         listener->run();
     } catch (const std::exception& e) {
         std::cerr << "[Blaze] FATAL: Could not start listener: " << e.what() << std::endl;
@@ -231,24 +260,12 @@ void App::listen(const int port, int num_threads) {
     }
 
     // (Ctrl+C) to stop cleanly
-    net::signal_set signals(ioc_, SIGINT, SIGTERM);
-    signals.async_wait([this](boost::system::error_code const&, int) {
-        ioc_.stop();
+    auto signals = std::make_shared<net::signal_set>(ioc_, SIGINT, SIGTERM);
+    signals->async_wait([this, signals](boost::system::error_code const&, int) {
+        this->stop();
     });
 
-    // Run the IO Context on n threads
-    std::vector<std::thread> v;
-    v.reserve(num_threads - 1);
-    for(auto i = num_threads - 1; i > 0; --i)
-        v.emplace_back([this]{
-            ioc_.run();
-        });
-    
-    // Run on the main thread too
-    ioc_.run();
-    
-    for(auto& t : v)
-        t.join();
+    _run_server(num_threads);
 }
 
 void App::listen_ssl(const int port, const std::string& cert_path, const std::string& key_path, int num_threads) {
@@ -272,16 +289,22 @@ void App::listen_ssl(const int port, const std::string& cert_path, const std::st
     auto const endpoint = net::ip::tcp::endpoint{address, static_cast<unsigned short>(port)};
 
     // Create and launch SSL listening port
-    std::make_shared<SslListener>(ioc_, ssl_ctx_, endpoint, *this)->run();
+    auto listener = std::make_shared<SslListener>(ioc_, ssl_ctx_, endpoint, *this);
+    listeners_.push_back(listener);
+    listener->run();
 
     // (Ctrl+C) to stop cleanly
-    net::signal_set signals(ioc_, SIGINT, SIGTERM);
-    signals.async_wait([this](boost::system::error_code const&, int) {
-        ioc_.stop();
+    auto signals = std::make_shared<net::signal_set>(ioc_, SIGINT, SIGTERM);
+    signals->async_wait([this, signals](boost::system::error_code const&, int) {
+        this->stop();
     });
 
     std::cout << "[App] Starting HTTPS on port " << port << " with " << num_threads << " threads\n";
 
+    _run_server(num_threads);
+}
+
+void App::_run_server(int num_threads) {
     // Run the IO Context on n threads
     std::vector<std::thread> v;
     v.reserve(num_threads - 1);
