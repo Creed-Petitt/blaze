@@ -7,6 +7,11 @@
 
 namespace blaze {
 
+Logger& Logger::instance() {
+    static Logger instance;
+    return instance;
+}
+
 Logger::Logger() {
     worker_ = std::thread(&Logger::process_queue, this);
 }
@@ -27,6 +32,7 @@ std::string Logger::get_timestamp() {
     const auto now = std::chrono::system_clock::now();
     const auto now_time_t = std::chrono::system_clock::to_time_t(now);
     std::tm tm_buf{};
+    
     localtime_r(&now_time_t, &tm_buf);
 
     std::stringstream ss;

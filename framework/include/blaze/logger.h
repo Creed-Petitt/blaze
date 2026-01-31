@@ -9,6 +9,7 @@
 #include <thread>
 #include <atomic>
 #include <fstream>
+#include <sstream>
 
 namespace blaze {
 
@@ -36,9 +37,14 @@ private:
     static std::string get_timestamp();
     void process_queue();
 
-public:
+    // Private Constructor (Singleton)
     Logger();
+
+public:
     ~Logger();
+    
+    // Global Access Point
+    static Logger& instance();
 
     // Configuration
     void configure(const std::string& path);
@@ -62,6 +68,21 @@ public:
     void error(const std::string& msg) { log(LogLevel::ERROR, msg); }
 };
 
+// Global Shortcuts
+inline void info(std::string_view msg) { Logger::instance().log(LogLevel::INFO, msg); }
+inline void warn(std::string_view msg) { Logger::instance().log(LogLevel::WARN, msg); }
+inline void error(std::string_view msg) { Logger::instance().log(LogLevel::ERROR, msg); }
+inline void debug(std::string_view msg) { Logger::instance().log(LogLevel::DEBUG, msg); }
+
 } // namespace blaze
+
+// Macros for detailed error logging
+#define BLAZE_LOG_ERROR(msg) \
+    blaze::Logger::instance().log(blaze::LogLevel::ERROR, \
+        std::string(__FILE__) + ":" + std::to_string(__LINE__) + " " + msg)
+
+#define BLAZE_LOG_WARN(msg) \
+    blaze::Logger::instance().log(blaze::LogLevel::WARN, \
+        std::string(__FILE__) + ":" + std::to_string(__LINE__) + " " + msg)
 
 #endif //HTTP_SERVER_LOGGER_H

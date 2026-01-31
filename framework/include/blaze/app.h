@@ -63,7 +63,6 @@ private:
 
     void broadcast_raw(const std::string& path, const std::string& payload);
 
-    Logger logger_;
     net::io_context ioc_;
     ssl::context ssl_ctx_{ssl::context::tlsv12};
     std::vector<Middleware> middleware_;
@@ -126,7 +125,7 @@ public:
     const AppConfig& get_config() const { return config_; }
 
     App& log_to(const std::string& path) { config_.log_path = path; return *this; }
-    App& log_level(LogLevel level) { config_.log_level = level; logger_.set_level(level); return *this; }
+    App& log_level(LogLevel level) { config_.log_level = level; Logger::instance().set_level(level); return *this; }
     App& max_body_size(size_t bytes) { config_.max_body_size = bytes; return *this; }
     App& timeout(int seconds) { config_.timeout_seconds = seconds; return *this; }
     App& shutdown_timeout(int seconds) { config_.shutdown_timeout = seconds; return *this; }
@@ -283,8 +282,8 @@ public:
     /** @brief Get WebSocket handlers for a specific path. */
     const WebSocketHandlers* get_ws_handler(const std::string& path) const;
 
-    /** @brief Access the application logger. */
-    Logger& get_logger();
+    // Logger is now static, but App can configure it.
+    // Logger& get_logger();  <-- REMOVED
 
     /** @brief Returns the internal io_context engine. */
     net::io_context& engine() { return ioc_; }

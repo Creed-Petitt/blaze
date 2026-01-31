@@ -71,10 +71,6 @@ Router &App::get_router() {
     return router_;
 }
 
-Logger &App::get_logger() {
-    return logger_;
-}
-
 boost::asio::awaitable<void> App::run_middleware(size_t index, Request& req, Response& res, const Handler& final_handler) {
     if (index < middleware_.size()) {
         const auto& mw = middleware_[index];
@@ -125,7 +121,7 @@ boost::asio::awaitable<Response> App::handle_request(Request& req, const std::st
             {"message", e.what()}
         });
         status_code = 500;
-        logger_.log_error(std::string("Exception in handle_request: ") + e.what());
+        Logger::instance().log_error(std::string("Exception in handle_request: ") + e.what());
     }
 
     if (keep_alive) {
@@ -139,7 +135,7 @@ boost::asio::awaitable<Response> App::handle_request(Request& req, const std::st
     // Async Logger
     const auto end_time = std::chrono::steady_clock::now();
     const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-    logger_.log_access(client_ip, req.method, req.path, status_code, duration);
+    Logger::instance().log_access(client_ip, req.method, req.path, status_code, duration);
 
     co_return res;
 }
@@ -252,8 +248,8 @@ void App::stop() {
 }
 
 void App::listen(const int port, int num_threads) {
-    logger_.configure(config_.log_path);
-    logger_.set_level(config_.log_level);
+    Logger::instance().configure(config_.log_path);
+    Logger::instance().set_level(config_.log_level);
     
     if (config_.enable_docs) {
         _register_docs();
@@ -291,8 +287,8 @@ void App::listen(const int port, int num_threads) {
 }
 
 void App::listen_ssl(const int port, const std::string& cert_path, const std::string& key_path, int num_threads) {
-    logger_.configure(config_.log_path);
-    logger_.set_level(config_.log_level);
+    Logger::instance().configure(config_.log_path);
+    Logger::instance().set_level(config_.log_level);
 
     if (config_.enable_docs) {
         _register_docs();
