@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <blaze/app.h>
+#include <blaze/exceptions.h>
 #include <blaze/wrappers.h>
 #include <blaze/model.h>
 #include <boost/mp11.hpp>
@@ -44,6 +45,18 @@ public:
 };
 
 // --- TESTS ---
+
+TEST_CASE("convert_string: Failure cases", "[injection]") {
+    SECTION("Invalid integer") {
+        CHECK_THROWS_AS(convert_string<int>("abc"), HttpError);
+    }
+    SECTION("Invalid boolean") {
+        CHECK_THROWS_AS(convert_string<bool>("not-a-bool"), HttpError);
+    }
+    SECTION("Invalid float") {
+        CHECK_THROWS_AS(convert_string<double>("xyz"), HttpError);
+    }
+}
 
 TEST_CASE("Typed Injection: Path Parameters", "[injection]") {
     App app;
