@@ -62,17 +62,12 @@ T convert_string(std::string_view s) {
         if (ec != std::errc()) throw HttpError(400, "Invalid integer format: " + std::string(s));
         return val;
     } else if constexpr (std::is_floating_point_v<PureT>) {
-        PureT val;
-        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
-        if (ec != std::errc()) {
-             // Some older C++20 implementations might still lack floating point from_chars
-             try {
-                 return static_cast<PureT>(std::stod(std::string(s)));
-             } catch (...) {
-                 throw HttpError(400, "Invalid floating point format: " + std::string(s));
-             }
+        // MacOS fallback
+        try {
+            return static_cast<PureT>(std::stod(std::string(s)));
+        } catch (...) {
+            throw HttpError(400, "Invalid floating point format: " + std::string(s));
         }
-        return val;
     } else {
         return PureT{};
     }
