@@ -69,7 +69,7 @@ bool Router::matches(const std::vector<std::string>& route_segments,
 
         if (!route_seg.empty() && route_seg[0] == ':') {
             std::string param_name = route_seg.substr(1);
-            std::string param_value = std::string(request_seg);
+            std::string param_value = Request::url_decode(request_seg);
             params[param_name] = param_value;
             path_values.push_back(param_value);
         } else {
@@ -83,29 +83,22 @@ bool Router::matches(const std::vector<std::string>& route_segments,
 }
 
 std::vector<std::string> Router::split(const std::string& str) {
+    auto views = split_view(str);
     std::vector<std::string> segments;
-    size_t start = 0;
-    while (start <= str.size()) {
-        size_t end = str.find('/', start);
-        if (end == std::string::npos) {
-            end = str.size();
-        }
-        segments.emplace_back(str.substr(start, end - start));
-        if (end == str.size()) {
-            break;
-        }
-        start = end + 1;
+    segments.reserve(views.size());
+    for (auto v : views) {
+        segments.emplace_back(v);
     }
-
-    if (segments.empty()) {
-        segments.emplace_back();
-    }
-
     return segments;
 }
 
 std::vector<std::string_view> Router::split_view(std::string_view str) {
     std::vector<std::string_view> segments;
+    if (str.empty()) {
+        segments.emplace_back("");
+        return segments;
+    }
+
     size_t start = 0;
     while (start <= str.size()) {
         size_t end = str.find('/', start);
@@ -118,11 +111,6 @@ std::vector<std::string_view> Router::split_view(std::string_view str) {
         }
         start = end + 1;
     }
-
-    if (segments.empty()) {
-        segments.emplace_back();
-    }
-
     return segments;
 }
 
