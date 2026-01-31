@@ -14,8 +14,11 @@
 using namespace blaze;
 
 int main() {
-    // 1. Create the application instance
+    // 1. Create and configure the application
     App app;
+    
+    app.server_name("HelloWorldApp/1.0")
+       .log_level(LogLevel::DEBUG);
 
     // 2. Define a simple route
     // Handlers are lambdas that return Async<void> (a C++20 coroutine)
