@@ -23,32 +23,32 @@ namespace blaze {
 
     ParsedUrl parse_url(const std::string& url) {
         ParsedUrl res;
-        std::string s = url;
+        std::string_view s = url;
         
-        if (s.substr(0, 8) == "https://") {
+        if (s.starts_with("https://")) {
             res.is_ssl = true;
             res.port = "443";
-            s.erase(0, 8);
-        } else if (s.substr(0, 7) == "http://") {
+            s.remove_prefix(8);
+        } else if (s.starts_with("http://")) {
             res.is_ssl = false;
             res.port = "80";
-            s.erase(0, 7);
+            s.remove_prefix(7);
         } else {
             res.is_ssl = false;
             res.port = "80";
         }
 
         size_t path_pos = s.find('/');
-        if (path_pos == std::string::npos) {
-            res.host = s;
+        if (path_pos == std::string_view::npos) {
+            res.host = std::string(s);
             res.target = "/";
         } else {
-            res.host = s.substr(0, path_pos);
-            res.target = s.substr(path_pos);
+            res.host = std::string(s.substr(0, path_pos));
+            res.target = std::string(s.substr(path_pos));
         }
 
         size_t port_pos = res.host.find(':');
-        if (port_pos != std::string::npos) {
+        if (port_pos != std::string_view::npos) {
             res.port = res.host.substr(port_pos + 1);
             res.host = res.host.substr(0, port_pos);
         }

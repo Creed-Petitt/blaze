@@ -105,12 +105,23 @@ std::vector<std::string_view> Router::split_view(std::string_view str) {
         if (end == std::string_view::npos) {
             end = str.size();
         }
-        segments.emplace_back(str.substr(start, end - start));
+        
+        std::string_view seg = str.substr(start, end - start);
+        // Only push non-empty segments, OR the root segment if it's the only one
+        if (!seg.empty() || (segments.empty() && end == str.size())) {
+            segments.push_back(seg);
+        }
+
         if (end == str.size()) {
             break;
         }
         start = end + 1;
     }
+
+    if (segments.empty()) {
+        segments.emplace_back("");
+    }
+
     return segments;
 }
 
