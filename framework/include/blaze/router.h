@@ -85,7 +85,7 @@ public:
     void add_doc(openapi::RouteDoc doc) { docs_.push_back(std::move(doc)); }
     const std::vector<openapi::RouteDoc>& docs() const { return docs_; }
 
-    std::optional<RouteMatch> match(std::string_view method, std::string_view path) const;
+    [[nodiscard]] std::optional<RouteMatch> match(std::string_view method, std::string_view path) const;
 };
 
 } // namespace blaze

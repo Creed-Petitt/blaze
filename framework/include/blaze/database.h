@@ -31,7 +31,7 @@ public:
      * @param params Vector of string parameters to be safely escaped.
      * @return Async<DbResult> yielding a value wrapper.
      */
-    virtual boost::asio::awaitable<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) = 0;
+    [[nodiscard]] virtual boost::asio::awaitable<DbResult> query(const std::string& sql, const std::vector<std::string>& params = {}) = 0;
     
     /**
      * @brief Returns the parameter placeholder for the specific driver.
