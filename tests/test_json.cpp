@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <blaze/json.h>
+#include <blaze/exceptions.h>
 
 using namespace blaze;
 
@@ -100,5 +101,11 @@ TEST_CASE("JSON: Error Handling", "[json]") {
         // Missing Key
         auto missing = obj.try_get<std::string>("missing");
         CHECK_FALSE(missing.has_value());
+    }
+
+    SECTION("Invalid Type Conversion Throws") {
+        Json obj({{"age", "abc"}});
+        // as<int>() should now throw HttpError(400) via BadRequest
+        CHECK_THROWS_AS(obj["age"].as<int>(), blaze::BadRequest);
     }
 }
