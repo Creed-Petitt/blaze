@@ -21,8 +21,15 @@ namespace blaze::crypto {
     std::string hex_encode(std::string_view input);
     std::string random_token(size_t length = 32);
 
+    enum class JwtError {
+        None,
+        Malformed,
+        InvalidSignature,
+        Expired
+    };
+
     std::string jwt_sign(const Json& payload, std::string_view secret, int expires_in = 3600);
-    Json jwt_verify(std::string_view token, std::string_view secret);
+    Json jwt_verify(std::string_view token, std::string_view secret, JwtError* error = nullptr);
 
     std::string hash_password(std::string_view password);
     bool verify_password(std::string_view password, std::string_view hash);

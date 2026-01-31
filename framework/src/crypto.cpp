@@ -9,8 +9,18 @@
 #include <openssl/crypto.h>
 #include <iomanip>
 #include <sstream>
+#include <memory>
 
 namespace blaze::crypto {
+
+    // RAII Helpers for OpenSSL
+    struct BioDeleter { void operator()(BIO* b) { BIO_free_all(b); } };
+    struct KdfDeleter { void operator()(EVP_KDF* k) { EVP_KDF_free(k); } };
+    struct KdfCtxDeleter { void operator()(EVP_KDF_CTX* c) { EVP_KDF_CTX_free(c); } };
+
+    using BioPtr = std::unique_ptr<BIO, BioDeleter>;
+    using KdfPtr = std::unique_ptr<EVP_KDF, KdfDeleter>;
+    using KdfCtxPtr = std::unique_ptr<EVP_KDF_CTX, KdfCtxDeleter>;
 
     std::string hex_encode(std::string_view input) {
         std::stringstream ss;
@@ -35,37 +45,35 @@ namespace blaze::crypto {
     }
 
     std::string base64_encode(std::string_view input) {
-        BIO *bio, *b64;
-        BUF_MEM *bufferPtr;
-
-        b64 = BIO_new(BIO_f_base64());
+        BIO* b64 = BIO_new(BIO_f_base64());
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-        bio = BIO_new(BIO_s_mem());
-        bio = BIO_push(b64, bio);
+        BIO* mem = BIO_new(BIO_s_mem());
+        BIO_push(b64, mem);
+        
+        BioPtr chain(b64); // Owns the entire chain
 
-        BIO_write(bio, input.data(), input.size());
-        BIO_flush(bio);
-        BIO_get_mem_ptr(bio, &bufferPtr);
+        BIO_write(chain.get(), input.data(), input.size());
+        BIO_flush(chain.get());
 
-        std::string res(bufferPtr->data, bufferPtr->length);
-        BIO_free_all(bio);
-        return res;
+        BUF_MEM *bufferPtr;
+        BIO_get_mem_ptr(chain.get(), &bufferPtr);
+
+        return std::string(bufferPtr->data, bufferPtr->length);
     }
 
     std::string base64_decode(std::string_view input) {
-        BIO *bio, *b64;
+        BIO* b64 = BIO_new(BIO_f_base64());
+        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+        BIO* mem = BIO_new_mem_buf(input.data(), input.size());
+        BIO_push(b64, mem);
+        
+        BioPtr chain(b64); // Owns the entire chain
+
         std::string res;
         res.resize(input.size());
-
-        b64 = BIO_new(BIO_f_base64());
-        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-        bio = BIO_new_mem_buf(input.data(), input.size());
-        bio = BIO_push(b64, bio);
-
-        int decoded_size = BIO_read(bio, res.data(), input.size());
+        int decoded_size = BIO_read(chain.get(), res.data(), input.size());
         res.resize(decoded_size > 0 ? decoded_size : 0);
         
-        BIO_free_all(bio);
         return res;
     }
 
@@ -116,11 +124,15 @@ namespace blaze::crypto {
         return data + "." + base64url_encode(signature);
     }
 
-    Json jwt_verify(std::string_view token, std::string_view secret) {
+    Json jwt_verify(std::string_view token, std::string_view secret, JwtError* error) {
+        if (error) *error = JwtError::None;
+
         size_t first_dot = token.find('.');
         size_t last_dot = token.rfind('.');
-        if(first_dot == std::string::npos || last_dot == std::string::npos || first_dot == last_dot) 
+        if(first_dot == std::string::npos || last_dot == std::string::npos || first_dot == last_dot) {
+            if (error) *error = JwtError::Malformed;
             return blaze::Json();
+        }
 
         std::string_view data = token.substr(0, last_dot);
         std::string_view sig_b64 = token.substr(last_dot + 1);
@@ -130,6 +142,7 @@ namespace blaze::crypto {
 
         if (expected_sig.size() != received_sig.size() ||
             CRYPTO_memcmp(expected_sig.data(), received_sig.data(), expected_sig.size()) != 0) {
+            if (error) *error = JwtError::InvalidSignature;
             return blaze::Json();
         }
 
@@ -141,6 +154,7 @@ namespace blaze::crypto {
                 auto& exp_val = payload.at("exp");
                 if (exp_val.is_number()) {
                     if (std::time(nullptr) > exp_val.to_number<std::int64_t>()) {
+                        if (error) *error = JwtError::Expired;
                         return blaze::Json(); 
                     }
                 }
@@ -148,6 +162,7 @@ namespace blaze::crypto {
             
             return blaze::Json(payload);
         } catch (...) {
+            if (error) *error = JwtError::Malformed;
             return blaze::Json();
         }
     }
@@ -157,8 +172,8 @@ namespace blaze::crypto {
         unsigned char out[32];
         RAND_bytes(salt, sizeof(salt));
 
-        EVP_KDF *kdf = EVP_KDF_fetch(nullptr, "SCRYPT", nullptr);
-        EVP_KDF_CTX *kctx = EVP_KDF_CTX_new(kdf);
+        KdfPtr kdf(EVP_KDF_fetch(nullptr, "SCRYPT", nullptr));
+        KdfCtxPtr kctx(EVP_KDF_CTX_new(kdf.get()));
 
         OSSL_PARAM params[6];
         uint64_t n = 16384; // CPU/Memory cost
@@ -172,14 +187,9 @@ namespace blaze::crypto {
         params[4] = OSSL_PARAM_construct_uint32("p", &p);
         params[5] = OSSL_PARAM_construct_end();
 
-        if (EVP_KDF_derive(kctx, out, sizeof(out), params) <= 0) {
-            EVP_KDF_CTX_free(kctx);
-            EVP_KDF_free(kdf);
+        if (EVP_KDF_derive(kctx.get(), out, sizeof(out), params) <= 0) {
             return "";
         }
-
-        EVP_KDF_CTX_free(kctx);
-        EVP_KDF_free(kdf);
 
         // Encode as: $s1$N$r$p$salt_b64$hash_b64
         return "$s1$" + std::to_string(n) + "$" + std::to_string(r) + "$" + std::to_string(p) + "$" + 
@@ -209,8 +219,8 @@ namespace blaze::crypto {
         std::string expected_hash = base64url_decode(parts[6]);
 
         unsigned char out[32];
-        EVP_KDF *kdf = EVP_KDF_fetch(nullptr, "SCRYPT", nullptr);
-        EVP_KDF_CTX *kctx = EVP_KDF_CTX_new(kdf);
+        KdfPtr kdf(EVP_KDF_fetch(nullptr, "SCRYPT", nullptr));
+        KdfCtxPtr kctx(EVP_KDF_CTX_new(kdf.get()));
 
         OSSL_PARAM params[6];
         params[0] = OSSL_PARAM_construct_octet_string("pass", (void*)password.data(), password.size());
@@ -220,11 +230,8 @@ namespace blaze::crypto {
         params[4] = OSSL_PARAM_construct_uint32("p", &p);
         params[5] = OSSL_PARAM_construct_end();
 
-        bool success = (EVP_KDF_derive(kctx, out, sizeof(out), params) > 0);
+        bool success = (EVP_KDF_derive(kctx.get(), out, sizeof(out), params) > 0);
         
-        EVP_KDF_CTX_free(kctx);
-        EVP_KDF_free(kdf);
-
         if (!success) return false;
 
         if (expected_hash.size() != 32) return false;
