@@ -33,7 +33,7 @@ TEST_CASE("App: Configuration & Fluent API", "[app]") {
     CHECK(config.max_body_size == 1024);
     CHECK(config.timeout_seconds == 45);
     CHECK(config.num_threads == 16);
-    CHECK(app.get_logger().get_level() == LogLevel::DEBUG);
+    CHECK(Logger::instance().get_level() == LogLevel::DEBUG);
 }
 
 TEST_CASE("App: Documentation Toggle", "[app]") {
