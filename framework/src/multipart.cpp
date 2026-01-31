@@ -74,16 +74,13 @@ MultipartFormData parse(std::string_view body, std::string_view boundary) {
         pos = body.find(start_boundary, pos);
         if (pos == std::string_view::npos) break;
 
-        // Check if it's the end boundary
         if (body.substr(pos, end_boundary.size()) == end_boundary) break;
 
         pos += start_boundary.size();
         
-        // Move past \r\n
         if (pos + 2 <= body.size() && body[pos] == '\r' && body[pos+1] == '\n') pos += 2;
         else if (pos + 1 <= body.size() && body[pos] == '\n') pos += 1;
 
-        // Find the start of the data (after headers, marked by \r\n\r\n)
         size_t header_end = body.find("\r\n\r\n", pos);
         if (header_end == std::string_view::npos) {
             header_end = body.find("\n\n", pos);
@@ -93,11 +90,9 @@ MultipartFormData parse(std::string_view body, std::string_view boundary) {
         std::string_view headers = body.substr(pos, header_end - pos);
         size_t data_start = header_end + (body[header_end] == '\r' ? 4 : 2);
 
-        // Find the next boundary (end of data)
         size_t data_end = body.find(start_boundary, data_start);
         if (data_end == std::string_view::npos) break;
         
-        // Trim trailing \r\n before boundary
         if (data_end >= 2 && body[data_end-2] == '\r' && body[data_end-1] == '\n') data_end -= 2;
         else if (data_end >= 1 && body[data_end-1] == '\n') data_end -= 1;
 
@@ -116,13 +111,15 @@ MultipartFormData parse(std::string_view body, std::string_view boundary) {
                 if (name_pos != std::string_view::npos) {
                     name_pos += 6;
                     auto name_end = line.find("\"", name_pos);
-                    part.name = std::string(line.substr(name_pos, name_end - name_pos));
+                    if (name_end != std::string_view::npos)
+                        part.name = std::string(line.substr(name_pos, name_end - name_pos));
                 }
                 auto file_pos = line.find("filename=\"");
                 if (file_pos != std::string_view::npos) {
                     file_pos += 10;
                     auto file_end = line.find("\"", file_pos);
-                    part.filename = std::string(line.substr(file_pos, file_end - file_pos));
+                    if (file_end != std::string_view::npos)
+                        part.filename = std::string(line.substr(file_pos, file_end - file_pos));
                 }
             } else if (line.find("Content-Type:") != std::string_view::npos) {
                 auto type_pos = line.find(':') + 1;
