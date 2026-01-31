@@ -20,14 +20,16 @@ add_executable(blaze_tests
     test_websocket.cpp
     test_timeout.cpp
     test_injection.cpp
+    test_app.cpp
+    test_client_smart.cpp
+    test_response.cpp
+    test_static_files.cpp
+    test_request.cpp
+    test_multipart.cpp
     test_request_di.cpp
     test_snake_case.cpp
-    test_app.cpp
-    test_multipart.cpp
-    test_client_smart.cpp
-    test_request.cpp
-    test_response.cpp
 )
+
 
 target_link_libraries(blaze_tests 
     PRIVATE 

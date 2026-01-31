@@ -45,4 +45,12 @@ TEST_CASE("Router: Parameter Extraction", "[router]") {
         auto match = router.match("GET", "/user/123/");
         CHECK(match.has_value());
     }
+
+    SECTION("Path parameters should be URL-decoded") {
+        router.add_route("GET", "/profile/:name", [](Request&, Response&) -> Async<void> { co_return; });
+        auto match = router.match("GET", "/profile/Jane%20Doe");
+        REQUIRE(match.has_value());
+        CHECK(match->params.at("name") == "Jane Doe");
+        CHECK(match->path_values[match->path_values.size()-1] == "Jane Doe");
+    }
 }

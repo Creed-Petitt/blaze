@@ -49,6 +49,7 @@ TEST_CASE("Server: End-to-End Request", "[integration]") {
 
         CHECK(res.result() == boost::beast::http::status::ok);
         CHECK(res.body() == "Integration OK");
+        CHECK(res[boost::beast::http::field::server] == "Blaze/1.0");
     }
 
     app.engine().stop();

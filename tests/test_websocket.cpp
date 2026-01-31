@@ -15,6 +15,7 @@ using tcp = net::ip::tcp;
 
 TEST_CASE("WebSocket: Connection and Echo", "[websocket]") {
     App app;
+    app.config().shutdown_timeout = 0; // Immediate shutdown for tests
     std::string received_msg;
     std::mutex msg_mutex;
     std::atomic<bool> connected{false};
@@ -32,9 +33,14 @@ TEST_CASE("WebSocket: Connection and Echo", "[websocket]") {
 
     std::thread server_thread([&]() {
         try {
-            app.listen(8888);
+            app.listen(8890); // Using unique port
         } catch (...) {}
     });
+
+    struct Guard {
+        App& a; std::thread& t;
+        ~Guard() { a.stop(); if(t.joinable()) t.join(); }
+    } guard{app, server_thread};
 
     // Wait for start
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -44,7 +50,7 @@ TEST_CASE("WebSocket: Connection and Echo", "[websocket]") {
         tcp::resolver resolver(ioc);
         websocket::stream<tcp::socket> ws(ioc);
 
-        auto const results = resolver.resolve("127.0.0.1", "8888");
+        auto const results = resolver.resolve("127.0.0.1", "8890");
         net::connect(ws.next_layer(), results);
 
         ws.handshake("127.0.0.1", "/chat");
@@ -61,13 +67,11 @@ TEST_CASE("WebSocket: Connection and Echo", "[websocket]") {
 
         ws.close(websocket::close_code::normal);
     }
-
-    app.engine().stop();
-    if (server_thread.joinable()) server_thread.join();
 }
 
 TEST_CASE("WebSocket: Automated Broadcasting", "[websocket]") {
     App app;
+    app.config().shutdown_timeout = 0; // Immediate shutdown for tests
     
     app.ws("/broadcast", {
         .on_open = [](auto ws) {}
@@ -75,9 +79,14 @@ TEST_CASE("WebSocket: Automated Broadcasting", "[websocket]") {
 
     std::thread server_thread([&]() {
         try {
-            app.listen(8889);
+            app.listen(8891); // Using unique port
         } catch (...) {}
     });
+
+    struct Guard {
+        App& a; std::thread& t;
+        ~Guard() { a.stop(); if(t.joinable()) t.join(); }
+    } guard{app, server_thread};
 
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
@@ -87,13 +96,13 @@ TEST_CASE("WebSocket: Automated Broadcasting", "[websocket]") {
         
         // Connect Client 1
         websocket::stream<tcp::socket> ws1(ioc);
-        auto const res1 = resolver.resolve("127.0.0.1", "8889");
+        auto const res1 = resolver.resolve("127.0.0.1", "8891");
         net::connect(ws1.next_layer(), res1);
         ws1.handshake("127.0.0.1", "/broadcast");
 
         // Connect Client 2
         websocket::stream<tcp::socket> ws2(ioc);
-        auto const res2 = resolver.resolve("127.0.0.1", "8889");
+        auto const res2 = resolver.resolve("127.0.0.1", "8891");
         net::connect(ws2.next_layer(), res2);
         ws2.handshake("127.0.0.1", "/broadcast");
 
@@ -115,7 +124,4 @@ TEST_CASE("WebSocket: Automated Broadcasting", "[websocket]") {
         ws1.close(websocket::close_code::normal);
         ws2.close(websocket::close_code::normal);
     }
-
-    app.engine().stop();
-    if (server_thread.joinable()) server_thread.join();
 }
