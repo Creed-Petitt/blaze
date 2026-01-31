@@ -2,10 +2,13 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 
 namespace blaze {
 
 void Request::set_target(std::string_view target) {
+    query.clear();
+    params.clear();
     const size_t query_pos = target.find('?');
 
     if (query_pos != std::string_view::npos) {
@@ -22,8 +25,8 @@ void Request::set_target(std::string_view target) {
             const size_t eq_pos = pair.find('=');
 
             if (eq_pos != std::string_view::npos) {
-                auto key = std::string(pair.substr(0, eq_pos));
-                auto value = std::string(pair.substr(eq_pos + 1));
+                auto key = url_decode(pair.substr(0, eq_pos));
+                auto value = url_decode(pair.substr(eq_pos + 1));
                 query[std::move(key)] = std::move(value);
             }
             pos = amp_pos + 1;
@@ -99,13 +102,34 @@ std::string Request::cookie(const std::string& name) const {
         if (end == std::string_view::npos) end = cookie_header.size();
 
         std::string_view pair = cookie_header.substr(pos, end - pos);
+        
+        // Trim leading space
         while (!pair.empty() && std::isspace(pair.front()))
             pair.remove_prefix(1);
+        // Trim trailing space
+        while (!pair.empty() && std::isspace(pair.back()))
+            pair.remove_suffix(1);
 
         size_t eq = pair.find('=');
         if (eq != std::string_view::npos) {
-            if (pair.substr(0, eq) == name) {
-                return std::string(pair.substr(eq + 1));
+            std::string_view key = pair.substr(0, eq);
+            std::string_view value = pair.substr(eq + 1);
+
+            // Trim key
+            while (!key.empty() && std::isspace(key.front())) key.remove_prefix(1);
+            while (!key.empty() && std::isspace(key.back())) key.remove_suffix(1);
+
+            if (key == name) {
+                // Trim value
+                while (!value.empty() && std::isspace(value.front())) value.remove_prefix(1);
+                while (!value.empty() && std::isspace(value.back())) value.remove_suffix(1);
+
+                // Handle quoted values
+                if (value.size() >= 2 && value.front() == '\"' && value.back() == '\"') {
+                    value.remove_prefix(1);
+                    value.remove_suffix(1);
+                }
+                return std::string(value);
             }
         }
 
@@ -113,6 +137,32 @@ std::string Request::cookie(const std::string& name) const {
     }
 
     return "";
+}
+
+std::string Request::url_decode(std::string_view str) {
+    std::string result;
+    result.reserve(str.size());
+    for (size_t i = 0; i < str.size(); ++i) {
+        if (str[i] == '%') {
+            if (i + 2 < str.size()) {
+                int value;
+                auto [ptr, ec] = std::from_chars(str.data() + i + 1, str.data() + i + 3, value, 16);
+                if (ec == std::errc()) {
+                    result += static_cast<char>(value);
+                    i += 2;
+                } else {
+                    result += '%';
+                }
+            } else {
+                result += '%';
+            }
+        } else if (str[i] == '+') {
+            result += ' ';
+        } else {
+            result += str[i];
+        }
+    }
+    return result;
 }
 
 const MultipartFormData& Request::form() const {

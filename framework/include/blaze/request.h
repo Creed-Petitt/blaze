@@ -29,6 +29,8 @@ struct Request {
 
     void set_target(std::string_view target);
     void set_fields(boost::beast::http::fields&& fields);
+    
+    static std::string url_decode(std::string_view str);
 
     // Returns parsed JSON body wrapper
     blaze::Json json() const;
