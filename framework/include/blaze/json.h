@@ -3,6 +3,7 @@
 
 #include <boost/json.hpp>
 #include <string>
+#include <string_view>
 #include <memory>
 #include <variant>
 #include <optional>
@@ -83,6 +84,9 @@ public:
     explicit operator int() const;
 
     operator boost::json::value() const;
+
+    const boost::json::value& value() const;
+    boost::json::value move_value();
 
     size_t size() const;
     bool empty() const { return size() == 0; }

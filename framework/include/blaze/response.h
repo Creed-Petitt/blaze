@@ -39,10 +39,12 @@ public:
     // Boost.JSON overload
     Response& json(const boost::json::value& data);
 
-    //Generic JSON Serializer
+    // Generic JSON Serializer
     template<typename T>
     Response& json(const T& data) {
-        if constexpr (std::is_convertible_v<T, boost::json::value>) {
+        if constexpr (std::is_same_v<T, Json>) {
+            return json(data.value());
+        } else if constexpr (std::is_convertible_v<T, boost::json::value>) {
             return json(static_cast<boost::json::value>(data));
         } else {
             return json(boost::json::value_from(data));
