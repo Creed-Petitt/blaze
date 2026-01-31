@@ -73,6 +73,7 @@ set(CORE_SOURCES
     src/crypto.cpp
     src/client.cpp
     src/multipart.cpp
+    src/logger.cpp
 )
 
 add_library(blaze_core STATIC ${CORE_SOURCES})
