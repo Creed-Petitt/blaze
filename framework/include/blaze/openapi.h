@@ -37,9 +37,13 @@ struct schema_builder {
         } else if constexpr (std::is_same_v<PureT, bool>) {
             schema["type"] = "boolean";
         } else if constexpr (boost::mp11::mp_is_list<PureT>::value) {
-             // Handle vectors/lists
              schema["type"] = "array";
-             // Todo: inner type schema
+             // Recursive schema for inner types
+             if constexpr (requires { typename PureT::value_type; }) {
+                 schema["items"] = schema_builder<typename PureT::value_type>::build();
+             } else {
+                 schema["items"] = object{{"type", "object"}};
+             }
         } else {
             // Default: Reflect on Struct
             schema["type"] = "object";
@@ -65,9 +69,9 @@ struct schema_builder<W<T>, std::void_t<typename W<T>::value_type>> {
     }
 };
 
-// Specialized for std::vector
+// Specialized for std::vector (redundant but explicit)
 template<typename T>
-struct schema_builder<std::vector<T>> {
+struct schema_builder<std::vector<T>, void> {
     static object build() {
         return {
             {"type", "array"},
