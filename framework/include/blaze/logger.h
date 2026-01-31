@@ -1,27 +1,30 @@
 #ifndef HTTP_SERVER_LOGGER_H
 #define HTTP_SERVER_LOGGER_H
 
-#include <fstream>
-#include <mutex>
 #include <string>
-#include <chrono>
-#include <iomanip>
-#include <sstream>
-#include <iostream>
-#include <sys/stat.h>
-#include <thread>
+#include <string_view>
 #include <queue>
+#include <mutex>
 #include <condition_variable>
+#include <thread>
 #include <atomic>
-#include <filesystem>
+#include <fstream>
 
 namespace blaze {
+
+enum class LogLevel {
+    DEBUG,
+    INFO,
+    WARN,
+    ERROR
+};
 
 class Logger {
 private:
     std::ofstream file_stream_;
     bool use_stdout_{false};
-    bool enabled_{true}; // Default to true, but can be disabled
+    bool enabled_{true};
+    LogLevel level_{LogLevel::INFO};
     
     // Async Queue
     std::queue<std::string> queue_;
@@ -30,116 +33,33 @@ private:
     std::thread worker_;
     std::atomic<bool> running_{true};
 
-    static std::string get_timestamp() {
-        const auto now = std::chrono::system_clock::now();
-        const auto now_time_t = std::chrono::system_clock::to_time_t(now);
-        std::tm tm_buf{};
-        localtime_r(&now_time_t, &tm_buf);
-
-        std::stringstream ss;
-        ss << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S");
-        return ss.str();
-    }
-
-    void process_queue() {
-        while (running_) {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            cv_.wait(lock, [this] { return !queue_.empty() || !running_; });
-
-            while (!queue_.empty()) {
-                std::string msg = std::move(queue_.front());
-                queue_.pop();
-                
-                // Unlock during I/O
-                lock.unlock();
-
-                std::stringstream output;
-                output << "[" << get_timestamp() << "] " << msg << "\n";
-
-                if (use_stdout_) {
-                    if (msg.starts_with("ERROR:")) {
-                        std::cerr << output.str();
-                    } else {
-                        std::cout << output.str();
-                    }
-                } else if (file_stream_.is_open()) {
-                    file_stream_ << output.str();
-                    file_stream_.flush();
-                }
-                
-                lock.lock();
-            }
-        }
-    }
+    static std::string get_timestamp();
+    void process_queue();
 
 public:
-    Logger() {
-        // Start the worker immediately
-        worker_ = std::thread(&Logger::process_queue, this);
-    }
+    Logger();
+    ~Logger();
 
-    // Called when Server Starts
-    void configure(const std::string& path) {
-        if (path == "/dev/null") {
-            enabled_ = false;
-            return;
-        }
+    // Configuration
+    void configure(const std::string& path);
+    void set_level(LogLevel level) { level_ = level; }
+    LogLevel get_level() const { return level_; }
 
-        enabled_ = true;
-
-        if (path == "stdout" || path.empty()) {
-            use_stdout_ = true;
-            return;
-        }
-
-        use_stdout_ = false;
-        
-        // Ensure directory exists
-        std::filesystem::path p(path);
-        if (p.has_parent_path()) {
-            std::filesystem::create_directories(p.parent_path());
-        }
-
-        // Open file (Append Mode)
-        if (file_stream_.is_open()) file_stream_.close();
-        file_stream_.open(path, std::ios::out | std::ios::app);
-    }
+    void log(LogLevel level, std::string_view message);
 
     void log_access(std::string_view client_ip,
                    std::string_view method,
                    std::string_view path,
                    int status_code,
-                   long long response_time_ms) {
-        
-        if (!enabled_) return;
+                   long long response_time_ms);
 
-        std::stringstream ss;
-        // GREEN/RESET ANSI codes could go here if stdout
-        ss << client_ip << " " << method << " " << path << " " 
-           << status_code << " " << response_time_ms << "ms";
-        
-        std::lock_guard<std::mutex> lock(queue_mutex_);
-        queue_.push(ss.str());
-        cv_.notify_one();
-    }
-
-    void log_error(const std::string& message) {
-        if (!enabled_) return;
-
-        std::string msg = "ERROR: " + message;
-        std::lock_guard<std::mutex> lock(queue_mutex_);
-        queue_.push(std::move(msg));
-        cv_.notify_one();
-    }
-
-    ~Logger() {
-        running_ = false;
-        cv_.notify_all();
-        if (worker_.joinable()) {
-            worker_.join();
-        }
-        if (file_stream_.is_open()) file_stream_.close();
-    }
+    void log_error(const std::string& message);
+    
+    // Convenience methods
+    void debug(const std::string& msg) { log(LogLevel::DEBUG, msg); }
+    void info(const std::string& msg) { log(LogLevel::INFO, msg); }
+    void warn(const std::string& msg) { log(LogLevel::WARN, msg); }
+    void error(const std::string& msg) { log(LogLevel::ERROR, msg); }
 };
 
 } // namespace blaze
