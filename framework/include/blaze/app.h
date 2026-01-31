@@ -37,7 +37,12 @@ struct extract_async_type<boost::asio::awaitable<T>> {
 struct AppConfig {
     size_t max_body_size = 10 * 1024 * 1024; // 10MB default
     int timeout_seconds = 30;                // 30s timeout
+    int shutdown_timeout = 30;               // 30s safety shutdown
     std::string log_path = "stdout";         // Logging destination
+    LogLevel log_level = LogLevel::INFO;     // Default log level
+    int num_threads = 0;                     // 0 = auto-detect
+    std::string server_name = "Blaze/1.0";   // Server header
+    bool enable_docs = true;                 // Enable Swagger UI
 };
 
 
@@ -65,6 +70,7 @@ private:
     AppConfig config_;
     ServiceProvider services_;
     std::vector<std::shared_ptr<ListenerBase>> listeners_;
+    std::unique_ptr<net::signal_set> signals_;
 
 public:
     App();
@@ -119,7 +125,13 @@ public:
     const AppConfig& get_config() const { return config_; }
 
     App& log_to(const std::string& path) { config_.log_path = path; return *this; }
+    App& log_level(LogLevel level) { config_.log_level = level; logger_.set_level(level); return *this; }
     App& max_body_size(size_t bytes) { config_.max_body_size = bytes; return *this; }
+    App& timeout(int seconds) { config_.timeout_seconds = seconds; return *this; }
+    App& shutdown_timeout(int seconds) { config_.shutdown_timeout = seconds; return *this; }
+    App& num_threads(int n) { config_.num_threads = n; return *this; }
+    App& server_name(const std::string& name) { config_.server_name = name; return *this; }
+    App& enable_docs(bool enable) { config_.enable_docs = enable; return *this; }
 
     /**
      * @brief Access the internal ServiceProvider for registering dependencies.

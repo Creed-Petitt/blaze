@@ -134,6 +134,8 @@ boost::asio::awaitable<std::string> App::handle_request(Request& req, const std:
         res.header("Connection", "close");
     }
 
+    res.header("Server", config_.server_name);
+
     // Async Logger
     const auto end_time = std::chrono::steady_clock::now();
     const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
@@ -210,6 +212,11 @@ void App::_register_docs() {
 }
 
 void App::stop() {
+    // Cancel signal waiting
+    if (signals_) {
+        signals_->cancel();
+    }
+
     // Close listener
     for (auto& listener : listeners_) {
         listener->stop();
@@ -228,10 +235,13 @@ void App::stop() {
     }
 
     // Safety timeout
-    std::thread([this]() {
-        std::this_thread::sleep_for(std::chrono::seconds(30));
+    int timeout = config_.shutdown_timeout;
+    std::thread([this, timeout]() {
+        std::this_thread::sleep_for(std::chrono::seconds(timeout));
         if (!ioc_.stopped()) {
-            std::cerr << "[Blaze] Shutdown timeout reached. Force stopping..." << std::endl;
+            if (timeout > 0) {
+                std::cerr << "[Blaze] Shutdown timeout reached. Force stopping..." << std::endl;
+            }
             ioc_.stop();
         }
     }).detach();
@@ -239,7 +249,15 @@ void App::stop() {
 
 void App::listen(const int port, int num_threads) {
     logger_.configure(config_.log_path);
-    _register_docs();
+    logger_.set_level(config_.log_level);
+    
+    if (config_.enable_docs) {
+        _register_docs();
+    }
+
+    if (num_threads <= 0) {
+        num_threads = config_.num_threads;
+    }
 
     if (num_threads <= 0) {
         num_threads = std::thread::hardware_concurrency();
@@ -260,8 +278,8 @@ void App::listen(const int port, int num_threads) {
     }
 
     // (Ctrl+C) to stop cleanly
-    auto signals = std::make_shared<net::signal_set>(ioc_, SIGINT, SIGTERM);
-    signals->async_wait([this, signals](boost::system::error_code const&, int) {
+    signals_ = std::make_unique<net::signal_set>(ioc_, SIGINT, SIGTERM);
+    signals_->async_wait([this](boost::system::error_code const&, int) {
         this->stop();
     });
 
@@ -270,7 +288,15 @@ void App::listen(const int port, int num_threads) {
 
 void App::listen_ssl(const int port, const std::string& cert_path, const std::string& key_path, int num_threads) {
     logger_.configure(config_.log_path);
-    _register_docs();
+    logger_.set_level(config_.log_level);
+
+    if (config_.enable_docs) {
+        _register_docs();
+    }
+
+    if (num_threads <= 0) {
+        num_threads = config_.num_threads;
+    }
 
     if (num_threads <= 0) {
         num_threads = std::thread::hardware_concurrency();
@@ -294,8 +320,8 @@ void App::listen_ssl(const int port, const std::string& cert_path, const std::st
     listener->run();
 
     // (Ctrl+C) to stop cleanly
-    auto signals = std::make_shared<net::signal_set>(ioc_, SIGINT, SIGTERM);
-    signals->async_wait([this, signals](boost::system::error_code const&, int) {
+    signals_ = std::make_unique<net::signal_set>(ioc_, SIGINT, SIGTERM);
+    signals_->async_wait([this](boost::system::error_code const&, int) {
         this->stop();
     });
 
