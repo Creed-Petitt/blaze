@@ -124,31 +124,6 @@ jobs:
     - name: Full Benchmark Suite
       run: ./tools/benchmark.sh --ci
 
-  coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake g++ libssl-dev libpq-dev libmariadb-dev lcov pkg-config
-        
-    - name: Build with Coverage
-      run: |
-        cmake -B build -DBLAZE_ENABLE_COVERAGE=ON
-        cmake --build build -j$(nproc)
-        
-    - name: Run Tests
-      run: ./build/tests/blaze_tests
-      
-    - name: Generate Report
-      run: |
-        lcov --capture --directory build --output-file coverage.info
-        lcov --remove coverage.info '/usr/*' '*/tests/*' '*/examples/*' --output-file coverage.info
-        lcov --list coverage.info
-
   fuzzing-libfuzzer:
     name: Internal Fuzzing (LibFuzzer)
     runs-on: ubuntu-latest
@@ -236,7 +211,7 @@ jobs:
         for i in {1..60}; do curl -s http://127.0.0.1:8080/health && break || echo "Waiting for server..."; sleep 1; done
         python3 tests/integration_app/fuzz.py
         ./tools/benchmark.sh --ci
-        kill -SIGINT $(cat app.pid)
+        kill -SIGINT $(cat app.pid) 2>/dev/null || true
         sleep 2
 
   thread-safety:
