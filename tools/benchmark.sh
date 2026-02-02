@@ -47,10 +47,6 @@ NC='\033[0m'
 
 echo -e "${BLUE}=== Blaze Framework Benchmark Suite ($MODE Mode) ===${NC}"
 
-# 0. Cleanup Zombies
-pkill -9 -f "blaze_integration_app" || true
-fuser -k 8080/tcp || true 2>/dev/null
-
 # Generate Lua scripts
 generate_lua
 
