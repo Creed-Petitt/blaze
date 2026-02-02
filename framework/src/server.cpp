@@ -310,7 +310,9 @@ void HttpSession<Stream>::on_read(beast::error_code ec, std::size_t bytes_transf
         }
 
         if (ec != net::error::connection_reset && ec != net::error::eof && ec != beast::error::timeout && ec != ssl::error::stream_truncated) {
-            std::cerr << "read error: " << ec.message() << std::endl;
+            std::cerr << "Request Parse Error: " << ec.message() << "\n";
+            send_error_response(http::status::bad_request, "Bad Request");
+            return;
         }
         return;
     }
