@@ -54,7 +54,17 @@ python3 tests/integration_app/fuzz.py
 ```
 
 ### Performance Stress Test
-We use `wrk` for high-concurrency benchmarks.
+We use `wrk` for high-concurrency benchmarks. We provide a consolidated suite:
+
+```bash
+# Run full suite
+./tools/benchmark.sh
+
+# Run lightweight CI version
+./tools/benchmark.sh --ci
+```
+
+Or run manual tests:
 
 ```bash
 # Simple GET benchmark
