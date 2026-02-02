@@ -13,8 +13,8 @@ Every push to Blaze triggers an automated suite of tests in GitHub Actions. The 
 
 ### Job B: Integration & Fuzzing (Reliability)
 *   **Database Integration:** Boots real **PostgreSQL** and **MySQL** instances in Docker.
-*   **SSL Verification:** Generates self-signed certificates on-the-fly.
-*   **Fuzz Attack:** Runs a Python-based protocol fuzzer to bombard the parser with malicious packets.
+*   **Chaos Testing:** Intentionally stops the database container mid-benchmark to ensure `blaze::CircuitBreaker` correctly isolates failures.
+*   **Logic Fuzzing:** Sends malformed JSON types and invalid URL encodings to verify `400 Bad Request` handling.
 *   **Performance Benchmark:** Runs `wrk` load tests against all core routes to ensure no performance regressions.
 
 ### Job C: Memory Safety (ASan Auditor)

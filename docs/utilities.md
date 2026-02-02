@@ -42,6 +42,21 @@ try {
 }
 ```
 
+### `jwt_sign` & `jwt_verify`
+Convenient shortcuts for standard JSON Web Token operations.
+
+```cpp
+// Create a token
+std::string token = blaze::jwt_sign({{"user_id", 123}}, "secret_key");
+
+// Verify a token
+try {
+    Json payload = blaze::jwt_verify(token, "secret_key");
+} catch (const blaze::crypto::JwtError& e) {
+    // Handle invalid/expired token
+}
+```
+
 ---
 
 ## Circuit Breaker
