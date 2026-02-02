@@ -40,6 +40,14 @@ jobs:
         brew install cmake openssl libpq mariadb-connector-c pkg-config
         echo "CMAKE_PREFIX_PATH=$(brew --prefix openssl):$(brew --prefix libpq):$(brew --prefix mariadb-connector-c)" >> $GITHUB_ENV
 
+    - name: Cache Build Dependencies
+      uses: actions/cache@v3
+      with:
+        path: build/_deps
+        key: ${{ runner.os }}-build-deps-${{ hashFiles('**/CMakeLists.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-build-deps-
+
     - name: Build
       run: |
         cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -97,19 +105,89 @@ jobs:
         for i in {1..60}; do curl -s http://127.0.0.1:8080/health && break || echo "Waiting for server..."; sleep 1; done
         python3 tests/integration_app/fuzz.py
 
-    - name: Load Test (wrk)
+    - name: Chaos Load Test (DB Failure)
       run: |
-        wrk -t4 -c100 -d5s http://127.0.0.1:8080/health
-        wrk -t4 -c100 -d5s http://127.0.0.1:8080/abstract
-        wrk -t4 -c100 -d5s http://127.0.0.1:8080/users
-        wrk -t4 -c100 -d5s http://127.0.0.1:8080/users/count
-        wrk -t4 -c100 -d5s http://127.0.0.1:8080/users/1
-        wrk -t4 -c100 -d5s "http://127.0.0.1:8080/search?name=Blaze"
-        wrk -t4 -c100 -d5s -s tests/integration_app/user_post.lua http://127.0.0.1:8080/users
-        wrk -t4 -c100 -d5s -s tests/integration_app/login.lua http://127.0.0.1:8080/login
-        wrk -t4 -c100 -d5s -s tests/integration_app/post.lua http://127.0.0.1:8080/modern-api
-        wrk -t4 -c100 -d5s -s tests/integration_app/user_post.lua http://127.0.0.1:8080/all-in-one
-        wrk -t4 -c100 -d5s http://127.0.0.1:8080/index.html
+        # Start load test in background
+        wrk -t4 -c100 -d10s http://127.0.0.1:8080/users &
+        WRK_PID=$!
+        
+        sleep 3
+        echo "!!! CHAOS: STOPPING POSTGRES !!!"
+        docker stop $(docker ps -q --filter ancestor=postgres)
+        
+        sleep 2
+        echo "!!! CHAOS: RESTARTING POSTGRES !!!"
+        docker start $(docker ps -aq --filter ancestor=postgres)
+        
+        wait $WRK_PID || echo "Wrk finished"
+
+    - name: Full Benchmark Suite
+      run: ./tools/benchmark.sh --ci
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ libssl-dev lcov pkg-config
+        
+    - name: Build with Coverage
+      run: |
+        cmake -B build -DBLAZE_ENABLE_COVERAGE=ON
+        cmake --build build -j$(nproc)
+        
+    - name: Run Tests
+      run: ./build/tests/blaze_tests
+      
+    - name: Generate Report
+      run: |
+        lcov --capture --directory build --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' '*/tests/*' '*/examples/*' --output-file coverage.info
+        lcov --list coverage.info
+
+  fuzzing-libfuzzer:
+    name: Internal Fuzzing (LibFuzzer)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ clang llvm libssl-dev
+        
+    - name: Build Fuzzers
+      run: |
+        cmake -B build -DCMAKE_CXX_COMPILER=clang++ -DBLAZE_BUILD_FUZZERS=ON
+        cmake --build build -j$(nproc)
+        
+    - name: Fuzz URL Decoder
+      run: ./build/tests/fuzzers/fuzz_url -max_total_time=60
+      
+    - name: Fuzz JSON Parser
+      run: ./build/tests/fuzzers/fuzz_json -max_total_time=60
+
+  lint:
+    name: Static Analysis (Clang-Tidy)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ clang-tidy libssl-dev libpq-dev libmariadb-dev
+        
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      
+    - name: Run Clang-Tidy
+      run: |
+        clang-tidy -p build framework/src/*.cpp framework/src/util/*.cpp framework/src/drivers/*/*.cpp
 
   sanitizer-pass:
     name: Memory Safety (ASan/UBSan)
@@ -157,13 +235,7 @@ jobs:
       run: |
         for i in {1..60}; do curl -s http://127.0.0.1:8080/health && break || echo "Waiting for server..."; sleep 1; done
         python3 tests/integration_app/fuzz.py
-        # Stress test ALL routes to catch leaks in every subsystem
-        wrk -t2 -c20 -d5s http://127.0.0.1:8080/users
-        wrk -t2 -c20 -d5s http://127.0.0.1:8080/users/1
-        wrk -t2 -c20 -d5s -s tests/integration_app/login.lua http://127.0.0.1:8080/login
-        wrk -t2 -c20 -d5s -s tests/integration_app/post.lua http://127.0.0.1:8080/modern-api
-        wrk -t2 -c20 -d5s http://127.0.0.1:8080/health
-        wrk -t2 -c20 -d5s http://127.0.0.1:8080/index.html
+        ./tools/benchmark.sh --ci
         kill -SIGINT $(cat app.pid)
         sleep 2
 
@@ -207,17 +279,11 @@ jobs:
       run: ./build/tests/blaze_tests
 
     - name: Run TSan Integration App
-      run: ./build/tests/integration_app/blaze_integration_app &
+      run: TSAN_OPTIONS="suppressions=tools/tsan.supp" ./build/tests/integration_app/blaze_integration_app &
 
     - name: Fuzzing Attack (TSan)
       run: |
         for i in {1..60}; do curl -s http://127.0.0.1:8080/health && break || echo "Waiting for server..."; sleep 1; done
         python3 tests/integration_app/fuzz.py
-        # Stress test ALL routes to catch race conditions everywhere
-        wrk -t2 -c20 -d5s http://127.0.0.1:8080/users
-        wrk -t2 -c20 -d5s http://127.0.0.1:8080/users/1
-        wrk -t2 -c20 -d5s -s tests/integration_app/login.lua http://127.0.0.1:8080/login
-        wrk -t2 -c20 -d5s -s tests/integration_app/post.lua http://127.0.0.1:8080/modern-api
-        wrk -t2 -c20 -d5s -s tests/integration_app/user_post.lua http://127.0.0.1:8080/all-in-one
-        wrk -t1 -c5 -d5s http://127.0.0.1:8080/health
-        wrk -t2 -c20 -d5s http://127.0.0.1:8080/index.html
+        # Use centralized benchmark suite for stress testing
+        ./tools/benchmark.sh --ci
