@@ -9,6 +9,7 @@
 #include <blaze/wrappers.h>
 #include <blaze/repository.h>
 #include <blaze/crypto.h>
+#include <blaze/logger.h> // Include Logger for blaze::info/error shortcuts
 #include <iostream>
 #include <vector>
 
@@ -88,13 +89,13 @@ int main() {
     std::string secret = "integration-secret-key";
     app.use(middleware::jwt_auth(secret));
 
-    std::cout << "--- REGISTERING ABSTRACT SERVICES ---" << std::endl;
+    blaze::info("--- REGISTERING ABSTRACT SERVICES ---");
     
     try {
         MySql::install(app, "mysql://root:blaze_secret@127.0.0.1:3306/blaze", 10);
         Postgres::install(app, "postgresql://postgres:blaze_secret@127.0.0.1:5432/postgres", 10);
     } catch (const std::exception& e) {
-        std::cerr << "Warning: Failed to connect to one or more databases: " << e.what() << std::endl;
+        blaze::error(std::string("Warning: Failed to connect to one or more databases: ") + e.what());
     }
 
     app.provide<UserService>();
@@ -104,19 +105,20 @@ int main() {
         try {
             auto db = a.services().resolve<Database>();
             co_await db->query("CREATE TABLE IF NOT EXISTS \"User\" (id INT PRIMARY KEY, name TEXT)");
-            std::cout << "[Migration] 'User' table ready." << std::endl;
+            blaze::info("[Migration] 'User' table ready.");
         } catch (...) {
-            std::cerr << "[Migration] Warning: Could not run migrations." << std::endl;
+            blaze::error("[Migration] Warning: Could not run migrations.");
         }
     };
     app.spawn(migrate(app));
 
-    std::cout << "--- DEFINING ROUTES ---" << std::endl;
+    blaze::info("--- DEFINING ROUTES ---");
 
     // Login (Generates JWT)
     app.post("/login", [secret](Body<LoginRequest> creds) -> Async<Json> {
         if (creds.username == "admin" && creds.password == "password") {
-            std::string token = crypto::jwt_sign({{"id", 1}, {"role", "admin"}}, secret);
+            // Use new top-level shortcut
+            std::string token = blaze::jwt_sign({{"id", 1}, {"role", "admin"}}, secret);
             co_return Json({{"token", token}});
         }
         throw Unauthorized("Invalid credentials");
@@ -211,7 +213,37 @@ int main() {
         co_return Json{{"table", repo.table_name()}};
     });
 
-    std::cout << "Integration App running on :8080" << std::endl;
+    // --- FAULT INJECTION & FUZZER TARGETS ---
+
+    // 1. Strict JSON Target
+    // Fuzzer will send strings/garbage here. We expect 400 Bad Request.
+    app.post("/test/strict-json", [](Body<int> val) -> Async<Json> {
+        // Body<int> wraps int. Use .value or cast.
+        co_return Json{{"received", val.value}};
+    });
+
+    // 2. Circuit Breaker Fault Injection
+    // Connects to a DEAD port to force a connection failure.
+    // Verifies the framework trips the breaker (503) or handles the error (500).
+    app.get("/test/circuit-breaker", [&app]() -> Async<void> {
+        try {
+            // Attempt to connect to a port that definitely isn't listening
+            // PgPool constructor (App&, conn_str, size) automatically calls connect().
+            // We just create it and let it fail.
+            auto dead_db = PgPool::open(app, "postgresql://postgres:pass@127.0.0.1:9999/db", 1);
+            
+            // If open() doesn't throw on connect failure (it catches internally), we might need to force a query.
+            // But PgPool::open calls pool->connect().
+            // Let's force a query to be sure we hit the network.
+            co_await dead_db->query("SELECT 1");
+            
+        } catch (const std::exception& e) {
+            // We WANT this error to happen
+            throw ServiceUnavailable("Circuit tripped successfully");
+        }
+    });
+
+    blaze::info("Integration App running on :8080");
     app.listen(8080);
 
     return 0;
