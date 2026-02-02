@@ -23,7 +23,11 @@ endif()
 
 FetchContent_GetProperties(boost_all)
 if(NOT boost_all_POPULATED)
-    FetchContent_Populate(boost_all)
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.14)
+        FetchContent_MakeAvailable(boost_all)
+    else()
+        FetchContent_Populate(boost_all)
+    endif()
 endif()
 
 # boost_system
