@@ -238,15 +238,17 @@ void App::stop() {
 
     // Safety timeout
     int timeout = config_.shutdown_timeout;
-    std::thread([this, timeout]() {
-        std::this_thread::sleep_for(std::chrono::seconds(timeout));
-        if (!ioc_.stopped()) {
-            if (timeout > 0) {
+    if (timeout > 0) {
+        auto timer = std::make_shared<net::steady_timer>(ioc_, std::chrono::seconds(timeout));
+        timer->async_wait([this, timer](const boost::system::error_code& ec) {
+            if (!ec && !ioc_.stopped()) {
                 std::cerr << "[Blaze] Shutdown timeout reached. Force stopping..." << std::endl;
+                ioc_.stop();
             }
-            ioc_.stop();
-        }
-    }).detach();
+        });
+    } else {
+        ioc_.stop();
+    }
 }
 
 void App::listen(const int port, int num_threads) {
