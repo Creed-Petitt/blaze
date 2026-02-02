@@ -48,6 +48,12 @@ public:
     InternalServerError(const std::string& msg = "Internal Server Error") : HttpError(500, msg) {}
 };
 
+/** @brief 503 Service Unavailable */
+class ServiceUnavailable : public HttpError {
+public:
+    ServiceUnavailable(const std::string& msg = "Service Unavailable") : HttpError(503, msg) {}
+};
+
 } // namespace blaze
 
 #endif
