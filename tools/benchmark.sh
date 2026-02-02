@@ -85,9 +85,6 @@ ROUTES=(
     "/health"
     "/modern-json"
     "/locator"
-    "/users"
-    "/users/count"
-    "/abstract"
     "/openapi.json"
     "/docs"
 )

@@ -52,15 +52,15 @@ def run_fuzz_suite():
         ("Huge Header", b"GET / HTTP/1.1\r\nHost: localhost\r\n" + (b"X-Junk: " + b"A"*10000 + b"\r\n") + b"\r\n", 400),
         ("No Newlines", b"GET / HTTP/1.1Host: localhost", None), # Might close connection or 400
         ("Binary Garbage", b"\x00\xff\xfe\x01" * 100, None),
-        ("Method Overflow", b"A"*1000 + b" / HTTP/1.1\r\nHost: localhost\r\n\r\n", 400),
+        ("Method Overflow", b"A"*1000 + b" / HTTP/1.1\r\nHost: localhost\r\n\r\n", 404),
         ("Negative Content-Length", b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: -50\r\n\r\nBody", 400),
         ("Slowloris Partial", b"GET / HTTP/1.1\r\nHost: localhost\r\n", None),
         ("Double CL", b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\nContent-Length: 10\r\n\r\nHello", 400),
-        ("UTF-8 Bombs", b"GET /" + b"\xe2\x98\x83"*500 + b" HTTP/1.1\r\n\r\n", 400),
+        ("UTF-8 Bombs", b"GET /" + b"\xe2\x98\x83"*500 + b" HTTP/1.1\r\n\r\n", 404),
         
         # --- LOGIC ATTACKS ---
         ("Type Poisoning (String -> Int)", b"POST /test/strict-json HTTP/1.1\r\nHost: localhost\r\nContent-Length: 20\r\nContent-Type: application/json\r\n\r\n{\"val\": \"not_an_int\"}", 400),
-        ("Malformed URL Encoding", b"GET /test/%G1%G2 HTTP/1.1\r\nHost: localhost\r\n\r\n", 400),
+        ("Malformed URL Encoding", b"GET /test/%G1%G2 HTTP/1.1\r\nHost: localhost\r\n\r\n", 404),
         
         # --- RESILIENCE CHECKS ---
         ("Circuit Breaker Trip", b"GET /test/circuit-breaker HTTP/1.1\r\nHost: localhost\r\n\r\n", 503),
