@@ -46,26 +46,76 @@ blaze init my-app --fullstack
 
 ---
 
+### `dev`
+
+Start the Fullstack Development Server.
+
+```bash
+blaze dev [flags]
+```
+
+*   **Description**: The ultimate command for local development. It launches your C++ Backend and (if present) your Vite Frontend simultaneously.
+*   **Features**:
+    *   **Auto-Install**: Automatically detects missing `node_modules` and runs `npm install`.
+    *   **Dashboard**: Shows real-time status of your Backend, Frontend, and API Docs.
+    *   **Unified Logs**: Manages output from both services in a clean interface.
+*   **Flags**:
+    *   `-w, --watch`: Enables **Hot Reload**. Watches `src/` and `include/` for changes, automatically recompiling and restarting the backend.
+    *   `-r, --release`: Runs the backend in Release mode (`-O3`) for performance testing.
+
+**Example**:
+```bash
+# Start in static mode (no hot-reload)
+blaze dev
+
+# Start with Hot Reload (Recommended)
+blaze dev --watch
+```
+
+---
+
 ### `run`
 
-Build and run the application.
+Build and run the Backend (API only).
 
 ```bash
 blaze run [flags]
 ```
 
-*   **Description**: Compiles the C++ project using CMake and executes the binary.
+*   **Description**: Compiles the C++ project using CMake and executes the binary. Ideal for API-only projects.
 *   **Flags**:
-    *   `-w, --watch`: Enables **Hot Reload**. Watches `src/` and `include/` for changes, automatically recompiling and restarting the server.
-    *   `-r, --release`: Builds in Release mode (`-O3`) for maximum performance.
+    *   `-w, --watch`: Enables **Hot Reload**.
+    *   `-r, --release`: Builds in Release mode.
 
 **Example**:
 ```bash
-# Development mode with hot-reload
-blaze run --watch
+blaze run -w
+```
 
-# Production build
-blaze run --release
+---
+
+### `build`
+
+Compile the project for deployment.
+
+```bash
+blaze build [flags]
+```
+
+*   **Description**: Compiles the project into a standalone binary located in `build/`.
+*   **Flags**:
+    *   `--prod`: **Production Bundle Mode**.
+        *   Runs `npm install && npm run build` (if frontend exists).
+        *   Moves built assets to the backend's `public/` folder.
+        *   Compiles the C++ binary in **Release Mode**.
+        *   Result: A single binary that serves your entire fullstack app.
+    *   `-r, --release`: Force Release mode (default for `build` unless overridden).
+    *   `-d, --debug`: Force Debug mode.
+
+**Example**:
+```bash
+# Create a deployment-ready binary
+blaze build --prod
 ```
 
 ---
@@ -82,12 +132,10 @@ blaze add <feature>
     *   `postgres`: Adds PostgreSQL driver and updates `CMakeLists.txt`.
     *   `mysql`: Adds MySQL/MariaDB driver and updates `CMakeLists.txt`.
     *   `test`: Adds a Catch2 testing suite and a `tests/` directory.
-    *   `frontend`: launches the frontend wizard to add a Vite-based frontend to an existing backend project.
 
 **Example**:
 ```bash
 blaze add postgres
-blaze add test
 ```
 
 ---
