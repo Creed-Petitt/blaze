@@ -7,7 +7,10 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "Blaze v1.0.0 - High Performance C++ Framework"
+REPO="Creed-Petitt/blaze"
+VERSION="v1.0.0" # Change this if you tag differently
+
+echo -e "Blaze $VERSION - High Performance C++ Framework"
 
 # Helper to check if a package is installed (Debian/Ubuntu)
 is_installed_apt() {
@@ -67,38 +70,72 @@ install_dependencies() {
     fi
 }
 
+install_binary() {
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    ARCH=$(uname -m)
+
+    if [ "$ARCH" == "x86_64" ]; then
+        ARCH="amd64"
+    elif [ "$ARCH" == "aarch64" ] || [ "$ARCH" == "arm64" ]; then
+        ARCH="arm64"
+    fi
+
+    BINARY="blaze-${OS}-${ARCH}"
+    URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}"
+
+    echo -e "${YELLOW}[+] Attempting to download pre-built binary for ${OS}/${ARCH}...${NC}"
+    
+    if curl -fsSL "$URL" -o blaze_bin; then
+        chmod +x blaze_bin
+        echo -e "${GREEN}[+] Download successful!${NC}"
+        return 0
+    else
+        echo -e "${RED}[!] Binary download failed (HTTP 404). Falling back to source build...${NC}"
+        return 1
+    fi
+}
+
+build_from_source() {
+    if ! command -v go &> /dev/null; then
+        echo -e "${RED}Error: Go is not installed. Please install Go (golang.org) to build the CLI.${NC}"
+        exit 1
+    fi
+
+    REMOTE_INSTALL=false
+    if [ ! -d "cli" ]; then
+        echo -e "${YELLOW}[+] Remote install detected. Cloning Blaze repository...${NC}"
+        TEMP_DIR=$(mktemp -d)
+        git clone --depth 1 https://github.com/${REPO}.git "$TEMP_DIR"
+        cd "$TEMP_DIR"
+        REMOTE_INSTALL=true
+    fi
+
+    echo "[+] Building Blaze CLI from source..."
+    if [ -d "cli" ]; then
+        cd cli
+        go mod tidy
+        go build -o ../blaze_bin
+        cd ..
+    else
+        echo -e "${RED}Error: 'cli' directory not found.${NC}"
+        exit 1
+    fi
+
+    if [ "$REMOTE_INSTALL" = true ]; then
+        echo "[+] Cleaning up temporary files..."
+        rm -rf "$TEMP_DIR"
+    fi
+}
+
 # 1. Install system libs + ccache
 install_dependencies
 
-# 2. Check for Go
-if ! command -v go &> /dev/null; then
-    echo -e "${RED}Error: Go is not installed. Please install Go (golang.org) to build the CLI.${NC}"
-    exit 1
+# 2. Try Binary Install -> Fallback to Source
+if ! install_binary; then
+    build_from_source
 fi
 
-# 3. Handle Remote Install
-REMOTE_INSTALL=false
-if [ ! -d "cli" ]; then
-    echo -e "${YELLOW}[+] Remote install detected. Cloning Blaze repository...${NC}"
-    TEMP_DIR=$(mktemp -d)
-    git clone --depth 1 https://github.com/Creed-Petitt/blaze.git "$TEMP_DIR"
-    cd "$TEMP_DIR"
-    REMOTE_INSTALL=true
-fi
-
-# 4. Build Blaze CLI
-echo "[+] Building Blaze CLI..."
-if [ -d "cli" ]; then
-    cd cli
-    go mod tidy
-    go build -o ../blaze_bin
-    cd ..
-else
-    echo -e "${RED}Error: 'cli' directory not found.${NC}"
-    exit 1
-fi
-
-# 5. Install to system path
+# 3. Install to system path
 echo "[+] Installing binary to /usr/local/bin..."
 if [ -w /usr/local/bin ]; then
     mv blaze_bin /usr/local/bin/blaze
@@ -106,16 +143,9 @@ else
     sudo mv blaze_bin /usr/local/bin/blaze
 fi
 
-# 6. Setup Blaze Cache Directories
+# 4. Setup Blaze Cache Directories
 echo "[+] Initializing global cache..."
 mkdir -p ~/.blaze/cache
 
-# 7. Cleanup
-if [ "$REMOTE_INSTALL" = true ]; then
-    echo "[+] Cleaning up temporary files..."
-    cd /tmp
-    rm -rf "$TEMP_DIR"
-fi
-
-echo -e "${GREEN}[+] Blaze v1.0.0 Installation Successful!${NC}"
+echo -e "${GREEN}[+] Blaze $VERSION Installation Successful!${NC}"
 echo -e "${YELLOW}[!] Type 'blaze init myproject' to start.${NC}"
