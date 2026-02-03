@@ -288,7 +288,13 @@ void App::listen(const int port, int num_threads) {
     {
         std::lock_guard<std::mutex> lock(lifecycle_mtx_);
         signals_ = std::make_unique<net::signal_set>(ioc_, SIGINT, SIGTERM);
-        signals_->async_wait([this](boost::system::error_code const&, int) {
+        signals_->async_wait([this](boost::system::error_code const& ec, int signal_number) {
+            if (ec == net::error::operation_aborted) return;
+            if (ec) {
+                std::cerr << "Signal error: " << ec.message() << std::endl;
+                return;
+            }
+            std::cout << "[Blaze] Received signal " << signal_number << ", stopping..." << std::endl;
             this->stop();
         });
     }
@@ -336,7 +342,13 @@ void App::listen_ssl(const int port, const std::string& cert_path, const std::st
     {
         std::lock_guard<std::mutex> lock(lifecycle_mtx_);
         signals_ = std::make_unique<net::signal_set>(ioc_, SIGINT, SIGTERM);
-        signals_->async_wait([this](boost::system::error_code const&, int) {
+        signals_->async_wait([this](boost::system::error_code const& ec, int signal_number) {
+            if (ec == net::error::operation_aborted) return;
+            if (ec) {
+                std::cerr << "Signal error: " << ec.message() << std::endl;
+                return;
+            }
+            std::cout << "[Blaze] Received signal " << signal_number << ", stopping..." << std::endl;
             this->stop();
         });
     }
