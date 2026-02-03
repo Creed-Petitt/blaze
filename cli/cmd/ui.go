@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -17,6 +18,7 @@ import (
 )
 
 var (
+	uiLock       sync.Mutex
 	colorB       = lipgloss.Color("#00A2FF") // Blaze Blue
 	styleB       = lipgloss.NewStyle().Foreground(colorB).Bold(true)
 	blueStyle    = lipgloss.NewStyle().Foreground(colorB)
@@ -49,13 +51,79 @@ type funnyMsg string
 type errMsg error
 type quitMsg struct{}
 
+type taskModel struct {
+	spinner spinner.Model
+	message string
+	err     error
+	done    bool
+}
+
+func (m taskModel) Init() tea.Cmd { return m.spinner.Tick }
+func (m taskModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+	case quitMsg:
+		m.done = true
+		return m, tea.Quit
+	case errMsg:
+		m.err = msg
+		return m, tea.Quit
+	}
+	return m, nil
+}
+func (m taskModel) View() string {
+	if m.done {
+		return greenStyle.Render("  ✓ ") + whiteStyle.Render(m.message) + "\n"
+	}
+	if m.err != nil {
+		return orangeStyle.Render("  ✗ ") + whiteStyle.Render(m.message) + "\n"
+	}
+	return fmt.Sprintf("  %s %s", m.spinner.View(), whiteStyle.Render(m.message))
+}
+
+func RunTaskWithSpinner(message string, task func() error) error {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(colorB)
+
+	m := taskModel{
+		spinner: s,
+		message: message,
+	}
+
+	p := tea.NewProgram(m)
+
+	var taskErr error
+	go func() {
+		taskErr = task()
+		if taskErr != nil {
+			p.Send(errMsg(taskErr))
+		} else {
+			p.Send(quitMsg{})
+		}
+	}()
+
+	if _, err := p.Run(); err != nil {
+		return err
+	}
+	return taskErr
+}
+
 type model struct {
-	spinner  spinner.Model
-	percent  float64
-	funnyMsg string
-	err      error
-	quitting bool
-	showLogo bool
+	spinner   spinner.Model
+	percent   float64
+	funnyMsg  string
+	err       error
+	quitting  bool
+	cancelled bool
+	showLogo  bool
 }
 
 func initialModel(showLogo bool) model {
@@ -64,10 +132,11 @@ func initialModel(showLogo bool) model {
 	s.Style = lipgloss.NewStyle().Foreground(colorB)
 
 	return model{
-		spinner:  s,
-		funnyMsg: loadingMessages[0],
-		percent:  0,
-		showLogo: showLogo,
+		spinner:   s,
+		funnyMsg:  loadingMessages[0],
+		percent:   0,
+		showLogo:  showLogo,
+		cancelled: false,
 	}
 }
 
@@ -79,6 +148,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
+			m.cancelled = true
 			return m, tea.Quit
 		}
 	case spinner.TickMsg:
@@ -139,6 +209,13 @@ func tickFunnyMessage() tea.Cmd {
 }
 
 func RunBlazeBuild(release bool, showLogo bool) error {
+	if !uiLock.TryLock() {
+		// If UI is busy (e.g. hot reload overlap), just run quietly
+		// But we still want to block until it's done
+		return runBuildQuietly(release)
+	}
+	defer uiLock.Unlock()
+
 	m := initialModel(showLogo)
 	p := tea.NewProgram(m)
 
@@ -176,15 +253,32 @@ func RunBlazeBuild(release bool, showLogo bool) error {
 
 		close(doneChan)
 		p.Send(progressMsg(1.0))
-		time.Sleep(time.Millisecond * 50)
+		time.Sleep(time.Millisecond * 100) // Ensure 100% is seen
 		p.Send(quitMsg{})
 	}()
 
-	if _, err := p.Run(); err != nil {
+	if finalModel, err := p.Run(); err != nil {
 		return err
+	} else if m, ok := finalModel.(model); ok && m.cancelled {
+		return fmt.Errorf("build cancelled by user")
 	}
 
 	return buildErr
+}
+
+func runBuildQuietly(release bool) error {
+	buildMode := "Debug"
+	if release {
+		buildMode = "Release"
+	}
+	// Re-configure just in case
+	exec.Command("cmake", "-B", "build", fmt.Sprintf("-DCMAKE_BUILD_TYPE=%s", buildMode), ".").Run()
+
+	cmd := exec.Command("cmake", "--build", "build", "--parallel")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return BeautifyError(string(output))
+	}
+	return nil
 }
 
 func runCmdWithParsing(p *tea.Program, command string, args []string, startRange, endRange float64) error {
@@ -241,7 +335,8 @@ func BeautifyError(raw string) error {
 
 	if len(errorLines) == 0 {
 		out += errStyle.Render("  [!] Build failed:") + "\n"
-		start := len(lines) - 8
+		// Capture last 15 lines for context (Linker errors, CMake config issues)
+		start := len(lines) - 15
 		if start < 0 {
 			start = 0
 		}

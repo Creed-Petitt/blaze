@@ -290,5 +290,10 @@ func createProject(name string, frontend string, features []string) {
 
 	fmt.Println(blueStyle.Render("\n  Project ready!"))
 	fmt.Println(whiteStyle.Render(fmt.Sprintf("  cd %s", name)))
-	fmt.Println(whiteStyle.Render("  blaze run\n"))
+
+	if frontend != "" {
+		fmt.Println(whiteStyle.Render("  blaze dev  (Starts Backend + Frontend)\n"))
+	} else {
+		fmt.Println(whiteStyle.Render("  blaze run\n"))
+	}
 }
