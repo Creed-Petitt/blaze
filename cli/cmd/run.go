@@ -57,7 +57,7 @@ func runStatic(release bool) {
 	if release {
 		mode = "Release"
 	}
-	fmt.Printf("  [Mode: %s]\n", orangeStyle.Render(mode))
+	fmt.Printf("  [Build: %s]\n", orangeStyle.Render(mode))
 	fmt.Println(dimStyle.Render("  (Press Ctrl+C to stop)"))
 
 	runCmd := exec.Command("./build/" + projectName)
@@ -139,7 +139,7 @@ func runWithWatch(release bool) {
 		if release {
 			mode = "Release"
 		}
-		fmt.Printf("  [Mode: %s]\n", orangeStyle.Render(mode))
+		fmt.Printf("  [Build: %s]\n", orangeStyle.Render(mode))
 		fmt.Println(dimStyle.Render("  [Hot Reload Active] Watching for changes..."))
 
 		currentCmd = exec.Command("./build/" + projectName)

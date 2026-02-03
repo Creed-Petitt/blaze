@@ -125,11 +125,11 @@ func runDev() {
 		if devRelease {
 			mode = "Release"
 		}
-		fmt.Printf("  [Mode: %s]\n", orangeStyle.Render(mode))
+		fmt.Printf("  [Build: %s]\n", orangeStyle.Render(mode))
 		if devWatch {
 			fmt.Println(dimStyle.Render("  [Hot Reload Active] Watching for changes..."))
 		} else {
-			fmt.Println(dimStyle.Render("  (Press Ctrl+C to stop)"))
+			fmt.Println(dimStyle.Render("  [Static Mode] (Press Ctrl+C to stop)"))
 		}
 	}
 

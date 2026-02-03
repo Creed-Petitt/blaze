@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -151,6 +152,11 @@ func getProjectName() string {
 
 func buildDockerImage() bool {
 	name := getProjectName()
+	if name == "." || name == "/" {
+		name = "blaze-app"
+	}
+	name = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+
 	fmt.Println(dTitleStyle.Render(fmt.Sprintf("Building Docker image: %s", name)))
 	cmd := exec.Command("docker", "build", "-t", name, ".")
 	cmd.Stdout = os.Stdout
