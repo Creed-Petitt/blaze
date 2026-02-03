@@ -25,7 +25,7 @@ func init() {
 
 func runTests() {
 	if _, err := os.Stat("CMakeLists.txt"); os.IsNotExist(err) {
-		fmt.Println(orangeStyle.Render("Error: No Blaze project found."))
+		fmt.Println(blueStyle.Render("Error: No Blaze project found."))
 		return
 	}
 

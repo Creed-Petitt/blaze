@@ -50,7 +50,7 @@ func init() {
 
 func generateFile(name string, genType string) {
 	if _, err := os.Stat("CMakeLists.txt"); os.IsNotExist(err) {
-		fmt.Println(orangeStyle.Render("Error: No Blaze project found. Run this in the project root."))
+		fmt.Println(blueStyle.Render("Error: No Blaze project found. Run this in the project root."))
 		return
 	}
 

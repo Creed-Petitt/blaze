@@ -28,7 +28,7 @@ var initCmd = &cobra.Command{
 
 		// Sanitize project name
 		if strings.Contains(projectName, "..") || strings.Contains(projectName, "/") || strings.Contains(projectName, "\\") {
-			fmt.Println(orangeStyle.Render("\n  [!] Error: Project name cannot contain path separators or '..'"))
+			fmt.Println(blueStyle.Render("\n  [!] Error: Project name cannot contain path separators or '..'"))
 			os.Exit(1)
 		}
 
@@ -109,12 +109,12 @@ func (m featureSelectionModel) View() string {
 	if m.done {
 		return ""
 	}
-	s := fmt.Sprintf("\n%s\n\n", orangeStyle.Render("  Select Backend Features:"))
+	s := fmt.Sprintf("\n%s\n\n", blueStyle.Render("  Select Backend Features:"))
 
 	for i, choice := range m.choices {
 		cursor := "  "
 		if m.cursor == i {
-			cursor = orangeStyle.Render("❯ ")
+			cursor = blueStyle.Render("❯ ")
 		}
 
 		checked := "[ ]"
@@ -128,7 +128,7 @@ func (m featureSelectionModel) View() string {
 	doneCursor := "  "
 	doneStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	if m.cursor == len(m.choices) {
-		doneCursor = orangeStyle.Render("❯ ")
+		doneCursor = blueStyle.Render("❯ ")
 		doneStyle = blueStyle.Bold(true)
 	}
 	s += fmt.Sprintf("\n%s%s\n", doneCursor, doneStyle.Render("[ Confirm & Create ]"))
@@ -158,7 +158,7 @@ func selectFeatures() []string {
 
 func checkNpm() {
 	if _, err := exec.LookPath("npm"); err != nil {
-		fmt.Println(orangeStyle.Render("\n  [!] Error: Node.js/NPM is required for fullstack mode."))
+		fmt.Println(blueStyle.Render("\n  [!] Error: Node.js/NPM is required for fullstack mode."))
 		os.Exit(1)
 	}
 }
@@ -202,10 +202,10 @@ func (m selectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m selectionModel) View() string {
-	s := fmt.Sprintf("\n%s\n\n", orangeStyle.Render("  Select a Frontend Framework:"))
+	s := fmt.Sprintf("\n%s\n\n", blueStyle.Render("  Select a Frontend Framework:"))
 	for i, choice := range m.choices {
 		if m.cursor == i {
-			s += fmt.Sprintf("  %s %s\n", orangeStyle.Render("❯"), choice)
+			s += fmt.Sprintf("  %s %s\n", blueStyle.Render("❯"), choice)
 		} else {
 			s += fmt.Sprintf("    %s\n", choice)
 		}

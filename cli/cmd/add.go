@@ -93,7 +93,7 @@ func addDriver(name, pkgName, libName string, silent bool) {
 
 		check := exec.Command("pkg-config", "--exists", pkgConfigName)
 		if err := check.Run(); err != nil {
-			fmt.Printf(orangeStyle.Render("  [!] Warning: %s dev libs not found on system.\n"), name)
+			fmt.Printf(blueStyle.Render("  [!] Warning: %s dev libs not found on system.\n"), name)
 			fmt.Printf(dimStyle.Render("      You may need to run 'blaze doctor --fix' or install %s manually.\n"), pkgName)
 		}
 

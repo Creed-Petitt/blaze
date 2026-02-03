@@ -17,10 +17,10 @@ import (
 )
 
 var (
-	colorB       = lipgloss.Color("202") // Blaze Orange
+	colorB       = lipgloss.Color("#00A2FF") // Blaze Blue
 	styleB       = lipgloss.NewStyle().Foreground(colorB).Bold(true)
-	orangeStyle  = lipgloss.NewStyle().Foreground(colorB).Bold(true)
-	blueStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#00A2FF"))
+	blueStyle    = lipgloss.NewStyle().Foreground(colorB)
+	orangeStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("202")).Bold(true)
 	greenStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Bold(true)
 	whiteStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Bold(true)
 	percentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("246"))
@@ -151,37 +151,23 @@ func RunBlazeBuild(release bool, showLogo bool) error {
 	doneChan := make(chan bool)
 
 	go func() {
-		ticker := time.NewTicker(time.Millisecond * 100)
-		fakePercent := 0.0
-		go func() {
-			for {
-				select {
-				case <-doneChan:
-					ticker.Stop()
-					return
-				case <-ticker.C:
-					if fakePercent < 0.92 {
-						fakePercent += 0.004
-						p.Send(progressMsg(fakePercent))
-					}
-				}
-			}
-		}()
-
 		// Auto-Detect ccache
 		cmakeFlags := []string{"-B", "build", fmt.Sprintf("-DCMAKE_BUILD_TYPE=%s", buildMode), "."}
 		if _, err := exec.LookPath("ccache"); err == nil {
 			cmakeFlags = append(cmakeFlags, "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache")
 		}
 
-		if err := runCmdWithParsing(p, "cmake", cmakeFlags, 0, 0.15); err != nil {
+		// Initial config - slow progress
+		p.Send(progressMsg(0.05))
+		if err := runCmdWithParsing(p, "cmake", cmakeFlags, 0.05, 0.20); err != nil {
 			close(doneChan)
 			buildErr = err
 			p.Send(errMsg(err))
 			return
 		}
 
-		if err := runCmdWithParsing(p, "cmake", []string{"--build", "build", "--parallel"}, 0.15, 1.0); err != nil {
+		// Build - real progress
+		if err := runCmdWithParsing(p, "cmake", []string{"--build", "build", "--parallel"}, 0.20, 1.0); err != nil {
 			close(doneChan)
 			buildErr = err
 			p.Send(errMsg(err))

@@ -37,7 +37,7 @@ func init() {
 
 func runStatic(release bool) {
 	if _, err := os.Stat("CMakeLists.txt"); os.IsNotExist(err) {
-		fmt.Println(orangeStyle.Render("Error: No Blaze project found."))
+		fmt.Println(blueStyle.Render("Error: No Blaze project found."))
 		return
 	}
 
@@ -50,7 +50,7 @@ func runStatic(release bool) {
 	fmt.Printf("\nLaunching %s\n", projectName)
 	fmt.Printf("Local: http://localhost:8080\n")
 	fmt.Printf("Docs:  http://localhost:8080/docs\n\n")
-	
+
 	runCmd := exec.Command("./build/" + projectName)
 	runCmd.Stdout = os.Stdout
 	runCmd.Stderr = os.Stderr
@@ -66,35 +66,41 @@ func runWithWatch(release bool) {
 	defer watcher.Close()
 
 	filepath.Walk("src", func(path string, info os.FileInfo, err error) error {
-		if info != nil && info.IsDir() { watcher.Add(path) }
+		if info != nil && info.IsDir() {
+			watcher.Add(path)
+		}
 		return nil
 	})
 	filepath.Walk("include", func(path string, info os.FileInfo, err error) error {
-		if info != nil && info.IsDir() { watcher.Add(path) }
+		if info != nil && info.IsDir() {
+			watcher.Add(path)
+		}
 		return nil
 	})
 
 	var currentCmd *exec.Cmd
 	isFirstRun := true
 	projectName := getProjectName()
-	
+
 	var buildLock sync.Mutex
 
 	restart := func() {
-		if !buildLock.TryLock() { return }
+		if !buildLock.TryLock() {
+			return
+		}
 		defer buildLock.Unlock()
 
 		if currentCmd != nil && currentCmd.Process != nil {
 			currentCmd.Process.Kill()
 		}
-		
+
 		if err := RunBlazeBuild(release, isFirstRun); err != nil {
 			fmt.Println(err)
 			return
 		}
 
 		if !isFirstRun {
-			fmt.Printf("\n%s\n", orangeStyle.Render(" [ Hot Reload ]"))
+			fmt.Printf("\n%s\n", blueStyle.Render(" [ Hot Reload ]"))
 		}
 		isFirstRun = false
 
@@ -114,15 +120,21 @@ func runWithWatch(release bool) {
 	for {
 		select {
 		case event, ok := <-watcher.Events:
-			if !ok { return }
+			if !ok {
+				return
+			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				if timer != nil { timer.Stop() }
+				if timer != nil {
+					timer.Stop()
+				}
 				timer = time.AfterFunc(100*time.Millisecond, func() {
 					go restart()
 				})
 			}
 		case err, ok := <-watcher.Errors:
-			if !ok { return }
+			if !ok {
+				return
+			}
 			fmt.Printf("Watcher error: %v\n", err)
 		}
 	}
