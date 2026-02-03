@@ -88,7 +88,6 @@ curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh 
 Blaze is designed for modern Linux and macOS environments.
 
 - **Compiler**: C++20 compliant (GCC 11+, Clang 13+, or MSVC 2022+).
-- **Tooling**: [Go](https://golang.org/doc/install) (required to build the Blaze CLI).
 - **Libraries**: OpenSSL, libpq (PostgreSQL), and libmariadb (MySQL).
 - **Engine**: Boost 1.85+ (Automatically managed via CMake).
 
