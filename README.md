@@ -18,7 +18,9 @@
 - **Reflection ORM**: Zero-boilerplate mapping between database, structs, and JSON.
 - **Built-in Security**: Production-ready JWT, Rate Limiting, and CORS.
 - **Automatic API Docs**: Swagger UI and OpenAPI 3.0 generated at compile-time.
-- **$O(1)$ Broadcasting**: High-efficiency WebSockets for real-time scale.
+- **High-Efficiency WebSockets**: Scalable real-time communication.
+- **Hot Reload**: Automatic server restart on file changes.
+- **Automatic Validation**: Integrity checks via `validate()` hooks.
 
 ## Installation
 
