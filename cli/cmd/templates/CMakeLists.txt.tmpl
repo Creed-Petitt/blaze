@@ -3,6 +3,11 @@ project({{ .ProjectName }})
 
 set(CMAKE_CXX_STANDARD 20)
 
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release")
+endif()
+message(STATUS "Blaze: Building in ${CMAKE_BUILD_TYPE} Mode")
+
 include(FetchContent)
 
 # Use Global Blaze Cache (Instant Builds)
