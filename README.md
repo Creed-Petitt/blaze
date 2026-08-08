@@ -16,7 +16,7 @@
 - **Type-Safe Extraction**: Automatic injection of `Path<T>`, `Body<T>`, and `Query<T>`.
 - **Auto-Wiring DI**: A robust IoC container that resolves dependencies automatically.
 - **Reflection ORM**: Zero-boilerplate mapping between database, structs, and JSON.
-- **Built-in Security**: Production-ready JWT, Rate Limiting, and CORS.
+- **Focused Middleware**: Rate limiting, CORS, static files, and request context.
 - **Automatic API Docs**: Swagger UI and OpenAPI 3.0 generated at compile-time.
 - **High-Efficiency WebSockets**: Scalable real-time communication.
 - **Hot Reload**: Automatic server restart on file changes.
@@ -31,7 +31,7 @@ Install the **Blaze CLI** to scaffold and run projects with zero configuration.
 curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh | bash
 ```
 
-> **Note:** The installer (`install.sh`) handles all system dependencies (CMake, OpenSSL, Drivers) automatically for you.
+> **Note:** The installer (`install.sh`) handles the core system dependencies and optional database driver headers automatically for you.
 ## Quick Start
 
 1. **Initialize** your project:
@@ -81,16 +81,16 @@ curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh 
 - **[Database & ORM](docs/database-orm.md)**: Drivers, BLAZE_MODEL, and Repository pattern.
 - **[HTTP Client](docs/http-client.md)**: Async requests, timeouts, and redirects.
 - **[File Uploads](docs/file-uploads.md)**: Multipart forms and client-side uploads.
-- **[Middleware & Security](docs/middleware.md)**: JWT Auth, CORS, and the middleware chain.
+- **[Middleware](docs/middleware.md)**: CORS, rate limiting, static files, and the middleware chain.
 - **[WebSockets](docs/websockets.md)**: Real-time broadcasting and background tasks.
-- **[Core Utilities](docs/utilities.md)**: Zero-allocation tools for strings, JWTs, and resilience.
+- **[Core Utilities](docs/utilities.md)**: Zero-allocation tools for strings, parsing, and resilience.
 
 ## Requirements
 
 Blaze is designed for modern Linux and macOS environments.
 
 - **Compiler**: C++20 compliant (GCC 11+, Clang 13+, or MSVC 2022+).
-- **Libraries**: OpenSSL, libpq (PostgreSQL), and libmariadb (MySQL).
+- **Libraries**: libpq (PostgreSQL) and libmariadb (MySQL) when using database drivers.
 - **Engine**: Boost 1.85+ (Automatically managed via CMake).
 
 ## License

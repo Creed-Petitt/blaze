@@ -13,20 +13,20 @@
 
 using namespace blaze;
 
-// A background worker that checks GitHub's status every 10 seconds
-Async<void> github_monitor(App& app) {
+// A background worker that checks an HTTP endpoint every 10 seconds
+Async<void> status_monitor(App& app) {
     while (true) {
         try {
-            std::cout << "[Monitor] Checking GitHub status..." << std::endl;
-            auto res = co_await blaze::fetch("https://api.github.com/zen");
+            std::cout << "[Monitor] Checking example.com..." << std::endl;
+            auto res = co_await blaze::fetch("http://example.com/");
             
             if (res.status == 200) {
-                std::cout << "[Monitor] GitHub is UP. Zen: " << res.text() << std::endl;
+                std::cout << "[Monitor] example.com is reachable." << std::endl;
             } else {
-                std::cout << "[Monitor] GitHub returned status: " << res.status << std::endl;
+                std::cout << "[Monitor] example.com returned status: " << res.status << std::endl;
             }
         } catch (const std::exception& e) {
-            std::cout << "[Monitor] GitHub check failed: " << e.what() << std::endl;
+            std::cout << "[Monitor] HTTP check failed: " << e.what() << std::endl;
         }
 
         // Wait for 10 seconds WITHOUT blocking the worker thread
@@ -39,7 +39,7 @@ int main() {
 
     // 1. Launch the background worker
     // The server will handle requests while this runs in parallel
-    app.spawn(github_monitor(app));
+    app.spawn(status_monitor(app));
 
     app.get("/", [](Response& res) -> Async<void> {
         res.send("The background monitor is running. Check your terminal!");

@@ -78,9 +78,9 @@ std::string session = req.get<std::string>("session_id");
 ```
 
 ### User Identity & `is_authenticated()`
-Blaze features a built-in identity system for tracking authenticated users. This is a "Producer/Consumer" model:
+Blaze includes request-level identity storage for applications that provide their own authentication middleware. This is a "Producer/Consumer" model:
 
-1.  **The Producer**: Middleware (like `jwt_auth`) validates credentials and attaches an identity to the request via `req.set_user(json_payload)`.
+1.  **The Producer**: Your middleware validates credentials and attaches an identity to the request via `req.set_user(json_payload)`.
 2.  **The Consumer**: Your route handlers check if a user is present and access their data.
 
 ```cpp
@@ -90,7 +90,7 @@ app.get("/profile", [](Request& req) -> Async<Json> {
         throw Unauthorized("You must be logged in to view this page");
     }
 
-    // 2. Access the user data (from the JWT payload)
+    // 2. Access the user data
     Json user = req.user();
     std::cout << "Viewing profile for: " << user["email"] << std::endl;
 
@@ -100,19 +100,7 @@ app.get("/profile", [](Request& req) -> Async<Json> {
 
 ---
 
-## 4. Built-in Security
-
-### JWT Authentication
-Blaze includes a built-in JWT validator that uses **constant-time (timing-safe)** string comparisons to prevent side-channel attacks. It automatically checks the `Authorization: Bearer <token>` header.
-
-**Behavior:**
-*   **Success**: If the token is valid, it extracts the payload, calls `req.set_user()`, and sets `req.is_authenticated()` to **true**.
-*   **Missing/Invalid**: It allows the request to continue (so you can have optional auth), but `req.is_authenticated()` will be **false**.
-
-```cpp
-// Protect your routes with a secret key
-app.use(middleware::jwt_auth("your-secret-key"));
-```
+## 4. Built-in Middleware
 
 ### Rate Limiting
 Protect your API from abuse by limiting the number of requests per IP address.
@@ -133,40 +121,3 @@ The `static_files` middleware uses high-performance **Zero-Copy Streaming**. Unl
 ```cpp
 app.use(middleware::static_files("public"));
 ```
-
----
-
-## 5. Crypto & Password Utilities
-
-Security isn't just about middleware; it's about how you handle data. Blaze includes a `blaze::crypto` namespace for common security tasks.
-
-### Password Hashing
-Never store passwords in plain text. Blaze provides a built-in hashing utility that uses **SCRYPT**, a memory-hard algorithm designed to be resistant to hardware (ASIC/GPU) brute-force attacks.
-
-```cpp
-#include <blaze/crypto.h>
-
-// 1. Hash a password during signup
-// Automatically handles salting and work-factor tuning
-std::string hash = blaze::crypto::hash_password("user_password");
-
-// 2. Verify during login (Timing-safe)
-bool ok = blaze::crypto::verify_password("user_password", hash);
-```
-
-### Manual JWT Management
-While `jwt_auth` middleware handles verification, you need to sign tokens yourself when a user logs in.
-
-```cpp
-// Generate a token that expires in 1 hour (3600s)
-Json payload = {{"user_id", 123}, {"role", "admin"}};
-std::string token = blaze::crypto::jwt_sign(payload, "your-secret-key", 3600);
-
-// Return it to the client
-res.json({{"token", token}});
-```
-
-### Core Cryptography
-*   **`sha256(data)`**: Returns a hex-encoded SHA256 hash.
-*   **`random_token(length)`**: Generates a secure random string (perfect for API keys or session IDs).
-*   **`base64_encode/decode`**: Standard base64 and base64url support.

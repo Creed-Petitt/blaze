@@ -1,6 +1,6 @@
 # Async HTTP Client
 
-Blaze includes a high-performance, non-blocking HTTP client (`blaze::fetch`). It is built on the same `boost::beast` and C++20 coroutine engine as the server, ensuring efficient I/O usage.
+Blaze includes a high-performance, non-blocking HTTP client (`blaze::fetch`). It is built on the same `boost::beast` and C++20 coroutine engine as the server, ensuring efficient I/O usage. The client supports plain `http://` URLs.
 
 ## 1. Basic Usage
 
@@ -11,10 +11,10 @@ The `fetch` function is a coroutine that returns a `FetchResponse`.
 
 app.get("/proxy", []() -> Async<void> {
     // Simple GET request
-    auto res = co_await blaze::fetch("https://api.github.com/zen");
+    auto res = co_await blaze::fetch("http://example.com/");
     
     if (res.status == 200) {
-        std::cout << "GitHub Zen: " << res.text() << std::endl;
+        std::cout << "Body: " << res.text() << std::endl;
     }
     co_return;
 });
@@ -32,7 +32,7 @@ blaze::Json payload = {
 
 // POST request with JSON body
 auto res = co_await blaze::fetch(
-    "https://api.example.com/users", 
+    "http://api.example.com/users", 
     "POST", 
     {{"Authorization", "Bearer token123"}}, // Headers map
     payload
@@ -47,7 +47,7 @@ You can specify a timeout in seconds. If the request takes longer, a `boost::sys
 ```cpp
 // Timeout after 5 seconds (Default is 30s)
 try {
-    auto res = co_await blaze::fetch("https://slow-api.com", "GET", {}, {}, 5);
+    auto res = co_await blaze::fetch("http://slow-api.com", "GET", {}, {}, 5);
 } catch (const std::exception& e) {
     std::cerr << "Request timed out: " << e.what() << std::endl;
 }
@@ -69,7 +69,7 @@ form.add_field("description", "File upload test");
 form.add_file("avatar", "me.png", raw_file_bytes, "image/png");
 
 // Automatically sets 'Content-Type: multipart/form-data; boundary=...'
-auto res = co_await blaze::fetch("https://api.example.com/upload", form);
+auto res = co_await blaze::fetch("http://api.example.com/upload", form);
 ```
 
 ## 4. The FetchResponse Object

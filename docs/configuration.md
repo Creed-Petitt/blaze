@@ -115,6 +115,6 @@ int main() {
        .max_body_size(1024*1024) // 1MB limit for standard APIs
        .enable_docs(false);     // Disable docs in public production
 
-    app.listen_ssl(443, "cert.pem", "key.pem");
+    app.listen(8080);
 }
 ```

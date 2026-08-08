@@ -16,7 +16,7 @@ using namespace blaze;
 // Functions using fetch should always be made named handlers
 Async<void> github_handler(Request& req, Response& res) {
     std::string user = req.params["user"];
-    std::string url = "https://api.github.com/users/" + user;
+    std::string url = "http://api.github.com/users/" + user;
 
     std::map<std::string, std::string> headers;
     headers["User-Agent"] = "Blaze-Proxy-Example";
@@ -34,7 +34,7 @@ Async<void> github_handler(Request& req, Response& res) {
 Async<void> echo_handler(Request& req, Response& res) {
     // Use req.json() to get the blaze::Json wrapper directly
     auto body = req.json();
-    auto fetch_res = co_await blaze::fetch("https://httpbin.org/post", "POST", {}, body);
+    auto fetch_res = co_await blaze::fetch("http://httpbin.org/post", "POST", {}, body);
     res.json(fetch_res.body);
     co_return;
 }
