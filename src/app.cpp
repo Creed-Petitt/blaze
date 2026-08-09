@@ -4,7 +4,7 @@
 #include <memory>
 #include <vector>
 #include <iostream>
-#include "server.h"
+#include "detail/server.h"
 
 namespace blaze {
 

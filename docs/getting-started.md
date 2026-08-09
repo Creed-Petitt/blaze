@@ -201,33 +201,25 @@ int main() {
 Use CMake directly:
 
 ```bash
-cmake --preset dev
-cmake --build --preset dev
-./build/<project-name>
-```
-
-Without presets:
-
-```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --parallel
 ./build/<project-name>
 ```
 
-See the [Build System](build-system.md) guide for direct CMake usage, package installation, and optional database drivers.
+See the [Build System](build-system.md) guide for direct CMake usage and package installation.
 
 ---
 
 ## IDE Support
 
-Blaze is designed to work seamlessly with modern C++ IDEs like **CLion**, **VS Code**, and **Visual Studio**. 
+Blaze is designed to work seamlessly with modern C++ IDEs like **CLion**, **VS Code**, and **Visual Studio**.
 
-Projects can include a `CMakePresets.json` file, so IDEs can open the same `dev` and `release` configurations used from the terminal.
+Projects can include their own `CMakePresets.json` file if they want IDEs and terminals to share build profiles.
 
 **Pro-Tips for IDEs:**
 1.  **Code Completion**: Blaze's headers expose route and service types clearly so "Go to Definition" and parameter hints work well.
 2.  **Debugging**: You can set breakpoints inside your route handlers and step directly into the Blaze framework source code.
-3.  **Formatting**: We recommend using the provided `.clang-format` file in the project root to keep your code consistent with the framework.
+3.  **Formatting**: Use your editor or formatter of choice; Blaze does not require project-specific formatting tooling.
 
 ## Advanced Essentials
 

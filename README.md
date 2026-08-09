@@ -60,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh 
 
 ### Project Setup
 - **[Getting Started](docs/getting-started.md)**: Installation and project setup.
-- **[Build System](docs/build-system.md)**: CMake usage, presets, and install/package flow.
+- **[Build System](docs/build-system.md)**: Direct CMake usage and install/package flow.
 - **[Configuration](docs/configuration.md)**: The App Builder API, logging, and environment variables.
 - **[Architecture & Design](docs/architecture.md)**: Deep dive into the framework's core engine and design patterns.
 - **[Testing & Security](docs/testing.md)**: CI/CD, sanitizers, and performance benchmarking.

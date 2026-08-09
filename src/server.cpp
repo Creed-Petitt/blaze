@@ -1,4 +1,4 @@
-#include "server.h"
+#include "detail/server.h"
 #include <blaze/app.h>
 #include <blaze/request.h>
 #include <blaze/response.h>

@@ -28,44 +28,38 @@ Every push to Blaze triggers an automated suite of tests in GitHub Actions. The 
 
 ## 2. Manual Testing & Debugging
 
-If you are developing locally, you can run these tools manually.
+If you are developing locally, you can run these checks manually.
 
+
+### Standard Build
+Use this for the normal local test loop.
+
+```bash
+cmake -S . -B build/dev -DBLAZE_BUILD_TESTS=ON -DBLAZE_BUILD_EXAMPLES=ON
+cmake --build build/dev --parallel
+ctest --test-dir build/dev --output-on-failure
+```
 
 ### ASan/TSan Build
 Use this to find hidden memory and threading bugs during development.
 
 ```bash
-cmake --preset sanitizers
-cmake --build --preset tests
-./build/sanitizers/tests/blaze_tests
-```
+cmake -S . -B build/asan -DBLAZE_BUILD_TESTS=ON -DBLAZE_ENABLE_SANITIZERS=ON
+cmake --build build/asan --parallel
+ctest --test-dir build/asan --output-on-failure
 
-For ThreadSanitizer:
-
-```bash
-cmake --preset tsan
-cmake --build --preset tests
-./build/tsan/tests/blaze_tests
+cmake -S . -B build/tsan -DBLAZE_BUILD_TESTS=ON -DBLAZE_ENABLE_TSAN=ON
+cmake --build build/tsan --parallel
+ctest --test-dir build/tsan --output-on-failure
 ```
 
 
 ### Performance Stress Test
-We use `wrk` for high-concurrency benchmarks. We provide a consolidated suite:
-
-```bash
-# Run full suite
-./tools/benchmark.sh
-
-# Run lightweight CI version
-./tools/benchmark.sh --ci
-```
-
-Or run manual tests:
+Use `wrk` or another load-testing tool against a running example or application:
 
 ```bash
 # Simple GET benchmark
 wrk -t4 -c100 -d10s http://localhost:8080/health
-
 ```
 
 ## 3. Security Philosophy

@@ -34,39 +34,11 @@ cmake --build build --parallel
 ./build/my_api
 ```
 
-If your application provides `CMakePresets.json`, these commands work too:
-
-```bash
-cmake --preset dev
-cmake --build --preset dev
-```
-
 ---
 
 ## 2. Build this repository
 
-Use presets for common maintainer workflows:
-
-```bash
-cmake --preset dev
-cmake --build --preset dev
-ctest --preset dev
-```
-
-Other useful presets:
-
-```bash
-cmake --preset release
-cmake --build --preset release
-
-cmake --preset sanitizers
-cmake --build --preset tests
-
-cmake --preset tsan
-cmake --build --preset tests
-```
-
-Presets require CMake 3.21 or newer. Without presets, use the equivalent direct commands:
+Use direct CMake commands for maintainer workflows:
 
 ```bash
 cmake -B build/dev -DCMAKE_BUILD_TYPE=Debug -DBLAZE_BUILD_TESTS=ON -DBLAZE_BUILD_EXAMPLES=ON
@@ -81,8 +53,8 @@ ctest --test-dir build/dev --output-on-failure
 Blaze installs a CMake package config, so another project can use `find_package`.
 
 ```bash
-cmake --preset release
-cmake --build --preset release
+cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DBLAZE_BUILD_TESTS=OFF -DBLAZE_BUILD_EXAMPLES=OFF
+cmake --build build/release --parallel
 cmake --install build/release --prefix /tmp/blaze-install
 ```
 
@@ -105,7 +77,7 @@ cmake --build build --parallel
 
 ---
 
-## 5. Dependency policy
+## 4. Dependency policy
 
 The default framework build is intentionally small:
 

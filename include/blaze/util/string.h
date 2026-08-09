@@ -31,7 +31,7 @@ std::string to_snake_case(std::string_view name);
 std::string pluralize(std::string_view name);
 
 /**
- * @brief Converts various types to string for database parameters.
+ * @brief Converts various types to string for route/query parameter handling.
  */
 template<typename T>
 std::string to_string_param(const T& val) {

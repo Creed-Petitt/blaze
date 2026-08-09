@@ -55,7 +55,7 @@ install_dependencies() {
 }
 
 prepare_source() {
-    if [ -f "CMakeLists.txt" ] && [ -d "framework" ]; then
+    if [ -f "CMakeLists.txt" ] && [ -d "include/blaze" ] && [ -d "src" ]; then
         return
     fi
 
@@ -69,7 +69,7 @@ install_dependencies
 prepare_source
 
 echo -e "${YELLOW}[+] Configuring Blaze...${NC}"
-cmake -S . -B build/install -DBLAZE_BUILD_EXAMPLES=OFF -DBLAZE_BUILD_TESTS=OFF
+cmake -S . -B build/install -DBLAZE_BUILD_EXAMPLES=OFF -DBLAZE_BUILD_TESTS=OFF -DBLAZE_INSTALL=ON
 
 echo -e "${YELLOW}[+] Installing Blaze CMake package...${NC}"
 if [ -w /usr/local ]; then
