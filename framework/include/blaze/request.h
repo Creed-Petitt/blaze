@@ -5,6 +5,10 @@
 #include <string_view>
 #include <unordered_map>
 #include <optional>
+#include <memory>
+#include <type_traits>
+#include <utility>
+#include <vector>
 #include <boost/json.hpp>
 #include <boost/beast/http/message.hpp>
 #include <boost/beast/http/string_body.hpp>
@@ -105,20 +109,20 @@ struct Request {
         }
     }
 
-    // Resolves a service from the DI container manually
+    // Resolves an app-owned service from the request.
     template<typename T>
-    std::shared_ptr<T> resolve() const {
+    std::shared_ptr<T> service() const {
         if (!services_) {
-            throw std::runtime_error("DI container not attached to request");
+            throw std::runtime_error("Service registry not attached to request");
         }
-        return services_->resolve<T>();
+        return services_->get<T>();
     }
 
     // Internal use only
-    void _set_services(ServiceProvider* sp) { services_ = sp; }
+    void _set_services(Services* services) { services_ = services; }
 
 private:
-    ServiceProvider* services_ = nullptr;
+    Services* services_ = nullptr;
     std::optional<blaze::Json> user_context_;
     std::unordered_map<std::string, std::any> context_;
     mutable std::optional<MultipartFormData> cached_form_;

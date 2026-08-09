@@ -16,43 +16,33 @@ public:
     std::string log() override { return "logged"; }
 };
 
-class Database {
+class Store {
 public:
     std::string query() { return "data"; }
 };
 
-TEST_CASE("DI: Service Registration and Resolution", "[di]") {
-    ServiceProvider sp;
+TEST_CASE("Services: Registration and Resolution", "[di]") {
+    Services services;
 
-    SECTION("Singleton registration") {
+    SECTION("Shared service registration") {
         auto logger = std::make_shared<ConsoleLogger>();
-        sp.provide<ILogger>(logger);
+        services.add<ILogger>(logger);
 
-        auto resolved = sp.resolve<ILogger>();
+        auto resolved = services.get<ILogger>();
         REQUIRE(resolved != nullptr);
         CHECK(resolved->log() == "logged");
-        CHECK(resolved == logger); // Should be the exact same pointer
+        CHECK(resolved == logger);
     }
 
     SECTION("Resolution of missing service should throw") {
-        CHECK_THROWS(sp.resolve<Database>());
+        CHECK_THROWS(services.get<Store>());
     }
-}
 
-TEST_CASE("DI: Transient Services", "[di]") {
-    ServiceProvider sp;
-    int counter = 0;
+    SECTION("Emplace constructs and stores one shared instance") {
+        auto created = services.emplace<Store>();
+        auto resolved = services.get<Store>();
 
-    sp.provide_transient<Database>([&](ServiceProvider& provider) {
-        counter++;
-        return std::make_shared<Database>();
-    });
-
-    SECTION("Every resolution should create a new instance") {
-        auto d1 = sp.resolve<Database>();
-        auto d2 = sp.resolve<Database>();
-        
-        CHECK(counter == 2);
-        CHECK(d1 != d2); // Should be different pointers
+        CHECK(created == resolved);
+        CHECK(resolved->query() == "data");
     }
 }

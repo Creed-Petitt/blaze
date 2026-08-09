@@ -5,14 +5,13 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 REPO="Creed-Petitt/blaze"
-VERSION="v1.0.0" # Change this if you tag differently
+VERSION="v1.0.0"
 
-echo -e "Blaze $VERSION - High Performance C++ Framework"
+echo -e "Blaze $VERSION - C++20 Web Server Framework"
 
-# Helper to check if a package is installed (Debian/Ubuntu)
 is_installed_apt() {
     dpkg -s "$1" &> /dev/null
 }
@@ -22,126 +21,62 @@ install_dependencies() {
 
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         if [ -f /etc/debian_version ]; then
-            # Debian/Ubuntu
             CORE_LIBS="cmake g++ build-essential ccache pkg-config"
-            
             MISSING_CORE=""
             for lib in $CORE_LIBS; do
-                if ! is_installed_apt $lib; then MISSING_CORE="$MISSING_CORE $lib"; fi
+                if ! is_installed_apt "$lib"; then MISSING_CORE="$MISSING_CORE $lib"; fi
             done
 
             if [ -n "$MISSING_CORE" ]; then
-                echo -e "${YELLOW}[+] Installing Core Dependencies: $MISSING_CORE${NC}"
+                echo -e "${YELLOW}[+] Installing dependencies:$MISSING_CORE${NC}"
                 sudo apt-get update && sudo apt-get install -y $MISSING_CORE
             fi
-
         elif [ -f /etc/redhat-release ]; then
-            # Fedora / RHEL / Rocky / Alma
             echo -e "${YELLOW}[+] Detected RHEL/Fedora-based system${NC}"
-            
-            # Enable EPEL/CRB for RHEL derivatives if needed
             if grep -qE "Rocky|Alma|CentOS" /etc/redhat-release; then
                 sudo dnf install -y epel-release
                 sudo dnf config-manager --set-enabled crb || true
             fi
-
-            # Fedora/RHEL package names often differ
             sudo dnf install -y gcc-c++ make cmake ccache pkg-config
-        
         elif [ -f /etc/arch-release ]; then
-            # Arch Linux
             echo -e "${YELLOW}[+] Detected Arch Linux${NC}"
             sudo pacman -S --noconfirm --needed base-devel cmake ccache pkgconf
         fi
     elif [[ "$OSTYPE" == "darwin"* ]]; then
-        # MacOS
         if ! command -v brew &> /dev/null; then
             echo -e "${RED}[!] Homebrew not found. Please install Homebrew first.${NC}"
             exit 1
         fi
-        echo -e "${YELLOW}[+] Detected MacOS. Installing via Homebrew...${NC}"
+        echo -e "${YELLOW}[+] Detected macOS. Installing via Homebrew...${NC}"
         brew install cmake ccache pkg-config
     else
         echo -e "${RED}[!] Unsupported OS. Please install dependencies manually.${NC}"
     fi
 }
 
-install_binary() {
-    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-    ARCH=$(uname -m)
-
-    if [ "$ARCH" == "x86_64" ]; then
-        ARCH="amd64"
-    elif [ "$ARCH" == "aarch64" ] || [ "$ARCH" == "arm64" ]; then
-        ARCH="arm64"
+prepare_source() {
+    if [ -f "CMakeLists.txt" ] && [ -d "framework" ]; then
+        return
     fi
 
-    BINARY="blaze-${OS}-${ARCH}"
-    URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}"
-
-    echo -e "${YELLOW}[+] Attempting to download pre-built binary for ${OS}/${ARCH}...${NC}"
-    
-    if curl -fsSL "$URL" -o blaze_bin; then
-        chmod +x blaze_bin
-        echo -e "${GREEN}[+] Download successful!${NC}"
-        return 0
-    else
-        echo -e "${RED}[!] Binary download failed (HTTP 404). Falling back to source build...${NC}"
-        return 1
-    fi
+    echo -e "${YELLOW}[+] Remote install detected. Cloning Blaze repository...${NC}"
+    TEMP_DIR=$(mktemp -d)
+    git clone --depth 1 https://github.com/${REPO}.git "$TEMP_DIR"
+    cd "$TEMP_DIR"
 }
 
-build_from_source() {
-    if ! command -v go &> /dev/null; then
-        echo -e "${RED}Error: Go is not installed. Please install Go (golang.org) to build the CLI.${NC}"
-        exit 1
-    fi
-
-    REMOTE_INSTALL=false
-    if [ ! -d "cli" ]; then
-        echo -e "${YELLOW}[+] Remote install detected. Cloning Blaze repository...${NC}"
-        TEMP_DIR=$(mktemp -d)
-        git clone --depth 1 https://github.com/${REPO}.git "$TEMP_DIR"
-        cd "$TEMP_DIR"
-        REMOTE_INSTALL=true
-    fi
-
-    echo "[+] Building Blaze CLI from source..."
-    if [ -d "cli" ]; then
-        cd cli
-        go mod tidy
-        go build -o ../blaze_bin
-        cd ..
-    else
-        echo -e "${RED}Error: 'cli' directory not found.${NC}"
-        exit 1
-    fi
-
-    if [ "$REMOTE_INSTALL" = true ]; then
-        echo "[+] Cleaning up temporary files..."
-        rm -rf "$TEMP_DIR"
-    fi
-}
-
-# 1. Install system libs + ccache
 install_dependencies
+prepare_source
 
-# 2. Try Binary Install -> Fallback to Source
-if ! install_binary; then
-    build_from_source
-fi
+echo -e "${YELLOW}[+] Configuring Blaze...${NC}"
+cmake -S . -B build/install -DBLAZE_BUILD_EXAMPLES=OFF -DBLAZE_BUILD_TESTS=OFF
 
-# 3. Install to system path
-echo "[+] Installing binary to /usr/local/bin..."
-if [ -w /usr/local/bin ]; then
-    mv blaze_bin /usr/local/bin/blaze
+echo -e "${YELLOW}[+] Installing Blaze CMake package...${NC}"
+if [ -w /usr/local ]; then
+    cmake --install build/install
 else
-    sudo mv blaze_bin /usr/local/bin/blaze
+    sudo cmake --install build/install
 fi
 
-# 4. Setup Blaze Cache Directories
-echo "[+] Initializing global cache..."
-mkdir -p ~/.blaze/cache
-
-echo -e "${GREEN}[+] Blaze $VERSION Installation Successful!${NC}"
-echo -e "${YELLOW}[!] Type 'blaze init myproject' to start.${NC}"
+echo -e "${GREEN}[+] Blaze $VERSION installed successfully.${NC}"
+echo -e "${YELLOW}[!] Link your app with blaze::core from CMake.${NC}"

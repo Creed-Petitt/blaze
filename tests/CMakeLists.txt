@@ -8,7 +8,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Catch2)
 
 add_executable(blaze_tests 
-    test_main.cpp
     test_router.cpp
     test_di.cpp
     test_json.cpp
@@ -20,15 +19,12 @@ add_executable(blaze_tests
     test_timeout.cpp
     test_injection.cpp
     test_app.cpp
-    test_client_smart.cpp
     test_response.cpp
     test_static_files.cpp
     test_request.cpp
     test_multipart.cpp
     test_request_di.cpp
-    test_snake_case.cpp
     test_validation.cpp
-    test_schema.cpp
 )
 
 
@@ -38,14 +34,5 @@ target_link_libraries(blaze_tests
     Catch2::Catch2WithMain
 )
 
-# If we had DB tests
-# target_link_libraries(blaze_tests PRIVATE blaze::mysql blaze::postgres)
-
 include(Catch)
 catch_discover_tests(blaze_tests)
-
-if(TARGET blaze::mysql AND TARGET blaze::postgres)
-    add_subdirectory(integration_app)
-else()
-    message(STATUS "Blaze: integration app disabled (requires BLAZE_ENABLE_MYSQL and BLAZE_ENABLE_POSTGRES).")
-endif()

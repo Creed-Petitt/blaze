@@ -14,36 +14,24 @@
 
 - **Asynchronous Coroutines**: High-concurrency powered by C++20 `co_await`.
 - **Type-Safe Extraction**: Automatic injection of `Path<T>`, `Body<T>`, and `Query<T>`.
-- **Auto-Wiring DI**: A robust IoC container that resolves dependencies automatically.
-- **Reflection ORM**: Zero-boilerplate mapping between database, structs, and JSON.
+- **Explicit Services**: Register and resolve shared services without hiding application wiring.
 - **Focused Middleware**: Rate limiting, CORS, static files, and request context.
-- **Automatic API Docs**: Swagger UI and OpenAPI 3.0 generated at compile-time.
 - **High-Efficiency WebSockets**: Scalable real-time communication.
-- **Hot Reload**: Automatic server restart on file changes.
 - **Automatic Validation**: Integrity checks via `validate()` hooks.
 
 ## Installation
 
-Install the **Blaze CLI** to scaffold and run projects with zero configuration.
+Install Blaze as a CMake package, or consume it directly with `FetchContent`.
 
 ```bash
 // YOLO mode
 curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh | bash
 ```
 
-> **Note:** The installer (`install.sh`) installs only the core build tools. Database driver headers are optional and only needed when you enable a driver.
+> **Note:** The installer (`install.sh`) installs only the core build tools.
 ## Quick Start
 
-1. **Initialize** your project:
-   ```bash
-   ~ blaze init my-api
-     Creating project...
-     Project ready!
-
-   ~ cd my-api
-   ```
-
-2. **Write** your logic (e.g., in `src/main.cpp`):
+1. **Write** your logic (e.g., in `src/main.cpp`):
    ```cpp
    #include <blaze/app.h>
 
@@ -61,26 +49,25 @@ curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh 
    }
    ```
 
-3. **Run** with hot-reload:
+2. **Build and run** with CMake:
    ```bash
-   ~ blaze run --watch
+   cmake -B build -DCMAKE_BUILD_TYPE=Debug
+   cmake --build build --parallel
+   ./build/my-api
    ```
 
 ## Documentation
 
 ### Project Setup
 - **[Getting Started](docs/getting-started.md)**: Installation and project setup.
-- **[Build System](docs/build-system.md)**: CMake usage, presets, install/package flow, and optional drivers.
-- **[CLI Reference](docs/cli.md)**: Complete guide to all Blaze CLI commands.
+- **[Build System](docs/build-system.md)**: CMake usage, presets, and install/package flow.
 - **[Configuration](docs/configuration.md)**: The App Builder API, logging, and environment variables.
 - **[Architecture & Design](docs/architecture.md)**: Deep dive into the framework's core engine and design patterns.
 - **[Testing & Security](docs/testing.md)**: CI/CD, sanitizers, and performance benchmarking.
 
 ### Core Framework
 - **[Routing & Request Handling](docs/routing.md)**: Methods, parameters, and typed injection.
-- **[Dependency Injection](docs/dependency-injection.md)**: Auto-wiring, lifetimes, and service registration.
-- **[Database & ORM](docs/database-orm.md)**: Drivers, BLAZE_MODEL, and Repository pattern.
-- **[HTTP Client](docs/http-client.md)**: Async requests, timeouts, and redirects.
+- **[Services](docs/dependency-injection.md)**: Explicit app-owned service registration.
 - **[File Uploads](docs/file-uploads.md)**: Multipart forms and client-side uploads.
 - **[Middleware](docs/middleware.md)**: CORS, rate limiting, static files, and the middleware chain.
 - **[WebSockets](docs/websockets.md)**: Real-time broadcasting and background tasks.
@@ -91,7 +78,6 @@ curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh 
 Blaze is designed for modern Linux and macOS environments.
 
 - **Compiler**: C++20 compliant (GCC 11+, Clang 13+, or MSVC 2022+).
-- **Libraries**: libpq (PostgreSQL) or libmariadb (MySQL/MariaDB) only when using database drivers.
 - **Engine**: Boost 1.85+ (Automatically managed via CMake).
 
 ## License

@@ -35,19 +35,3 @@ TEST_CASE("App: Configuration & Fluent API", "[app]") {
     CHECK(config.num_threads == 16);
     CHECK(Logger::instance().get_level() == LogLevel::DEBUG);
 }
-
-TEST_CASE("App: Documentation Toggle", "[app]") {
-    SECTION("Docs Enabled (Default)") {
-        App app;
-        // In our current implementation, docs are registered during listen()
-        // but we can check the internal state if we exposed it, or just 
-        // rely on the fact that it's enabled by default.
-        CHECK(app.get_config().enable_docs == true);
-    }
-
-    SECTION("Docs Disabled") {
-        App app;
-        app.enable_docs(false);
-        CHECK(app.get_config().enable_docs == false);
-    }
-}

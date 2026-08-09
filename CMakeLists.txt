@@ -43,9 +43,6 @@ install(
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/blaze
 )
 
-set(BLAZE_CONFIG_WITH_MYSQL ${BLAZE_ENABLE_MYSQL})
-set(BLAZE_CONFIG_WITH_POSTGRES ${BLAZE_ENABLE_POSTGRES})
-
 configure_package_config_file(
     cmake/blazeConfig.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/blazeConfig.cmake

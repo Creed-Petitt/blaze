@@ -38,8 +38,9 @@ struct MyService {
 // --- Controller for Static Member Test ---
 class TestController {
 public:
-    static Async<void> list_users(Response& res, MyService& svc) {
-        res.send("Users from service " + std::to_string(svc.value));
+    static Async<void> list_users(Request& req, Response& res) {
+        auto svc = req.service<MyService>();
+        res.send("Users from service " + std::to_string(svc->value));
         co_return;
     }
 };
@@ -147,34 +148,26 @@ TEST_CASE("Typed Injection: Automatic Validation", "[injection][validation]") {
     }
 }
 
-TEST_CASE("Typed Injection: Service Injection", "[injection]") {
+TEST_CASE("Services: App-owned explicit access", "[injection]") {
     App app;
     auto db = std::make_shared<MockDB>();
     auto svc = std::make_shared<MyService>();
 
-    app.provide<IMockDB>(db);
-    app.provide<MyService>(svc);
-
-    // We can't easily simulate the full DI injection without running the route handler
-    // via `inject_and_call`, but we can verify the ServiceProvider works 
-    // and that the syntax compiles for the user.
-    
-    // To truly test `inject_and_call`, we need to expose it or simulate an App call.
-    // Since `App::wrap_handler` is private, we trust `test_server` for the full loop,
-    // but we can verify resolution here.
+    app.services().add<IMockDB>(db);
+    app.services().add<MyService>(svc);
     
     SECTION("Service Resolution") {
-        auto resolved_db = app.services().resolve<IMockDB>();
+        auto resolved_db = app.services().get<IMockDB>();
         CHECK(resolved_db->query() == "SELECT *");
         
-        auto resolved_svc = app.services().resolve<MyService>();
+        auto resolved_svc = app.services().get<MyService>();
         CHECK(resolved_svc->value == 42);
     }
 }
 
 TEST_CASE("Typed Injection: Static Member Functions", "[injection]") {
     App app;
-    app.provide<MyService>();
+    app.services().emplace<MyService>();
     
     // Registering a static member function
     app.get("/users", &TestController::list_users);
@@ -191,8 +184,3 @@ TEST_CASE("Typed Injection: Static Member Functions", "[injection]") {
     // easily without the full loop, but the fact that it COMPILS above with &TestController::list_users
     // proves that the template deduction for static member functions works.
 }
-
-// Note: Full "Mixed Injection" (Service + Path) relies on App::wrap_handler logic
-// which is internally tested by the fact that `test_server` runs successfully.
-// Adding a unit test here for `inject_and_call` would require making it public public/protected.
-

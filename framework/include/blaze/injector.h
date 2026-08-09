@@ -5,9 +5,7 @@
 #include <blaze/exceptions.h>
 #include <blaze/request.h>
 #include <blaze/response.h>
-#include <blaze/model.h>
 #include <blaze/wrappers.h>
-#include <blaze/repository.h>
 #include <blaze/traits.h>
 #include <blaze/util/string.h>
 #include <tuple>
@@ -15,9 +13,13 @@
 #include <type_traits>
 #include <memory>
 #include <charconv>
+#include <boost/describe.hpp>
 #include <boost/mp11.hpp>
 
 namespace blaze {
+
+template<typename>
+inline constexpr bool always_false_v = false;
 
 // Detects if T has a void validate() method
 template <typename T, typename = void>
@@ -37,7 +39,7 @@ namespace detail {
 
     // 1. Resolve a single argument into a std::any (shared_ptr<T>)
     template<typename ArgType, size_t Is, typename Tuple>
-    std::any resolve_arg(ServiceProvider& provider, Request& req, Response& res) {
+    std::any resolve_arg(Request& req, Response& res) {
         using PureType = std::remove_cvref_t<ArgType>;
         
         if constexpr (std::is_same_v<PureType, Request> || std::is_same_v<PureType, Response>) {
@@ -72,21 +74,15 @@ namespace detail {
             auto val = req.get_opt<InnerT>(typeid(InnerT).name());
             if (val) return std::make_shared<PureType>(*val);
             return std::make_shared<PureType>();
-        } else if constexpr (is_instantiation_of<Repository, PureType>::value) {
-            auto db = provider.resolve<Database>();
-            return std::make_shared<PureType>(db);
-        } else if constexpr (is_shared_ptr_v<PureType>) {
-            return provider.resolve<typename PureType::element_type>();
         } else {
-            if (provider.has<PureType>()) {
-                return provider.resolve<PureType>();
-            }
             if constexpr (boost::describe::has_describe_members<PureType>::value) {
                 auto model = req.json<PureType>();
                 try_validate(model);
                 return std::make_shared<PureType>(std::move(model));
+            } else {
+                static_assert(always_false_v<PureType>,
+                    "Unsupported handler argument. Use Request&, Response&, Path<T>, Query<T>, Body<T>, Context<T>, or req.service<T>().");
             }
-            return provider.resolve<PureType>();
         }
     }
 
@@ -111,19 +107,18 @@ namespace detail {
 }
 
 template<typename Func, typename Tuple, size_t... Is>
-auto call_with_deps_impl(Func& func, ServiceProvider& provider, Request& req, Response& res, std::index_sequence<Is...>) {
-    auto deps = std::make_tuple(detail::resolve_arg<std::tuple_element_t<Is, Tuple>, Is, Tuple>(provider, req, res)...);
+auto call_with_deps_impl(Func& func, Request& req, Response& res, std::index_sequence<Is...>) {
+    auto deps = std::make_tuple(detail::resolve_arg<std::tuple_element_t<Is, Tuple>, Is, Tuple>(req, res)...);
     return func(detail::unwrap_arg<std::tuple_element_t<Is, Tuple>>(std::get<Is>(deps), req, res)...);
 }
 
 template<typename Func>
-auto inject_and_call(Func& func, ServiceProvider& provider, Request& req, Response& res) {
+auto inject_and_call(Func& func, Request& req, Response& res) {
     using Traits = function_traits<Func>;
     using ArgsTuple = typename Traits::args_tuple;
     
     return call_with_deps_impl<Func, ArgsTuple>(
         func, 
-        provider, 
         req, 
         res, 
         std::make_index_sequence<std::tuple_size_v<ArgsTuple>>{}

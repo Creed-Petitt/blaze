@@ -7,12 +7,13 @@
 #include <blaze/di.h>
 #include <blaze/injector.h>
 #include <blaze/json.h>
-#include <blaze/reflection.h>
 #include <boost/asio.hpp>
 #include <functional>
 #include <vector>
 #include <map>
 #include <mutex>
+#include <memory>
+#include <atomic>
 
 namespace net = boost::asio;
 
@@ -40,15 +41,14 @@ struct AppConfig {
     LogLevel log_level = LogLevel::INFO;     // Default log level
     int num_threads = 0;                     // 0 = auto-detect
     std::string server_name = "Blaze/1.0";   // Server header
-    bool enable_docs = true;                 // Enable Swagger UI
 };
 
 
 /**
  * @brief The primary entry point for a Blaze application.
  * 
- * The App class manages the internal Boost.Asio engine, dependency injection via ServiceProvider,
- * and HTTP routing. It supports 'magic' dependency injection directly into route handlers.
+ * The App class manages the internal Boost.Asio engine, application services,
+ * and HTTP routing.
  */
 class App {
 private:
@@ -67,7 +67,7 @@ private:
     net::io_context ioc_;
     std::vector<Middleware> middleware_;
     AppConfig config_;
-    ServiceProvider services_;
+    Services services_;
     std::vector<std::shared_ptr<ListenerBase>> listeners_;
     std::unique_ptr<net::signal_set> signals_;
     std::atomic<bool> stopping_{false};
@@ -83,42 +83,6 @@ public:
     void stop();
 
     /**
-     * @brief Helper class for fluent service registration.
-     */
-    template<typename T>
-    class ServiceRegistration {
-    private:
-        App& app_;
-        std::shared_ptr<T> instance_;
-
-    public:
-        ServiceRegistration(App& app, std::shared_ptr<T> instance)
-            : app_(app), instance_(instance) {
-            // Auto-register as concrete type
-            app_.provide<T>(instance_);
-        }
-
-        // Register as additional interface(s)
-        template<typename Interface>
-        ServiceRegistration& as() {
-            app_.provide<Interface>(instance_);
-            return *this;
-        }
-
-        // Allow access to underlying instance if needed
-        std::shared_ptr<T> get() const { return instance_; }
-    };
-
-    /**
-     * @brief Registers a service instance with fluent syntax.
-     * usage: app.service(Postgres::open(...)).as<Database>();
-     */
-    template<typename T>
-    ServiceRegistration<T> service(std::shared_ptr<T> instance) {
-        return ServiceRegistration<T>(*this, instance);
-    }
-
-    /**
      * @brief Access the application configuration.
      */
     AppConfig& config() { return config_; }
@@ -131,97 +95,42 @@ public:
     App& shutdown_timeout(int seconds) { config_.shutdown_timeout = seconds; return *this; }
     App& num_threads(int n) { config_.num_threads = n; return *this; }
     App& server_name(const std::string& name) { config_.server_name = name; return *this; }
-    App& enable_docs(bool enable) { config_.enable_docs = enable; return *this; }
 
     /**
-     * @brief Access the internal ServiceProvider for registering dependencies.
+     * @brief Access app-owned services.
      */
-    ServiceProvider& services() { return services_; }
-
-    /**
-     * @brief Resolves a service from the internal DI container.
-     * Shortcut for app.services().resolve<T>().
-     */
-    template<typename T>
-    std::shared_ptr<T> resolve() {
-        return services_.resolve<T>();
-    }
-
-    /**
-     * @brief Registers an auto-wired singleton service in the DI container.
-     */
-    template<typename T>
-    void provide() {
-        services_.provide<T>();
-    }
-
-    /**
-     * @brief Registers a singleton service with a custom factory.
-     */
-    template<typename T>
-    void provide(std::function<std::shared_ptr<T>(ServiceProvider&)> factory) {
-        services_.provide<T>(factory);
-    }
-
-    /**
-     * @brief Registers an existing instance as a singleton.
-     */
-    template<typename T>
-    void provide(std::shared_ptr<T> instance) {
-        services_.provide<T>(instance);
-    }
-
-    /**
-     * @brief Registers a singleton service by constructing it with arguments.
-     * usage: app.provide<JwtSecret>("my-secret");
-     * SFINAE: Disables if T is abstract (e.g. Database) or if first arg is a shared_ptr to T.
-     */
-    template<typename T, typename... Args, typename = std::enable_if_t<!std::is_abstract_v<T>>>
-    void provide(Args&&... args) {
-        services_.provide<T>(std::make_shared<T>(std::forward<Args>(args)...));
-    }
-
-    /**
-     * @brief Registers an auto-wired transient service (new instance every time).
-     */
-    template<typename T>
-    void provide_transient() {
-        services_.provide_transient<T>();
-    }
+    Services& services() { return services_; }
+    const Services& services() const { return services_; }
 
     /**
      * @brief Registers a GET route.
      * 
-     * The handler function supports injection. You can request any registered
-     * service, as well as 'Request&' or 'Response&', as arguments.
+     * The handler function supports Request&, Response&, Path<T>, Query<T>,
+     * Body<T>, and Context<T>. Use req.service<T>() for app services.
      * 
      * @param path The URL path (e.g., "/users/:id").
      * @param handler The callback function or lambda.
      */
     template<typename Func>
     void get(const std::string& path, Func handler) {
-        router_.add_doc(reflection::inspect_handler<Func>("GET", path));
         router_.add_route("GET", path, wrap_handler(handler));
     }
 
-    /** @brief Registers a POST route with magic injection. */
+    /** @brief Registers a POST route. */
     template<typename Func>
     void post(const std::string& path, Func handler) {
-        router_.add_doc(reflection::inspect_handler<Func>("POST", path));
         router_.add_route("POST", path, wrap_handler(handler));
     }
 
-    /** @brief Registers a PUT route with magic injection. */
+    /** @brief Registers a PUT route. */
     template<typename Func>
     void put(const std::string& path, Func handler) {
-        router_.add_doc(reflection::inspect_handler<Func>("PUT", path));
         router_.add_route("PUT", path, wrap_handler(handler));
     }
 
-    /** @brief Registers a DELETE route with magic injection. */
+    /** @brief Registers a DELETE route. */
     template<typename Func>
     void del(const std::string& path, Func handler) {
-        router_.add_doc(reflection::inspect_handler<Func>("DELETE", path));
         router_.add_route("DELETE", path, wrap_handler(handler));
     }
 
@@ -245,7 +154,6 @@ public:
     /** @brief Starts a background task (coroutine) in the event loop. */
     void spawn(Async<void> task);
 
-    // Getters for internal state (used by drivers/handlers)
     /**
      * @brief Starts the HTTP server on the specified port.
      * 
@@ -277,15 +185,11 @@ public:
     /** @brief Get WebSocket handlers for a specific path. */
     const WebSocketHandlers* get_ws_handler(const std::string& path) const;
 
-    // Logger is now static, but App can configure it.
-    // Logger& get_logger();  <-- REMOVED
-
     /** @brief Returns the internal io_context engine. */
     net::io_context& engine() { return ioc_; }
     boost::asio::awaitable<Response> handle_request(Request& req, const std::string& client_ip, bool keep_alive);
 
 private:
-    void _register_docs();
     void _run_server(int num_threads);
     boost::asio::awaitable<void> run_middleware(size_t index, Request& req, Response& res, const Handler& final_handler);
 
@@ -298,7 +202,7 @@ private:
         return [this, handler](Request& req, Response& res) -> Async<void> {
             if constexpr (AsyncInfo::is_async && !std::is_void_v<typename AsyncInfo::type>) {
                 using InnerT = typename AsyncInfo::type;
-                InnerT result = co_await inject_and_call(const_cast<Func&>(handler), services_, req, res);
+                InnerT result = co_await inject_and_call(const_cast<Func&>(handler), req, res);
                 
                 if constexpr (std::is_convertible_v<InnerT, std::string>) {
                     res.send(result);
@@ -310,7 +214,7 @@ private:
                     res.json(result);
                 }
             } else {
-                co_await inject_and_call(const_cast<Func&>(handler), services_, req, res);
+                co_await inject_and_call(const_cast<Func&>(handler), req, res);
             }
         };
     }

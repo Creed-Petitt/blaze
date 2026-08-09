@@ -4,7 +4,6 @@
 #include <memory>
 #include <vector>
 #include <iostream>
-#include <algorithm>
 #include "server.h"
 
 namespace blaze {
@@ -139,73 +138,6 @@ boost::asio::awaitable<Response> App::handle_request(Request& req, const std::st
     co_return res;
 }
 
-void App::_register_docs() {
-    // Register Documentation Routes
-    this->get("/openapi.json", [this]() -> Async<Json> {
-        boost::json::object spec;
-        spec["openapi"] = "3.0.0";
-        spec["info"] = {{"title", "Blaze API"}, {"version", "1.0.0"}};
-        
-        boost::json::object paths;
-        for (const auto& doc : router_.docs()) {
-            boost::json::object op;
-            op["summary"] = doc.summary;
-            
-            // Path Params
-            if (!doc.path_params.empty()) {
-                boost::json::array params;
-                for (const auto& p : doc.path_params) {
-                    params.push_back({{"name", p.first}, {"in", "path"}, {"required", true}, {"schema", p.second}});
-                }
-                op["parameters"] = params;
-            }
-
-            // Body
-            if (!doc.request_body.empty()) {
-                op["requestBody"] = {{"content", {{"application/json", {{"schema", doc.request_body}}}}}};
-            }
-
-            op["responses"] = {{"200", {{"description", "OK"}, {"content", {{"application/json", {{"schema", doc.response_schema}}}}}}}};
-            
-            std::string method_low = doc.method;
-            std::transform(method_low.begin(), method_low.end(), method_low.begin(), ::tolower);
-            
-            if (!paths.contains(doc.path)) paths[doc.path] = boost::json::object{};
-            paths[doc.path].as_object()[method_low] = op;
-        }
-        spec["paths"] = paths;
-        co_return Json(spec);
-    });
-
-    this->get("/docs", [](Response& res) -> Async<void> {
-        res.header("Content-Type", "text/html");
-        res.send(R"(
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="utf-8" />
-                <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <title>Blaze API Docs</title>
-                <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
-            </head>
-            <body>
-                <div id="swagger-ui"></div>
-                <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
-                <script>
-                    window.onload = () => {
-                        window.ui = SwaggerUIBundle({
-                            url: '/openapi.json',
-                            dom_id: '#swagger-ui',
-                        });
-                    };
-                </script>
-            </body>
-            </html>
-        )");
-        co_return;
-    });
-}
-
 void App::stop() {
     if (stopping_.exchange(true)) {
         return; // Already stopping
@@ -254,10 +186,6 @@ void App::stop() {
 void App::listen(const int port, int num_threads) {
     Logger::instance().configure(config_.log_path);
     Logger::instance().set_level(config_.log_level);
-    
-    if (config_.enable_docs) {
-        _register_docs();
-    }
 
     if (num_threads <= 0) {
         num_threads = config_.num_threads;

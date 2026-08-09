@@ -42,18 +42,6 @@ endif()
 
 find_package(Threads REQUIRED)
 
-option(BLAZE_ENABLE_MYSQL "Build the MySQL/MariaDB driver" OFF)
-option(BLAZE_ENABLE_POSTGRES "Build the PostgreSQL driver" OFF)
-
-if(BLAZE_ENABLE_MYSQL)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(MARIADB REQUIRED IMPORTED_TARGET libmariadb)
-endif()
-
-if(BLAZE_ENABLE_POSTGRES)
-    find_package(PostgreSQL REQUIRED)
-endif()
-
 # --- TARGET: BLAZE_CORE ---
 set(CORE_SOURCES
     src/app.cpp
@@ -63,12 +51,9 @@ set(CORE_SOURCES
     src/server.cpp
     src/environment.cpp
     src/json.cpp
-    src/client.cpp
     src/multipart.cpp
     src/logger.cpp
     src/util/string.cpp
-    src/util/circuit_breaker.cpp
-    src/db_result.cpp
     src/middleware.cpp
 )
 
@@ -88,40 +73,6 @@ target_link_libraries(blaze_core PUBLIC
     Threads::Threads
 )
 
-# TARGET: BLAZE_MYSQL
-if(BLAZE_ENABLE_MYSQL)
-    set(MYSQL_SOURCES
-        src/drivers/mysql/mysql_connection.cpp
-        src/drivers/mysql/mysql_pool.cpp
-        src/drivers/mysql/mysql_result.cpp
-    )
-    add_library(blaze_mysql STATIC ${MYSQL_SOURCES})
-    add_library(blaze::mysql ALIAS blaze_mysql)
-    set_target_properties(blaze_mysql PROPERTIES EXPORT_NAME mysql)
-    
-    target_link_libraries(blaze_mysql PUBLIC blaze::core PkgConfig::MARIADB)
-    message(STATUS "Blaze: MySQL driver enabled.")
-else()
-    message(STATUS "Blaze: MySQL driver disabled.")
-endif()
-
-# TARGET: BLAZE_POSTGRES
-if(BLAZE_ENABLE_POSTGRES)
-    set(PG_SOURCES
-        src/drivers/postgres/pg_connection.cpp
-        src/drivers/postgres/pg_pool.cpp
-        src/drivers/postgres/pg_result.cpp
-    )
-    add_library(blaze_postgres STATIC ${PG_SOURCES})
-    add_library(blaze::postgres ALIAS blaze_postgres)
-    set_target_properties(blaze_postgres PROPERTIES EXPORT_NAME postgres)
-    
-    target_link_libraries(blaze_postgres PUBLIC blaze::core PostgreSQL::PostgreSQL)
-    message(STATUS "Blaze: PostgreSQL driver enabled.")
-else()
-    message(STATUS "Blaze: PostgreSQL driver disabled.")
-endif()
-
 # Sanitizers for core
 if(BLAZE_ENABLE_SANITIZERS)
     target_compile_options(blaze_core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -140,26 +91,6 @@ install(
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
-
-if(BLAZE_ENABLE_MYSQL)
-    install(
-        TARGETS blaze_mysql
-        EXPORT blazeTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    )
-endif()
-
-if(BLAZE_ENABLE_POSTGRES)
-    install(
-        TARGETS blaze_postgres
-        EXPORT blazeTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    )
-endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(DIRECTORY ${boost_all_SOURCE_DIR}/boost DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
