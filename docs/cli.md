@@ -1,6 +1,6 @@
 # Blaze CLI Reference
 
-The **Blaze CLI** is your primary tool for developing, building, and deploying Blaze applications. It handles project scaffolding, dependency management, hot-reloading, and Docker integration.
+The **Blaze CLI** is an optional convenience tool for Blaze applications. It handles project scaffolding, CMake builds, hot-reloading, and Docker integration. You can also use Blaze directly from CMake without the CLI.
 
 ---
 
@@ -33,7 +33,7 @@ Initialize a new Blaze project.
 blaze init <project_name> [flags]
 ```
 
-*   **Description**: Creates a new directory with the project structure, `CMakeLists.txt`, `Dockerfile`, and a basic `main.cpp`.
+*   **Description**: Creates a new directory with the project structure, `CMakeLists.txt`, `CMakePresets.json`, `Dockerfile`, and a basic `main.cpp`.
 *   **Interactive Mode**: Prompts you to select backend features like Database drivers (PostgreSQL, MySQL) and Testing (Catch2).
 *   **Flags**:
     *   `-f, --fullstack`: Launches the frontend selection wizard (React, Vue, Svelte, Solid, Vanilla) to create a full-stack monorepo.
@@ -129,8 +129,8 @@ blaze add <feature>
 ```
 
 *   **Subcommands**:
-    *   `postgres`: Adds PostgreSQL driver and updates `CMakeLists.txt`.
-    *   `mysql`: Adds MySQL/MariaDB driver and updates `CMakeLists.txt`.
+    *   `postgres`: Enables `BLAZE_ENABLE_POSTGRES`, links `blaze::postgres`, and requires libpq headers.
+    *   `mysql`: Enables `BLAZE_ENABLE_MYSQL`, links `blaze::mysql`, and requires MariaDB connector headers.
     *   `test`: Adds a Catch2 testing suite and a `tests/` directory.
 
 **Example**:
