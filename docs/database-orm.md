@@ -14,6 +14,15 @@ blaze add postgres  # Adds PostgreSQL driver
 blaze add mysql     # Adds MySQL/MariaDB driver
 ```
 
+With direct CMake usage, enable the driver before `FetchContent_MakeAvailable(blaze)` and link the matching target:
+
+```cmake
+set(BLAZE_ENABLE_POSTGRES ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(blaze)
+
+target_link_libraries(my_api PRIVATE blaze::core blaze::postgres)
+```
+
 ### Establishing a Connection
 The easiest way to connect is using the static `install()` helper in your `main()` function. This automatically creates a connection pool and registers it as the default `Database` service.
 

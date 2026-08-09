@@ -9,14 +9,12 @@
 #include <blaze/json.h>
 #include <blaze/reflection.h>
 #include <boost/asio.hpp>
-#include <boost/asio/ssl.hpp>
 #include <functional>
 #include <vector>
 #include <map>
 #include <mutex>
 
 namespace net = boost::asio;
-namespace ssl = boost::asio::ssl;
 
 namespace blaze {
 
@@ -67,7 +65,6 @@ private:
     void broadcast_raw(const std::string& path, const std::string& payload);
 
     net::io_context ioc_;
-    ssl::context ssl_ctx_{ssl::context::tlsv12};
     std::vector<Middleware> middleware_;
     AppConfig config_;
     ServiceProvider services_;
@@ -256,11 +253,6 @@ public:
      * @param num_threads Number of threads for the event loop (0 = auto-detect).
      */
     void listen(int port, int num_threads = 0);
-
-    /**
-     * @brief Starts the HTTPS (SSL) server.
-     */
-    void listen_ssl(int port, const std::string& cert_path, const std::string& key_path, int num_threads = 0);
 
     /**
      * @brief Registers global middleware.

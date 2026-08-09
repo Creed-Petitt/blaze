@@ -302,62 +302,6 @@ void App::listen(const int port, int num_threads) {
     _run_server(num_threads);
 }
 
-void App::listen_ssl(const int port, const std::string& cert_path, const std::string& key_path, int num_threads) {
-    Logger::instance().configure(config_.log_path);
-    Logger::instance().set_level(config_.log_level);
-
-    if (config_.enable_docs) {
-        _register_docs();
-    }
-
-    if (num_threads <= 0) {
-        num_threads = config_.num_threads;
-    }
-
-    if (num_threads <= 0) {
-        num_threads = static_cast<int>(std::thread::hardware_concurrency());
-        if (num_threads == 0) num_threads = 4; // Fallback
-    }
-
-    try {
-        ssl_ctx_.use_certificate_chain_file(cert_path);
-        ssl_ctx_.use_private_key_file(key_path, ssl::context::pem);
-    } catch (const std::exception& e) {
-        std::cerr << "[App] SSL Error: " << e.what() << "\n";
-        return;
-    }
-
-    auto const address = net::ip::make_address("0.0.0.0");
-    auto const endpoint = net::ip::tcp::endpoint{address, static_cast<unsigned short>(port)};
-
-    // Create and launch SSL listening port
-    auto listener = std::make_shared<SslListener>(ioc_, ssl_ctx_, endpoint, *this);
-    {
-        std::lock_guard<std::mutex> lock(lifecycle_mtx_);
-        listeners_.push_back(listener);
-    }
-    listener->run();
-
-    // (Ctrl+C) to stop cleanly
-    {
-        std::lock_guard<std::mutex> lock(lifecycle_mtx_);
-        signals_ = std::make_unique<net::signal_set>(ioc_, SIGINT, SIGTERM);
-        signals_->async_wait([this](boost::system::error_code const& ec, int signal_number) {
-            if (ec == net::error::operation_aborted) return;
-            if (ec) {
-                std::cerr << "Signal error: " << ec.message() << std::endl;
-                return;
-            }
-            std::cout << "[Blaze] Received signal " << signal_number << ", stopping..." << std::endl;
-            this->stop();
-        });
-    }
-
-    std::cout << "[App] Starting HTTPS on port " << port << " with " << num_threads << " threads\n";
-
-    _run_server(num_threads);
-}
-
 void App::_run_server(int num_threads) {
     // Run the IO Context on n threads
     std::vector<std::thread> v;

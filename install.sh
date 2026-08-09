@@ -23,8 +23,7 @@ install_dependencies() {
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         if [ -f /etc/debian_version ]; then
             # Debian/Ubuntu
-            CORE_LIBS="cmake g++ build-essential libssl-dev ccache pkg-config"
-            DRIVER_LIBS="libpq-dev libmariadb-dev libhiredis-dev"
+            CORE_LIBS="cmake g++ build-essential ccache pkg-config"
             
             MISSING_CORE=""
             for lib in $CORE_LIBS; do
@@ -35,9 +34,6 @@ install_dependencies() {
                 echo -e "${YELLOW}[+] Installing Core Dependencies: $MISSING_CORE${NC}"
                 sudo apt-get update && sudo apt-get install -y $MISSING_CORE
             fi
-
-            echo -e "${YELLOW}[+] Ensuring Driver Headers are present...${NC}"
-            sudo apt-get install -y $DRIVER_LIBS
 
         elif [ -f /etc/redhat-release ]; then
             # Fedora / RHEL / Rocky / Alma
@@ -50,12 +46,12 @@ install_dependencies() {
             fi
 
             # Fedora/RHEL package names often differ
-            sudo dnf install -y gcc-c++ make cmake openssl-devel libpq-devel mariadb-devel hiredis-devel ccache pkg-config
+            sudo dnf install -y gcc-c++ make cmake ccache pkg-config
         
         elif [ -f /etc/arch-release ]; then
             # Arch Linux
             echo -e "${YELLOW}[+] Detected Arch Linux${NC}"
-            sudo pacman -S --noconfirm --needed base-devel cmake openssl postgresql-libs mariadb-libs hiredis ccache
+            sudo pacman -S --noconfirm --needed base-devel cmake ccache pkgconf
         fi
     elif [[ "$OSTYPE" == "darwin"* ]]; then
         # MacOS
@@ -64,7 +60,7 @@ install_dependencies() {
             exit 1
         fi
         echo -e "${YELLOW}[+] Detected MacOS. Installing via Homebrew...${NC}"
-        brew install cmake openssl libpq mariadb-connector-c hiredis ccache pkg-config
+        brew install cmake ccache pkg-config
     else
         echo -e "${RED}[!] Unsupported OS. Please install dependencies manually.${NC}"
     fi

@@ -148,31 +148,6 @@ Middleware limit_body_size(size_t max_bytes) {
     };
 }
 
-Middleware jwt_auth(const std::string_view secret) {
-    std::string secret_str(secret);
-    return [secret_str](Request& req, Response& res, auto next) -> Async<void> {
-        if (!req.has_header("Authorization")) {
-            co_await next();
-            co_return;
-        }
-
-        std::string_view auth = req.get_header("Authorization");
-        if (auth.substr(0, 7) != "Bearer ") {
-            throw Unauthorized("Invalid Authorization scheme (Expected Bearer)");
-        }
-
-        std::string_view token = auth.substr(7);
-        try {
-            auto payload = crypto::jwt_verify(token, secret_str);
-            req.set_user(Json(payload));
-        } catch (const std::exception& e) {
-            throw Unauthorized(std::string("Invalid Token: ") + e.what());
-        }
-
-        co_await next();
-    };
-}
-
 Middleware rate_limit(int max_requests, int window_seconds) {
     struct ClientState {
         int count;

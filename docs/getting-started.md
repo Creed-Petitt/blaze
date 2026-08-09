@@ -207,13 +207,31 @@ blaze run --watch
 
 This command will compile your code, start the server, and automatically reload it whenever you save a change.
 
+You can also use CMake directly:
+
+```bash
+cmake --preset dev
+cmake --build --preset dev
+./build/<project-name>
+```
+
+Without presets:
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --parallel
+./build/<project-name>
+```
+
+See the [Build System](build-system.md) guide for direct CMake usage, package installation, and optional database drivers.
+
 ---
 
 ## IDE Support
 
 Blaze is designed to work seamlessly with modern C++ IDEs like **CLion**, **VS Code**, and **Visual Studio**. 
 
-Thanks to our partitioned global cache, you can switch between the `blaze` CLI and your IDE's "Run" button without any CMake cache conflicts. 
+Generated projects include a `CMakePresets.json` file, so IDEs can open the same `dev` and `release` configurations used from the terminal.
 
 **Pro-Tips for IDEs:**
 1.  **Code Completion**: Blaze's heavy use of reflection and headers ensures that "Go to Definition" and Parameter Hints work perfectly.

@@ -49,21 +49,7 @@ TEST_CASE("Middleware: Execution Order", "[middleware]") {
     }
 }
 
-TEST_CASE("Middleware: JWT and User Context", "[middleware][auth]") {
-    App app;
-    std::string secret = "test-secret";
-    app.use(middleware::jwt_auth(secret));
-
-    app.get("/me", [](Request& req, Response& res) -> Async<void> {
-        if (req.is_authenticated()) {
-            res.json(req.user());
-        } else {
-            res.status(401).send("No user");
-        }
-        co_return;
-    });
-
-    // This test verifies compilation and the helper method logic
+TEST_CASE("Request: User Context", "[request][auth]") {
     SECTION("Request User Storage") {
         Request req;
         Json user({{"id", 1}, {"name", "Bob"}});

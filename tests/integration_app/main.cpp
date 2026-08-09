@@ -8,7 +8,6 @@
 #include <blaze/middleware.h>
 #include <blaze/wrappers.h>
 #include <blaze/repository.h>
-#include <blaze/crypto.h>
 #include <blaze/logger.h> // Include Logger for blaze::info/error shortcuts
 #include <iostream>
 #include <vector>
@@ -85,10 +84,6 @@ int main() {
     // Rate Limiting (10M reqs / 60s for Benchmarks)
     app.use(middleware::rate_limit(10000000, 60));
 
-    // JWT Auth
-    std::string secret = "integration-secret-key";
-    app.use(middleware::jwt_auth(secret));
-
     blaze::info("--- REGISTERING ABSTRACT SERVICES ---");
     
     try {
@@ -114,25 +109,11 @@ int main() {
 
     blaze::info("--- DEFINING ROUTES ---");
 
-    // Login (Generates JWT)
-    app.post("/login", [secret](Body<LoginRequest> creds) -> Async<Json> {
+    app.post("/login", [](Body<LoginRequest> creds) -> Async<Json> {
         if (creds.username == "admin" && creds.password == "password") {
-            // Use new top-level shortcut
-            std::string token = blaze::jwt_sign({{"id", 1}, {"role", "admin"}}, secret);
-            co_return Json({{"token", token}});
+            co_return Json({{"status", "ok"}});
         }
         throw Unauthorized("Invalid credentials");
-    });
-
-    // Protected Route (Requires Auth)
-    app.get("/protected", [](Request& req) -> Async<Json> {
-        if (!req.is_authenticated()) throw Unauthorized("Please login");
-        
-        // Pointer-free User Access
-        co_return Json({
-            {"message", "You are authenticated"},
-            {"user", req.user()} 
-        });
     });
 
     // Service Injection

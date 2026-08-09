@@ -1,15 +1,12 @@
 #include <blaze/client.h>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
-#include <boost/beast/ssl.hpp>
 #include <boost/beast/version.hpp>
 #include <boost/asio/use_awaitable.hpp>
-#include <boost/asio/ssl.hpp>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace net = boost::asio;
-namespace ssl = net::ssl;
 using tcp = net::ip::tcp;
 
 namespace blaze {
@@ -18,7 +15,6 @@ namespace blaze {
         std::string host;
         std::string port;
         std::string target;
-        bool is_ssl;
     };
 
     ParsedUrl parse_url(const std::string& url) {
@@ -26,15 +22,11 @@ namespace blaze {
         std::string_view s = url;
         
         if (s.starts_with("https://")) {
-            res.is_ssl = true;
-            res.port = "443";
-            s.remove_prefix(8);
+            throw std::invalid_argument("blaze::fetch supports http:// URLs only");
         } else if (s.starts_with("http://")) {
-            res.is_ssl = false;
             res.port = "80";
             s.remove_prefix(7);
         } else {
-            res.is_ssl = false;
             res.port = "80";
         }
 
@@ -57,15 +49,17 @@ namespace blaze {
     }
 
     std::string resolve_url(const std::string& base, const std::string& relative) {
-        if (relative.substr(0, 7) == "http://" || relative.substr(0, 8) == "https://") {
+        if (relative.substr(0, 8) == "https://") {
+            throw std::invalid_argument("blaze::fetch supports http:// URLs only");
+        }
+        if (relative.substr(0, 7) == "http://") {
             return relative;
         }
         auto b = parse_url(base);
-        std::string proto = b.is_ssl ? "https://" : "http://";
-        std::string port_str = (b.port == "80" || b.port == "443") ? "" : ":" + b.port;
+        std::string port_str = b.port == "80" ? "" : ":" + b.port;
         
         if (!relative.empty() && relative[0] == '/') {
-            return proto + b.host + port_str + relative;
+            return "http://" + b.host + port_str + relative;
         }
         
         size_t last_slash = base.find_last_of('/');
@@ -73,13 +67,6 @@ namespace blaze {
              return base + "/" + relative;
         }
         return base.substr(0, last_slash + 1) + relative;
-    }
-
-    // Static context for performance
-    static ssl::context& get_client_ssl_ctx() {
-        static ssl::context ctx{ssl::context::tlsv12_client};
-        ctx.set_default_verify_paths();
-        return ctx;
     }
 
     boost::asio::awaitable<FetchResponse> fetch_core(
@@ -124,33 +111,16 @@ namespace blaze {
             beast::flat_buffer b;
             http::response<http::string_body> res_msg;
 
-            if (parsed.is_ssl) {
-                beast::ssl_stream<beast::tcp_stream> stream(executor, get_client_ssl_ctx());
-                beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(timeout_seconds));
+            beast::tcp_stream stream(executor);
+            stream.expires_after(std::chrono::seconds(timeout_seconds));
 
-                if(! SSL_set_tlsext_host_name(stream.native_handle(), parsed.host.c_str()))
-                    throw boost::system::system_error(static_cast<int>(::ERR_get_error()), net::error::get_ssl_category());
-
-                co_await beast::get_lowest_layer(stream).async_connect(results, net::use_awaitable);
-                co_await stream.async_handshake(ssl::stream_base::client, net::use_awaitable);
-                
-                co_await http::async_write(stream, req, net::use_awaitable);
-                co_await http::async_read(stream, b, res_msg, net::use_awaitable);
-                
-                beast::error_code ec;
-                stream.shutdown(ec);
-            } else {
-                beast::tcp_stream stream(executor);
-                stream.expires_after(std::chrono::seconds(timeout_seconds));
-
-                co_await stream.async_connect(results, net::use_awaitable);
-                
-                co_await http::async_write(stream, req, net::use_awaitable);
-                co_await http::async_read(stream, b, res_msg, net::use_awaitable);
-                
-                beast::error_code ec;
-                stream.socket().shutdown(tcp::socket::shutdown_both, ec);
-            }
+            co_await stream.async_connect(results, net::use_awaitable);
+            
+            co_await http::async_write(stream, req, net::use_awaitable);
+            co_await http::async_read(stream, b, res_msg, net::use_awaitable);
+            
+            beast::error_code ec;
+            stream.socket().shutdown(tcp::socket::shutdown_both, ec);
 
             // Handle Redirects
             if (res_msg.result_int() >= 300 && res_msg.result_int() < 400) {

@@ -8,24 +8,15 @@
 
 namespace blaze {
 
-// Helper to handle stream-specific operations
 template<class Stream>
 struct StreamTraits {
     static void shutdown(Stream& stream) {
         beast::error_code ec;
-        if constexpr (std::is_same_v<Stream, beast::tcp_stream>) {
-            stream.socket().shutdown(tcp::socket::shutdown_send, ec);
-        } else {
-            beast::get_lowest_layer(stream).socket().shutdown(tcp::socket::shutdown_send, ec);
-        }
+        stream.socket().shutdown(tcp::socket::shutdown_send, ec);
     }
     
     static tcp::socket& get_socket(Stream& stream) {
-        if constexpr (std::is_same_v<Stream, beast::tcp_stream>) {
-            return stream.socket();
-        } else {
-            return beast::get_lowest_layer(stream).socket();
-        }
+        return stream.socket();
     }
 };
 
@@ -252,7 +243,6 @@ void WebSocketSession<Stream>::close() {
 
 // Explicit Instantiation
 template class WebSocketSession<beast::tcp_stream>;
-template class WebSocketSession<ssl::stream<beast::tcp_stream>>; 
 
 template<class Stream>
 template<typename... Args>
@@ -261,24 +251,9 @@ HttpSession<Stream>::HttpSession(App& app, Args&&... args)
 
 template<class Stream>
 void HttpSession<Stream>::run() {
-    if constexpr (std::is_same_v<Stream, beast::tcp_stream>) {
-        net::dispatch(
-            stream_.get_executor(),
-            beast::bind_front_handler(&HttpSession::do_read, this->shared_from_this()));
-    } else {
-        // SSL Handshake
-        beast::get_lowest_layer(stream_).expires_after(std::chrono::seconds(30));
-        stream_.async_handshake(
-            ssl::stream_base::server,
-            beast::bind_front_handler(
-                [self = this->shared_from_this()](beast::error_code ec) {
-                    if(ec) {
-                        std::cerr << "SSL handshake error: " << ec.message() << "\n";
-                        return;
-                    }
-                    self->do_read();
-                }));
-    }
+    net::dispatch(
+        stream_.get_executor(),
+        beast::bind_front_handler(&HttpSession::do_read, this->shared_from_this()));
 }
 
 template<class Stream>
@@ -309,7 +284,7 @@ void HttpSession<Stream>::on_read(beast::error_code ec, std::size_t bytes_transf
             return;
         }
 
-        if (ec != net::error::connection_reset && ec != net::error::eof && ec != beast::error::timeout && ec != ssl::error::stream_truncated) {
+        if (ec != net::error::connection_reset && ec != net::error::eof && ec != beast::error::timeout) {
             std::cerr << "Request Parse Error: " << ec.message() << "\n";
             send_error_response(http::status::bad_request, "Bad Request");
             return;
@@ -354,16 +329,8 @@ void HttpSession<Stream>::on_write(bool keep_alive, beast::error_code ec, std::s
 template<class Stream>
 void HttpSession<Stream>::do_shutdown() {
     beast::get_lowest_layer(stream_).expires_after(std::chrono::seconds(30));
-    if constexpr (std::is_same_v<Stream, beast::tcp_stream>) {
-        beast::error_code ec;
-        stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
-    } else {
-        stream_.async_shutdown(
-            beast::bind_front_handler(
-                [self = this->shared_from_this()](beast::error_code ec) {
-                    boost::ignore_unused(ec);
-                }));
-    }
+    beast::error_code ec;
+    stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
 }
 
 template<class Stream>
@@ -405,7 +372,6 @@ bool HttpSession<Stream>::try_websocket_upgrade() {
 
 // Explicit Instantiations
 template class HttpSession<beast::tcp_stream>;
-template class HttpSession<ssl::stream<beast::tcp_stream>>;
 
 Listener::Listener(net::io_context& ioc, const tcp::endpoint &endpoint, App& app)
     : ioc_(ioc), acceptor_(ioc), app_(app) {
@@ -445,45 +411,6 @@ void Listener::on_accept(const beast::error_code ec, tcp::socket socket) {
 }
 
 void Listener::stop() {
-    beast::error_code ec;
-    acceptor_.close(ec);
-}
-
-SslListener::SslListener(net::io_context& ioc, ssl::context& ctx, const tcp::endpoint &endpoint, App& app)
-    : ioc_(ioc), ctx_(ctx), acceptor_(ioc), app_(app) {
-    beast::error_code ec;
-    acceptor_.open(endpoint.protocol(), ec);
-    if(ec) throw std::runtime_error("SSL Acceptor open failed: " + ec.message());
-    acceptor_.set_option(net::socket_base::reuse_address(true), ec);
-    if(ec) throw std::runtime_error("SSL Acceptor set_option failed: " + ec.message());
-    acceptor_.bind(endpoint, ec);
-    if(ec) throw std::runtime_error("SSL Acceptor bind failed: " + ec.message());
-    acceptor_.listen(net::socket_base::max_listen_connections, ec);
-    if(ec) throw std::runtime_error("SSL Acceptor listen failed: " + ec.message());
-}
-
-void SslListener::run() { do_accept(); }
-
-void SslListener::do_accept() {
-    acceptor_.async_accept(
-        net::make_strand(ioc_),
-        beast::bind_front_handler(&SslListener::on_accept, shared_from_this()));
-}
-
-void SslListener::on_accept(const beast::error_code ec, tcp::socket socket) {
-    if(ec) {
-        if (ec == net::error::operation_aborted)
-            return; // Shutdown in progress
-
-        if (ec != net::error::bad_descriptor && ec != net::error::invalid_argument)
-            std::cerr << "accept error: " << ec.message() << std::endl;
-    } else {
-        std::make_shared<SslSession>(app_, std::move(socket), ctx_)->run();
-    }
-    do_accept();
-}
-
-void SslListener::stop() {
     beast::error_code ec;
     acceptor_.close(ec);
 }

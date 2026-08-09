@@ -4,7 +4,6 @@
 #include <blaze/router.h>
 #include <blaze/request.h>
 #include <blaze/response.h>
-#include <blaze/crypto.h>
 #include <blaze/exceptions.h>
 #include <string>
 #include <fstream>
@@ -55,9 +54,6 @@ namespace blaze::middleware
             co_await next();
         };
     }
-
-    /** @brief JWT Authentication middleware. */
-    Middleware jwt_auth(const std::string_view secret);
 
     /** @brief Basic Rate Limiting middleware. */
     Middleware rate_limit(int max_requests, int window_seconds);

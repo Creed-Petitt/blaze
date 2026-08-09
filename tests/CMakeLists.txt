@@ -14,7 +14,6 @@ add_executable(blaze_tests
     test_json.cpp
     test_model.cpp
     test_server.cpp
-    test_crypto.cpp
     test_environment.cpp
     test_middleware.cpp
     test_websocket.cpp
@@ -45,4 +44,8 @@ target_link_libraries(blaze_tests
 include(Catch)
 catch_discover_tests(blaze_tests)
 
-add_subdirectory(integration_app)
+if(TARGET blaze::mysql AND TARGET blaze::postgres)
+    add_subdirectory(integration_app)
+else()
+    message(STATUS "Blaze: integration app disabled (requires BLAZE_ENABLE_MYSQL and BLAZE_ENABLE_POSTGRES).")
+endif()

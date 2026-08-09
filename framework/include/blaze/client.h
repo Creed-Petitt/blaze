@@ -50,7 +50,7 @@ namespace blaze {
     };
 
     /**
-     * @brief Performs an asynchronous HTTP/HTTPS request.
+     * @brief Performs an asynchronous HTTP request.
      * 
      * @param url The full URL
      * @param method HTTP method (GET, POST, etc.)

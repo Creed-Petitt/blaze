@@ -31,7 +31,7 @@ Install the **Blaze CLI** to scaffold and run projects with zero configuration.
 curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh | bash
 ```
 
-> **Note:** The installer (`install.sh`) handles the core system dependencies and optional database driver headers automatically for you.
+> **Note:** The installer (`install.sh`) installs only the core build tools. Database driver headers are optional and only needed when you enable a driver.
 ## Quick Start
 
 1. **Initialize** your project:
@@ -70,6 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh 
 
 ### Project Setup
 - **[Getting Started](docs/getting-started.md)**: Installation and project setup.
+- **[Build System](docs/build-system.md)**: CMake usage, presets, install/package flow, and optional drivers.
 - **[CLI Reference](docs/cli.md)**: Complete guide to all Blaze CLI commands.
 - **[Configuration](docs/configuration.md)**: The App Builder API, logging, and environment variables.
 - **[Architecture & Design](docs/architecture.md)**: Deep dive into the framework's core engine and design patterns.
@@ -90,7 +91,7 @@ curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh 
 Blaze is designed for modern Linux and macOS environments.
 
 - **Compiler**: C++20 compliant (GCC 11+, Clang 13+, or MSVC 2022+).
-- **Libraries**: libpq (PostgreSQL) and libmariadb (MySQL) when using database drivers.
+- **Libraries**: libpq (PostgreSQL) or libmariadb (MySQL/MariaDB) only when using database drivers.
 - **Engine**: Boost 1.85+ (Automatically managed via CMake).
 
 ## License

@@ -8,7 +8,7 @@ Every push to Blaze triggers an automated suite of tests in GitHub Actions. The 
 
 ### Job A: Unit Tests (Logic)
 *   **Platforms:** Ubuntu (GCC), macOS (Clang).
-*   **Verification:** Runs the **Catch2** suite to verify core logic (DI, Routing, JSON, Crypto, Environment).
+*   **Verification:** Runs the **Catch2** suite to verify core logic (DI, routing, JSON, middleware, environment).
 *   **Target:** `blaze_tests`.
 
 ### Job B: Integration & Fuzzing (Reliability)
@@ -38,11 +38,17 @@ If you are developing locally, you can run these tools manually.
 Use this to find hidden memory and threading bugs during development.
 
 ```bash
-mkdir build_sanitizers && cd build_sanitizers
-cmake -DBLAZE_ENABLE_ASAN=ON .. 
-cmake -DBLAZE_ENABLE_TSAN=ON ..
-make -j$(nproc)
-./tests/blaze_tests
+cmake --preset sanitizers
+cmake --build --preset tests
+./build/sanitizers/tests/blaze_tests
+```
+
+For ThreadSanitizer:
+
+```bash
+cmake --preset tsan
+cmake --build --preset tests
+./build/tsan/tests/blaze_tests
 ```
 
 

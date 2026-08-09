@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(blaze_framework)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+project(blaze_framework LANGUAGES CXX)
 
 include(FetchContent)
 
@@ -35,35 +32,27 @@ if(NOT TARGET boost_system)
     add_library(boost_system STATIC
         ${boost_all_SOURCE_DIR}/libs/system/src/error_code.cpp
     )
-    target_include_directories(boost_system PUBLIC ${boost_all_SOURCE_DIR})
+    target_include_directories(boost_system PUBLIC
+        $<BUILD_INTERFACE:${boost_all_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    )
+    set_target_properties(boost_system PROPERTIES EXPORT_NAME boost_system)
     add_library(Boost::system ALIAS boost_system)
 endif()
 
-# boost_thread
-if(NOT TARGET boost_thread)
-    find_package(Threads REQUIRED)
-    file(GLOB BOOST_THREAD_SOURCES 
-        "${boost_all_SOURCE_DIR}/libs/thread/src/pthread/thread.cpp"
-        "${boost_all_SOURCE_DIR}/libs/thread/src/pthread/once.cpp"
-    )
-    if(NOT BOOST_THREAD_SOURCES)
-         file(GLOB_RECURSE BOOST_THREAD_SOURCES "${boost_all_SOURCE_DIR}/libs/thread/src/pthread/*.cpp")
-    endif()
+find_package(Threads REQUIRED)
 
-    add_library(boost_thread STATIC ${BOOST_THREAD_SOURCES})
-    target_include_directories(boost_thread PUBLIC ${boost_all_SOURCE_DIR})
-    target_link_libraries(boost_thread PUBLIC Threads::Threads)
-    add_library(Boost::thread ALIAS boost_thread)
+option(BLAZE_ENABLE_MYSQL "Build the MySQL/MariaDB driver" OFF)
+option(BLAZE_ENABLE_POSTGRES "Build the PostgreSQL driver" OFF)
+
+if(BLAZE_ENABLE_MYSQL)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(MARIADB REQUIRED IMPORTED_TARGET libmariadb)
 endif()
 
-# OPTIONAL DRIVER DETECTION
-find_package(PkgConfig QUIET)
-if(PKG_CONFIG_FOUND)
-    pkg_check_modules(MARIADB QUIET libmariadb)
+if(BLAZE_ENABLE_POSTGRES)
+    find_package(PostgreSQL REQUIRED)
 endif()
-
-find_package(OpenSSL REQUIRED)
-find_package(PostgreSQL QUIET)
 
 # --- TARGET: BLAZE_CORE ---
 set(CORE_SOURCES
@@ -74,7 +63,6 @@ set(CORE_SOURCES
     src/server.cpp
     src/environment.cpp
     src/json.cpp
-    src/crypto.cpp
     src/client.cpp
     src/multipart.cpp
     src/logger.cpp
@@ -86,21 +74,22 @@ set(CORE_SOURCES
 
 add_library(blaze_core STATIC ${CORE_SOURCES})
 add_library(blaze::core ALIAS blaze_core)
+set_target_properties(blaze_core PROPERTIES EXPORT_NAME core)
+target_compile_features(blaze_core PUBLIC cxx_std_20)
 
 target_include_directories(blaze_core BEFORE PUBLIC 
     $<BUILD_INTERFACE:${boost_all_SOURCE_DIR}>
-    include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 target_link_libraries(blaze_core PUBLIC 
-    Boost::system 
-    Boost::thread 
-    OpenSSL::SSL 
-    OpenSSL::Crypto
+    boost_system
+    Threads::Threads
 )
 
 # TARGET: BLAZE_MYSQL
-if(MARIADB_FOUND)
+if(BLAZE_ENABLE_MYSQL)
     set(MYSQL_SOURCES
         src/drivers/mysql/mysql_connection.cpp
         src/drivers/mysql/mysql_pool.cpp
@@ -108,17 +97,16 @@ if(MARIADB_FOUND)
     )
     add_library(blaze_mysql STATIC ${MYSQL_SOURCES})
     add_library(blaze::mysql ALIAS blaze_mysql)
+    set_target_properties(blaze_mysql PROPERTIES EXPORT_NAME mysql)
     
-    target_link_libraries(blaze_mysql PUBLIC blaze::core ${MARIADB_LIBRARIES})
-    target_include_directories(blaze_mysql PUBLIC ${MARIADB_INCLUDE_DIRS})
-    target_link_directories(blaze_mysql PUBLIC ${MARIADB_LIBRARY_DIRS})
+    target_link_libraries(blaze_mysql PUBLIC blaze::core PkgConfig::MARIADB)
     message(STATUS "Blaze: MySQL driver enabled.")
 else()
-    message(STATUS "Blaze: MySQL driver disabled (libmariadb not found).")
+    message(STATUS "Blaze: MySQL driver disabled.")
 endif()
 
 # TARGET: BLAZE_POSTGRES
-if(PostgreSQL_FOUND)
+if(BLAZE_ENABLE_POSTGRES)
     set(PG_SOURCES
         src/drivers/postgres/pg_connection.cpp
         src/drivers/postgres/pg_pool.cpp
@@ -126,12 +114,12 @@ if(PostgreSQL_FOUND)
     )
     add_library(blaze_postgres STATIC ${PG_SOURCES})
     add_library(blaze::postgres ALIAS blaze_postgres)
+    set_target_properties(blaze_postgres PROPERTIES EXPORT_NAME postgres)
     
     target_link_libraries(blaze_postgres PUBLIC blaze::core PostgreSQL::PostgreSQL)
-    target_include_directories(blaze_postgres PUBLIC ${PostgreSQL_INCLUDE_DIRS})
     message(STATUS "Blaze: PostgreSQL driver enabled.")
 else()
-    message(STATUS "Blaze: PostgreSQL driver disabled (libpq not found).")
+    message(STATUS "Blaze: PostgreSQL driver disabled.")
 endif()
 
 # Sanitizers for core
@@ -145,3 +133,33 @@ if(BLAZE_ENABLE_TSAN)
     target_link_options(blaze_core PUBLIC -fsanitize=thread)
 endif()
 
+install(
+    TARGETS blaze_core boost_system
+    EXPORT blazeTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+if(BLAZE_ENABLE_MYSQL)
+    install(
+        TARGETS blaze_mysql
+        EXPORT blazeTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
+
+if(BLAZE_ENABLE_POSTGRES)
+    install(
+        TARGETS blaze_postgres
+        EXPORT blazeTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
+
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(DIRECTORY ${boost_all_SOURCE_DIR}/boost DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

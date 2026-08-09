@@ -4,10 +4,8 @@
 #include <boost/beast/core.hpp>         // buffer, tcp_stream
 #include <boost/beast/http.hpp>         // request, response, parsing
 #include <boost/beast/websocket.hpp>    // websocket
-#include <boost/beast/websocket/ssl.hpp> // SSL websocket support
 #include <boost/asio/ip/tcp.hpp>        // sockets, acceptor
 #include <boost/asio.hpp>               // io_context
-#include <boost/asio/ssl.hpp>           // ssl
 #include <memory>
 #include <queue>
 #include <mutex>
@@ -19,7 +17,6 @@ namespace beast = boost::beast;
 namespace http = beast::http;
 namespace websocket = beast::websocket;
 namespace net = boost::asio;
-namespace ssl = boost::asio::ssl;
 using tcp = boost::asio::ip::tcp;
 
 namespace blaze {
@@ -39,7 +36,6 @@ class WebSocketSession : public WebSocket, public std::enable_shared_from_this<W
     std::mutex queue_mutex_;
 
 public:
-    // Resolver for Stream type (TCP vs SSL)
     explicit WebSocketSession(Stream&& stream, const WebSocketHandlers& handlers, App& app, std::string target);
 
     void run(http::request<http::string_body> req);
@@ -56,7 +52,7 @@ public:
     void on_write(beast::error_code ec, std::size_t bytes_transferred);
 };
 
-// Handles HTTP server connection (templated for TCP or SSL)
+// Handles HTTP server connection.
 template<class Stream>
 class HttpSession : public std::enable_shared_from_this<HttpSession<Stream>> {
     Stream stream_;
@@ -73,7 +69,6 @@ public:
     void on_read(beast::error_code ec, std::size_t bytes_transferred);
     void on_write(bool keep_alive, beast::error_code ec, std::size_t bytes_transferred);
     
-    // SSL-specific shutdown handling
     void do_shutdown();
     void on_shutdown(beast::error_code ec);
 
@@ -85,9 +80,7 @@ private:
     bool try_websocket_upgrade();
 };
 
-// Type aliases for cleaner usage in listeners
 using Session = HttpSession<beast::tcp_stream>;
-using SslSession = HttpSession<ssl::stream<beast::tcp_stream>>;
 
 // Base class for listeners to allow polymorphic tracking for shutdown
 class ListenerBase {
@@ -104,21 +97,6 @@ class Listener : public ListenerBase, public std::enable_shared_from_this<Listen
 
 public:
     Listener(net::io_context& ioc, const tcp::endpoint &endpoint, App& app);
-    void run();
-    void do_accept();
-    void on_accept(beast::error_code ec, tcp::socket socket);
-    void stop() override;
-};
-
-// Accepts incoming HTTPS connections
-class SslListener : public ListenerBase, public std::enable_shared_from_this<SslListener> {
-    net::io_context& ioc_;
-    ssl::context& ctx_;
-    tcp::acceptor acceptor_;
-    App& app_;
-
-public:
-    SslListener(net::io_context& ioc, ssl::context& ctx, const tcp::endpoint &endpoint, App& app);
     void run();
     void do_accept();
     void on_accept(beast::error_code ec, tcp::socket socket);
