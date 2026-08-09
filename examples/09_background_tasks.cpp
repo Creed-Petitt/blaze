@@ -9,27 +9,15 @@
  */
 
 #include <blaze/app.h>
-#include <blaze/client.h>
+#include <iostream>
 
 using namespace blaze;
 
-// A background worker that checks an HTTP endpoint every 10 seconds
-Async<void> status_monitor(App& app) {
+// A background worker that runs every 10 seconds without blocking the server.
+Async<void> status_monitor() {
+    int tick = 0;
     while (true) {
-        try {
-            std::cout << "[Monitor] Checking example.com..." << std::endl;
-            auto res = co_await blaze::fetch("http://example.com/");
-            
-            if (res.status == 200) {
-                std::cout << "[Monitor] example.com is reachable." << std::endl;
-            } else {
-                std::cout << "[Monitor] example.com returned status: " << res.status << std::endl;
-            }
-        } catch (const std::exception& e) {
-            std::cout << "[Monitor] HTTP check failed: " << e.what() << std::endl;
-        }
-
-        // Wait for 10 seconds WITHOUT blocking the worker thread
+        std::cout << "[Monitor] background tick " << ++tick << std::endl;
         co_await blaze::delay(std::chrono::seconds(10));
     }
 }
@@ -39,7 +27,7 @@ int main() {
 
     // 1. Launch the background worker
     // The server will handle requests while this runs in parallel
-    app.spawn(status_monitor(app));
+    app.spawn(status_monitor());
 
     app.get("/", [](Response& res) -> Async<void> {
         res.send("The background monitor is running. Check your terminal!");

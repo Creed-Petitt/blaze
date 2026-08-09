@@ -19,8 +19,7 @@ int main() {
     app.server_name("Blaze-API/1.0")    // Custom 'Server' HTTP header
        .max_body_size(10 * 1024 * 1024) // 10MB limit
        .timeout(30)                     // 30s request timeout
-       .num_threads(4)                  // Event loop thread count
-       .enable_docs(true);              // Toggle Swagger UI (/docs)
+       .num_threads(4);                 // Event loop thread count
 
     app.listen(8080);
 }
@@ -34,7 +33,6 @@ int main() {
 | `.max_body_size(bytes)` | `10MB` | The maximum size of an HTTP request body. Larger requests return `413 Payload Too Large`. |
 | `.timeout(seconds)` | `30` | The time Blaze waits for a request to complete before closing the connection. |
 | `.num_threads(int)` | `auto` | Number of CPU threads to use for the event loop. `0` auto-detects based on hardware. |
-| `.enable_docs(bool)` | `true` | Whether to register the `/docs` (Swagger UI) and `/openapi.json` routes. |
 | `.shutdown_timeout(sec)`| `30` | Grace period for active connections during server shutdown. |
 
 > **Note on Static Files**: Blaze uses zero-copy streaming for all static assets. This means the server does not need a "Cache Size" configuration for file contents, as it leverages the OS Page Cache for maximum performance without memory bloat.
@@ -112,8 +110,7 @@ int main() {
        .log_level(LogLevel::INFO)
        .num_threads(std::thread::hardware_concurrency())
        .timeout(15)             // Fail fast in high load
-       .max_body_size(1024*1024) // 1MB limit for standard APIs
-       .enable_docs(false);     // Disable docs in public production
+       .max_body_size(1024*1024); // 1MB limit for standard APIs
 
     app.listen(8080);
 }

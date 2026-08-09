@@ -6,11 +6,9 @@
  * 
  * Concepts:
  * - Server-side: Using req.form() and req.files() (Zero-Copy)
- * - Client-side: Using fetch(url, MultipartFormData)
  */
 
 #include <blaze/app.h>
-#include <blaze/client.h>
 #include <iostream>
 #include <filesystem>
 
@@ -50,26 +48,6 @@ int main() {
         }
         co_return;
     });
-
-    // CLIENT
-
-    // We spawn a client task that uploads a virtual file to this server
-    app.spawn([](App& a) -> Async<void> {
-        // Wait for server to start
-        co_await blaze::delay(std::chrono::milliseconds(500));
-
-        MultipartFormData form;
-        form.add_field("user", "BlazeClient");
-        form.add_file("photo", "test_upload.txt", "This is a test file content", "text/plain");
-
-        std::cout << "[Client] Starting multipart upload..." << std::endl;
-        try {
-            auto res = co_await fetch("http://localhost:8080/upload", form);
-            std::cout << "[Client] Server responded: " << res.text() << std::endl;
-        } catch (const std::exception& e) {
-            std::cerr << "[Client] Upload failed: " << e.what() << std::endl;
-        }
-    }(app));
 
     std::cout << "Upload Server running on http://localhost:8080" << std::endl;
     app.listen(8080);

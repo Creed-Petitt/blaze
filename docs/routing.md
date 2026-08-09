@@ -74,7 +74,7 @@ app.get("/search", [](Query<Search> s) -> Async<Json> {
 ### Requirements & Ergonomics
 
 #### 1. Models are Mandatory
-`Query<T>` and `Body<T>` require `T` to be a struct defined with `BLAZE_MODEL`. This is for **Static Extraction**—Blaze maps your fields at compile-time for zero-overhead performance and automatic Swagger documentation.
+`Query<T>` and `Body<T>` require `T` to be convertible from request data. `BLAZE_MODEL` remains available for Boost.JSON/Describe mapping.
 
 #### 2. Inheritance Ergonomics
 `Path<T>` and `Body<T>` **inherit** from your type `T`. This is a core ergonomic feature of Blaze: it means you don't need to call `.value()` or `.get()` to access your data. These wrappers *are* your types, augmented with metadata for the router.
@@ -106,7 +106,7 @@ Choosing the right tool for JSON handling is key to balancing performance and fl
 | :--- | :--- | :--- |
 | **Performance** | **Ultra-Fast**: Mapped at compile-time. | **Standard**: Parsed into a map-like structure. |
 | **Validation** | **Automatic**: Checks types and calls `validate()`. | **Manual**: You must check field existence/types. |
-| **Documentation** | **Auto-Swagger**: Generates JSON Schemas. | **Generic**: Documented as an opaque object. |
+| **Extraction** | **Typed**: Converts request data to your struct. | **Generic**: Work with raw JSON manually. |
 | **Best For** | Public APIs, DB Models, Strict Contracts. | Webhooks, Prototyping, Heterogeneous data. |
 
 ---
@@ -200,9 +200,7 @@ Blaze provides semantic helper methods to make your code read like English.
 | **`.not_found(msg)`** | `404` | Resource does not exist. |
 
 ```cpp
-// Example: Creating a user
-app.post("/users", [](Body<User> user, Repository<User> users) -> Async<void> {
-    co_await users.save(user);
+app.post("/users", [](Body<User> user, Response& res) -> Async<void> {
     res.created("/users/" + std::to_string(user.id));
     co_return;
 });
@@ -237,7 +235,7 @@ v1.get("/status", [](Response& res) -> Async<void> {
 
 ## 7. The Request Object
 
-While magic injection is preferred, sometimes you need direct access to the `Request` object. It acts as a "Bucket" for all incoming data.
+When you need headers, cookies, request context, or app services, request `Request&` directly.
 
 ```cpp
 app.get("/manual", [](Request& req, Response& res) -> Async<void> {
@@ -253,8 +251,8 @@ app.get("/manual", [](Request& req, Response& res) -> Async<void> {
         std::cout << "User ID: " << user["id"] << std::endl;
     }
 
-    // 4. Manual DI Resolution
-    auto db = req.resolve<Database>();
+    // 4. App services
+    auto users = req.service<UserService>();
 
     res.send("Handled manually");
     co_return;
@@ -263,15 +261,9 @@ app.get("/manual", [](Request& req, Response& res) -> Async<void> {
 
 ---
 
-## 8. Automatic API Documentation (Swagger)
+## 8. API Documentation
 
-Blaze automatically generates an **OpenAPI 3.0** specification for your API by inspecting your route handlers and models at compile-time.
-
-When you run your app, the following endpoints are available:
-*   `GET /openapi.json`: The raw OpenAPI spec.
-*   `GET /docs`: An interactive **Swagger UI** where you can test your endpoints.
-
-Because Blaze uses reflection, your `Body<User>` or `Query<Search>` arguments are automatically documented with their correct JSON schemas—no manual annotations required.
+Blaze no longer registers OpenAPI or Swagger routes in the core server. Keep API documentation as an external `openapi.yaml`, generated artifact, or a separate extension so routing stays focused on request dispatch.
 
 ---
 

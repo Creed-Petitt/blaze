@@ -11,6 +11,7 @@
 
 #include <blaze/app.h>
 #include <blaze/websocket.h>
+#include <iostream>
 
 using namespace blaze;
 

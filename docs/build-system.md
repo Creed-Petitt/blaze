@@ -1,6 +1,6 @@
 # Build System
 
-Blaze is a CMake-first C++20 framework. The CLI is optional: it scaffolds projects and wraps common commands, but the framework can be consumed directly from CMake.
+Blaze is a CMake-first C++20 framework. Applications consume it directly from CMake.
 
 ---
 
@@ -34,7 +34,7 @@ cmake --build build --parallel
 ./build/my_api
 ```
 
-Projects created by `blaze init` also include `CMakePresets.json`, so these commands work too:
+If your application provides `CMakePresets.json`, these commands work too:
 
 ```bash
 cmake --preset dev
@@ -43,39 +43,7 @@ cmake --build --preset dev
 
 ---
 
-## 2. Optional database drivers
-
-Database drivers are not built by default. Enable only the driver you use before `FetchContent_MakeAvailable(blaze)`.
-
-```cmake
-set(BLAZE_ENABLE_POSTGRES ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(blaze)
-
-target_link_libraries(my_api PRIVATE blaze::core blaze::postgres)
-```
-
-```cmake
-set(BLAZE_ENABLE_MYSQL ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(blaze)
-
-target_link_libraries(my_api PRIVATE blaze::core blaze::mysql)
-```
-
-System packages are only needed when that driver is enabled:
-
-- PostgreSQL: `libpq-dev` on Debian/Ubuntu, `libpq` on macOS/Homebrew.
-- MySQL/MariaDB: `libmariadb-dev` on Debian/Ubuntu, `mariadb-connector-c` on macOS/Homebrew.
-
-The CLI can update a generated project for you:
-
-```bash
-blaze add postgres
-blaze add mysql
-```
-
----
-
-## 3. Build this repository
+## 2. Build this repository
 
 Use presets for common maintainer workflows:
 
@@ -90,9 +58,6 @@ Other useful presets:
 ```bash
 cmake --preset release
 cmake --build --preset release
-
-cmake --preset db
-cmake --build --preset integration
 
 cmake --preset sanitizers
 cmake --build --preset tests
@@ -111,7 +76,7 @@ ctest --test-dir build/dev --output-on-failure
 
 ---
 
-## 4. Install and consume as a package
+## 3. Install and consume as a package
 
 Blaze installs a CMake package config, so another project can use `find_package`.
 
@@ -146,7 +111,6 @@ The default framework build is intentionally small:
 
 - Required: C++20 compiler, CMake, threads, and Boost.Beast/Asio headers.
 - Bundled by CMake: Boost 1.85 headers plus the small `boost_system` library.
-- Optional: PostgreSQL and MySQL/MariaDB drivers.
-- Not included: TLS/HTTPS, OpenSSL, JWT, or a general-purpose crypto API.
+- Not included: database drivers, TLS/HTTPS, OpenSSL, JWT, or a general-purpose crypto API.
 
 Run TLS at the deployment edge with a reverse proxy, gateway, or load balancer. Blaze focuses on the application framework and plain HTTP backend runtime.

@@ -8,14 +8,11 @@ Every push to Blaze triggers an automated suite of tests in GitHub Actions. The 
 
 ### Job A: Unit Tests (Logic)
 *   **Platforms:** Ubuntu (GCC), macOS (Clang).
-*   **Verification:** Runs the **Catch2** suite to verify core logic (DI, routing, JSON, middleware, environment).
+*   **Verification:** Runs the **Catch2** suite to verify core logic (services, routing, JSON, middleware, environment).
 *   **Target:** `blaze_tests`.
 
-### Job B: Integration & Fuzzing (Reliability)
-*   **Database Integration:** Boots real **PostgreSQL** and **MySQL** instances in Docker.
-*   **Chaos Testing:** Intentionally stops the database container mid-benchmark to ensure `blaze::CircuitBreaker` correctly isolates failures.
+### Job B: Internal Fuzzing
 *   **Logic Fuzzing:** Sends malformed JSON types and invalid URL encodings to verify `400 Bad Request` handling.
-*   **Performance Benchmark:** Runs `wrk` load tests against all core routes to ensure no performance regressions.
 
 ### Job C: Memory Safety (ASan Auditor)
 *   **AddressSanitizer (ASan):** Compiles the framework with strict memory checking enabled.
@@ -24,8 +21,8 @@ Every push to Blaze triggers an automated suite of tests in GitHub Actions. The 
 
 ### Job D: Concurrency Safety (TSan Auditor)
 *   **ThreadSanitizer (TSan):** Compiles the framework with runtime data-race detection enabled.
-*   **Race Detection:** Exercises the coroutine scheduler and database connection pools under high load to ensure zero race conditions.
-*   **Deadlock Prevention:** Verifies that internal mutexes and circuit breakers are correctly synchronized across multi-threaded execution contexts.
+*   **Race Detection:** Exercises the coroutine scheduler and shared server state under load.
+*   **Deadlock Prevention:** Verifies that internal mutexes are correctly synchronized across multi-threaded execution contexts.
 
 ---
 
@@ -52,13 +49,6 @@ cmake --build --preset tests
 ```
 
 
-### Manual Fuzzing
-Ensure your server is running (with ASan for best results), then launch the attack:
-
-```bash
-python3 tests/integration_app/fuzz.py
-```
-
 ### Performance Stress Test
 We use `wrk` for high-concurrency benchmarks. We provide a consolidated suite:
 
@@ -76,15 +66,9 @@ Or run manual tests:
 # Simple GET benchmark
 wrk -t4 -c100 -d10s http://localhost:8080/health
 
-# POST with JSON payload (using Lua script)
-wrk -t4 -c100 -d10s -s tests/integration_app/post.lua http://localhost:8080/modern-api
-
-# Auto-Injection Stress Test
-wrk -t4 -c100 -d10s -s tests/integration_app/user_post.lua http://localhost:8080/all-in-one
 ```
 
 ## 3. Security Philosophy
-*   **Concurrency Resilience:** Blaze guarantees that internal state (like Circuit Breakers and Connection Pools) is thread-safe, preventing crashes caused by high-concurrency race conditions.
+*   **Concurrency Resilience:** Blaze keeps shared server state small and synchronized, preventing crashes caused by high-concurrency race conditions.
 *   **Non-Blocking Timeouts:** Blaze implements mandatory socket timeouts (default 30s) to prevent **Slowloris** attacks from exhausting file descriptors.
 *   **Sanitized Headers:** Incoming headers are parsed via Boost.Beast with strict size limits (`max_body_size`) to prevent buffer overflows.
-*   **Safe DB Access:** Our `Database` API uses parameterized queries by default, making SQL injection impossible.

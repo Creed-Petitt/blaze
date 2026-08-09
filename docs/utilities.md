@@ -23,7 +23,7 @@ std::string hex = blaze::util::hex_encode(data); // "01ff"
 ```
 
 ### `to_snake_case`
-Converts PascalCase or camelCase identifiers to snake_case. Useful for dynamic DB mapping.
+Converts PascalCase or camelCase identifiers to snake_case.
 
 ```cpp
 // "user_account"
@@ -39,26 +39,5 @@ try {
     double price = blaze::util::convert_string<double>("19.99");
 } catch (const blaze::BadRequest& e) {
     // Handle invalid format
-}
-```
-
-## Circuit Breaker
-
-Include `<blaze/util/circuit_breaker.h>` to use the generic circuit breaker pattern.
-
-```cpp
-// Threshold: 5 failures
-// Cooldown: 10 seconds
-blaze::CircuitBreaker breaker(5, 10);
-
-if (breaker.allow_request()) {
-    try {
-        do_risky_operation();
-        breaker.record_success();
-    } catch (...) {
-        breaker.record_failure();
-    }
-} else {
-    // Fail fast
 }
 ```

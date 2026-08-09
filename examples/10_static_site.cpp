@@ -10,6 +10,7 @@
 
 #include <blaze/app.h>
 #include <blaze/middleware.h>
+#include <iostream>
 
 using namespace blaze;
 

@@ -28,7 +28,7 @@ int main() {
 
 The **App** class is the central nervous system of your application. It manages:
 *   **The Event Loop**: Powered by `boost::asio`, handling thousands of connections.
-*   **Dependency Injection**: Auto-filling your handlers with the services they need.
+*   **Services**: App-owned dependencies that handlers can access explicitly from `Request&`.
 *   **The Router**: Mapping URLs to your C++ logic.
 
 ---
@@ -62,8 +62,7 @@ int main() {
     app.server_name("MyBlazeApp/1.0")  // Custom 'Server' header
        .max_body_size(5 * 1024 * 1024) // Limit uploads to 5MB
        .timeout(60)                    // 60s request timeout
-       .num_threads(8)                 // Specify thread pool size
-       .enable_docs(false);            // Disable Swagger UI (/docs)
+       .num_threads(8);                // Specify thread pool size
 
     app.listen(8080);
 }
@@ -153,13 +152,13 @@ public:
 ### The "Named Function" Rule
 To ensure maximum stability and debuggability in production apps:
 1.  **Use Lambdas** for simple, one-line responses or basic middleware.
-2.  **Use Named Functions** for any handler that interacts with a Database, Filesystem, or External API.
+2.  **Use Named Functions** for any handler that interacts with the filesystem or external systems.
 3.  **Use Controllers** to group those named functions into resource-based modules (Users, Orders, etc.).
 
 #### **Technical Note: Why `static`?**
 When using controllers, your handler functions must be declared as `static`. 
 
-In C++, non-static member functions require an **instance** of the class to be called (they have a hidden `this` pointer). By using `static`, you turn the method into a regular function pointer that doesn't depend on an object's state. This allows the Blaze Dependency Injection engine to call the function directly and inject exactly what you've requested in the arguments (like `Database&` or `Response&`) without needing to manage the lifecycle of the controller class itself.
+In C++, non-static member functions require an **instance** of the class to be called (they have a hidden `this` pointer). By using `static`, you turn the method into a regular function pointer that doesn't depend on an object's state. App services should be accessed explicitly from `Request&` with `req.service<T>()`.
 
 ---
 
@@ -199,15 +198,7 @@ int main() {
 ```
 
 ### Compiling and Running
-If you used the Blaze CLI to initialize your project, simply run:
-
-```bash
-blaze run --watch
-```
-
-This command will compile your code, start the server, and automatically reload it whenever you save a change.
-
-You can also use CMake directly:
+Use CMake directly:
 
 ```bash
 cmake --preset dev
@@ -231,16 +222,12 @@ See the [Build System](build-system.md) guide for direct CMake usage, package in
 
 Blaze is designed to work seamlessly with modern C++ IDEs like **CLion**, **VS Code**, and **Visual Studio**. 
 
-Generated projects include a `CMakePresets.json` file, so IDEs can open the same `dev` and `release` configurations used from the terminal.
+Projects can include a `CMakePresets.json` file, so IDEs can open the same `dev` and `release` configurations used from the terminal.
 
 **Pro-Tips for IDEs:**
-1.  **Code Completion**: Blaze's heavy use of reflection and headers ensures that "Go to Definition" and Parameter Hints work perfectly.
+1.  **Code Completion**: Blaze's headers expose route and service types clearly so "Go to Definition" and parameter hints work well.
 2.  **Debugging**: You can set breakpoints inside your route handlers and step directly into the Blaze framework source code.
 3.  **Formatting**: We recommend using the provided `.clang-format` file in the project root to keep your code consistent with the framework.
-
-> **Tip:** For advanced commands like Docker integration (`blaze docker`) or Code Generators (`blaze generate`), check out the **[CLI Reference](cli.md)**.
-
----
 
 ## Advanced Essentials
 
@@ -264,23 +251,3 @@ int main() {
     app.listen(port);
 }
 ```
-
-### The Async HTTP Client
-Need to talk to another API? Use the built-in `blaze::fetch`. It uses the same coroutine engine as the server, so it never blocks your threads.
-
-```cpp
-#include <blaze/client.h>
-
-app.get("/proxy", []() -> Async<Json> {
-    // This looks like synchronous code, but it's 100% non-blocking!
-    auto res = co_await blaze::fetch("http://example.com/");
-    
-    if (res.status == 200) {
-        co_return res.body; // res.body is a blaze::Json object
-    }
-    
-    throw InternalServerError("Upstream API failed");
-});
-```
-
-For advanced usage (Timeouts, Redirects, File Uploads), check out the [HTTP Client Documentation](http-client.md).
