@@ -35,9 +35,7 @@ If you are developing locally, you can run these checks manually.
 Use this for the normal local test loop.
 
 ```bash
-cmake -S . -B build/dev -DBLAZE_BUILD_TESTS=ON -DBLAZE_BUILD_EXAMPLES=ON
-cmake --build build/dev --parallel
-ctest --test-dir build/dev --output-on-failure
+./build.sh test
 ```
 
 ### ASan/TSan Build

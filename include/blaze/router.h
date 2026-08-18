@@ -1,14 +1,14 @@
-#ifndef HTTP_SERVER_ROUTER_H
-#define HTTP_SERVER_ROUTER_H
+#pragma once
+
+#include <blaze/request.h>
+#include <blaze/response.h>
+#include <boost/asio/awaitable.hpp>
 
 #include <string>
 #include <vector>
 #include <functional>
 #include <optional>
 #include <unordered_map>
-#include <blaze/request.h>
-#include <blaze/response.h>
-#include <boost/asio/awaitable.hpp>
 
 namespace blaze {
 
@@ -31,7 +31,6 @@ class Router;
  * @brief A helper class for grouping routes under a common path prefix.
  */
 class RouteGroup {
-private:
     Router& router_;
     std::string prefix_;
 
@@ -59,7 +58,6 @@ public:
 };
 
 class Router {
-private:
 
     struct Route {
         std::string method;
@@ -70,20 +68,28 @@ private:
 
     std::vector<Route> routes_;
 
-    static bool matches(const std::vector<std::string>& route_segments,
-                        const std::vector<std::string_view>& request_segments,
-                        std::unordered_map<std::string, std::string>& params,
-                        std::vector<std::string>& path_values);
+    static bool matches(
+        const std::vector<std::string>& route_segments,
+        const std::vector<std::string_view>& request_segments,
+        std::unordered_map<std::string, std::string>& params,
+        std::vector<std::string>& path_values);
 
-    static std::vector<std::string> split(const std::string& str);
-    static std::vector<std::string_view> split_view(std::string_view str);
+    static std::vector<std::string> split(
+        const std::string& str);
+
+    static std::vector<std::string_view> split_view(
+        std::string_view str);
 
 public:
-    void add_route(const std::string& method, const std::string& path, const Handler &handler);
+    void add_route(
+        const std::string& method,
+        const std::string& path,
+        const Handler &handler);
 
-    [[nodiscard]] std::optional<RouteMatch> match(std::string_view method, std::string_view path) const;
+    std::optional<RouteMatch> match(
+        std::string_view method,
+        std::string_view path) const;
 };
 
 } // namespace blaze
 
-#endif

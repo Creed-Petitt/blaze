@@ -1,11 +1,9 @@
-#ifndef BLAZE_MODEL_H
-#define BLAZE_MODEL_H
+#pragma once
 
 #include <boost/describe.hpp>
 #include <boost/mp11.hpp>
 #include <boost/json.hpp>
-#include <string>
-#include <string_view>
+
 #include <type_traits>
 
 // usage: BLAZE_MODEL(User, id, name)
@@ -21,7 +19,7 @@ namespace blaze {
 
         boost::mp11::mp_for_each<members>([&](auto D) {
             auto cell = row[D.name];
-            using MemberType = typename std::remove_reference<decltype(obj.*(D.pointer))>::type;
+            using MemberType = std::remove_reference_t<decltype(obj.*(D.pointer))>;
             obj.*(D.pointer) = cell.template as<MemberType>();
         });
 
@@ -34,13 +32,13 @@ namespace blaze {
 namespace boost::json {
 
 template<class T>
-typename std::enable_if<
-    boost::describe::has_describe_members<T>::value,
+std::enable_if_t<
+    describe::has_describe_members<T>::value,
     void
->::type
+>
 tag_invoke(value_from_tag, value& jv, T const& t) {
     object obj;
-    boost::mp11::mp_for_each<boost::describe::describe_members<T, boost::describe::mod_any_access>>(
+    mp11::mp_for_each<describe::describe_members<T, describe::mod_any_access>>(
         [&](auto D) {
             obj[D.name] = value_from(t.*D.pointer);
         }
@@ -49,17 +47,17 @@ tag_invoke(value_from_tag, value& jv, T const& t) {
 }
 
 template<class T>
-typename std::enable_if<
-    boost::describe::has_describe_members<T>::value,
+std::enable_if_t<
+    describe::has_describe_members<T>::value,
     T
->::type
+>
 tag_invoke(value_to_tag<T>, value const& jv) {
     object const& obj = jv.as_object();
     T t{};
-    boost::mp11::mp_for_each<boost::describe::describe_members<T, boost::describe::mod_any_access>>(
+    mp11::mp_for_each<describe::describe_members<T, describe::mod_any_access>>(
         [&](auto D) {
             if(obj.contains(D.name)) {
-                t.*D.pointer = value_to<typename std::remove_reference<decltype(t.*D.pointer)>::type>(obj.at(D.name));
+                t.*D.pointer = value_to<std::remove_reference_t<decltype(t.*D.pointer)>>(obj.at(D.name));
             }
         }
     );
@@ -67,5 +65,3 @@ tag_invoke(value_to_tag<T>, value const& jv) {
 }
 
 } // namespace boost::json
-
-#endif

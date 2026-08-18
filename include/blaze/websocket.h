@@ -1,5 +1,4 @@
-#ifndef BLAZE_WEBSOCKET_H
-#define BLAZE_WEBSOCKET_H
+#pragma once
 
 #include <string>
 #include <functional>
@@ -31,5 +30,3 @@ struct WebSocketHandlers {
 };
 
 } // namespace blaze
-
-#endif // BLAZE_WEBSOCKET_H

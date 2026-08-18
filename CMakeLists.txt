@@ -6,14 +6,11 @@ include(CMakePackageConfigHelpers)
 include(cmake/BlazeDependencies.cmake)
 
 if(PROJECT_IS_TOP_LEVEL)
-    set(BLAZE_DEFAULT_BUILD_EXAMPLES ON)
     set(BLAZE_DEFAULT_INSTALL ON)
 else()
-    set(BLAZE_DEFAULT_BUILD_EXAMPLES OFF)
     set(BLAZE_DEFAULT_INSTALL OFF)
 endif()
 
-option(BLAZE_BUILD_EXAMPLES "Build the educational examples" ${BLAZE_DEFAULT_BUILD_EXAMPLES})
 option(BLAZE_BUILD_TESTS "Build the Blaze test suite" ${PROJECT_IS_TOP_LEVEL})
 option(BLAZE_BUILD_FUZZERS "Build LibFuzzer targets (requires Clang)" OFF)
 option(BLAZE_ENABLE_SANITIZERS "Build Blaze with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
@@ -35,17 +32,22 @@ if(NOT TARGET blaze_boost_system)
 endif()
 
 set(BLAZE_SOURCES
-    src/app.cpp
-    src/environment.cpp
+        src/core/app.cpp
+        src/core/config.cpp
+        src/core/environment.cpp
+        src/http/http_session.cpp
     src/json.cpp
     src/logger.cpp
     src/middleware.cpp
-    src/multipart.cpp
-    src/request.cpp
-    src/response.cpp
-    src/router.cpp
-    src/server.cpp
+        src/request/request.cpp
+        src/request/request_dispatcher.cpp
+        src/response/response.cpp
+        src/router/router.cpp
+        src/server/server.cpp
+        src/signal/signal_handler.cpp
     src/util/string.cpp
+        src/websocket/websocket_session.cpp
+        src/websocket/websocket_registry.cpp
 )
 
 add_library(blaze_core STATIC ${BLAZE_SOURCES})
@@ -74,13 +76,9 @@ if(BLAZE_ENABLE_TSAN)
     target_link_options(blaze_core PUBLIC -fsanitize=thread)
 endif()
 
-if(BLAZE_BUILD_EXAMPLES)
-    add_subdirectory(examples)
-endif()
-
 if(BLAZE_BUILD_TESTS)
     include(CTest)
-    if(BUILD_TESTING)
+    if(BUILD_TESTING AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
         add_subdirectory(tests)
     endif()
 endif()

@@ -1,5 +1,4 @@
-#ifndef BLAZE_JSON_WRAPPER_H
-#define BLAZE_JSON_WRAPPER_H
+#pragma once
 
 #include <boost/json.hpp>
 #include <string>
@@ -18,11 +17,11 @@ public:
     };
 
     Json();
-    Json(boost::json::value v);
+    explicit Json(boost::json::value v);
 
     // Generic constructor to allow Json({ ... }) syntax universally
     template<typename T>
-    Json(const T& value) : Json(boost::json::value_from(value)) {}
+    explicit Json(const T& value) : Json(boost::json::value_from(value)) {}
 
     // Json({{"key", val}})
     Json(std::initializer_list<std::pair<std::string_view, boost::json::value_ref>> list);
@@ -51,18 +50,18 @@ public:
         boost::json::array arr;
         arr.reserve(sizeof...(args));
         (arr.push_back(boost::json::value_from(std::forward<Args>(args))), ...);
-        return Json(boost::json::value(std::move(arr)));
+        return {boost::json::value(std::move(arr))};
     }
 
     Json operator[](size_t idx) const;
-    Json operator[](int idx) const { return (*this)[static_cast<size_t>(idx)]; }
+    Json operator[](const int idx) const { return (*this)[static_cast<size_t>(idx)]; }
     Json operator[](std::string_view key) const;
     Json operator[](const char* key) const { return (*this)[std::string_view(key)]; }
 
     bool has(std::string_view key) const;
 
     template<typename T>
-    std::optional<T> try_get(std::string_view key) const {
+    std::optional<T> try_get(const std::string_view key) const {
         if (!has(key)) return std::nullopt;
         // For now, we rely on as<T> being robust or implicit conversion
         // Ideally we check if conversion is valid.
@@ -78,15 +77,17 @@ public:
     }
 
     template<typename T>
-    T as() const;
+    T as() const {
+        return boost::json::value_to<T>(value());
+    }
 
     explicit operator std::string() const;
     explicit operator int() const;
 
-    operator boost::json::value() const;
+    explicit operator boost::json::value() const;
 
     const boost::json::value& value() const;
-    boost::json::value move_value();
+    boost::json::value move_value() const;
 
     size_t size() const;
     bool empty() const { return size() == 0; }
@@ -114,7 +115,7 @@ private:
     };
 
     Internal data_;
-    Json(Internal data) : data_(std::move(data)) {}
+    explicit Json(Internal data) : data_(std::move(data)) {}
 };
 
 template<> std::string Json::as<std::string>() const;
@@ -122,5 +123,3 @@ template<> int Json::as<int>() const;
 template<> Json Json::as<Json>() const;
 
 } // namespace blaze
-
-#endif

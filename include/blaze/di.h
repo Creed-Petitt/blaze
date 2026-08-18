@@ -1,5 +1,4 @@
-#ifndef BLAZE_DI_H
-#define BLAZE_DI_H
+#pragma once
 
 #include <memory>
 #include <mutex>
@@ -40,7 +39,7 @@ public:
     template<typename T>
     std::shared_ptr<T> get() const {
         std::lock_guard lock(mutex_);
-        auto it = services_.find(std::type_index(typeid(T)));
+        const auto it = services_.find(std::type_index(typeid(T)));
         if (it == services_.end()) {
             throw std::runtime_error(std::string("Service not registered: ") + typeid(T).name());
         }
@@ -50,12 +49,10 @@ public:
     template<typename T>
     bool has() const {
         std::lock_guard lock(mutex_);
-        return services_.find(std::type_index(typeid(T))) != services_.end();
+        return services_.contains(std::type_index(typeid(T)));
     }
 };
 
 using ServiceProvider = Services;
 
 } // namespace blaze
-
-#endif

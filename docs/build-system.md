@@ -38,10 +38,18 @@ cmake --build build --parallel
 
 ## 2. Build this repository
 
-Use direct CMake commands for maintainer workflows:
+Use the local helper for day-to-day development:
 
 ```bash
-cmake -B build/dev -DCMAKE_BUILD_TYPE=Debug -DBLAZE_BUILD_TESTS=ON -DBLAZE_BUILD_EXAMPLES=ON
+./build.sh
+./build.sh test
+./build.sh clean
+```
+
+The helper is only a thin wrapper around CMake. The equivalent direct commands are:
+
+```bash
+cmake -B build/dev -DCMAKE_BUILD_TYPE=Debug -DBLAZE_BUILD_TESTS=ON
 cmake --build build/dev --parallel
 ctest --test-dir build/dev --output-on-failure
 ```
@@ -53,7 +61,7 @@ ctest --test-dir build/dev --output-on-failure
 Blaze installs a CMake package config, so another project can use `find_package`.
 
 ```bash
-cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DBLAZE_BUILD_TESTS=OFF -DBLAZE_BUILD_EXAMPLES=OFF
+cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DBLAZE_BUILD_TESTS=OFF
 cmake --build build/release --parallel
 cmake --install build/release --prefix /tmp/blaze-install
 ```
@@ -77,7 +85,21 @@ cmake --build build --parallel
 
 ---
 
-## 4. Dependency policy
+## 4. Build examples
+
+Examples are standalone consumer projects. Build one directly from its directory:
+
+```bash
+cmake -S examples/01_hello_world -B build/examples/01_hello_world
+cmake --build build/examples/01_hello_world --parallel
+./build/examples/01_hello_world/01_hello_world
+```
+
+Each example links Blaze the same way a local user project can: by adding the repository root as a CMake subdirectory and linking `blaze::core`.
+
+---
+
+## 5. Dependency policy
 
 The default framework build is intentionally small:
 

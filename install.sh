@@ -7,7 +7,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-REPO="Creed-Petitt/blaze"
+REPO="creedpetitt/blaze"
 VERSION="v1.0.0"
 
 echo -e "Blaze $VERSION - C++20 Web Server Framework"
@@ -69,7 +69,7 @@ install_dependencies
 prepare_source
 
 echo -e "${YELLOW}[+] Configuring Blaze...${NC}"
-cmake -S . -B build/install -DBLAZE_BUILD_EXAMPLES=OFF -DBLAZE_BUILD_TESTS=OFF -DBLAZE_INSTALL=ON
+cmake -S . -B build/install -DBLAZE_BUILD_TESTS=OFF -DBLAZE_INSTALL=ON
 
 echo -e "${YELLOW}[+] Installing Blaze CMake package...${NC}"
 if [ -w /usr/local ]; then

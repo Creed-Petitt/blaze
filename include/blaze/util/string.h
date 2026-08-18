@@ -1,11 +1,11 @@
-#ifndef BLAZE_UTIL_STRING_H
-#define BLAZE_UTIL_STRING_H
+#pragma once
+
+#include <blaze/exceptions.h>
 
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <charconv>
-#include <blaze/exceptions.h>
 
 namespace blaze::util {
 
@@ -19,16 +19,6 @@ std::string url_decode(std::string_view str);
  * @brief Converts a binary string or buffer to a hex-encoded string.
  */
 std::string hex_encode(std::string_view input);
-
-/**
- * @brief Converts CamelCase or PascalCase to snake_case.
- */
-std::string to_snake_case(std::string_view name);
-
-/**
- * @brief Simple English pluralization helper (e.g., user -> users, category -> categories).
- */
-std::string pluralize(std::string_view name);
 
 /**
  * @brief Converts various types to string for route/query parameter handling.
@@ -79,5 +69,3 @@ namespace blaze {
     using util::to_string_param;
     using util::convert_string;
 }
-
-#endif // BLAZE_UTIL_STRING_H

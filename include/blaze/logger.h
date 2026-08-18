@@ -1,5 +1,4 @@
-#ifndef HTTP_SERVER_LOGGER_H
-#define HTTP_SERVER_LOGGER_H
+#pragma once
 
 #include <string>
 #include <string_view>
@@ -24,8 +23,8 @@ class Logger {
 private:
     std::ofstream file_stream_;
     bool use_stdout_{false};
-    bool enabled_{true};
-    LogLevel level_{LogLevel::INFO};
+    std::atomic<bool> enabled_{true};
+    std::atomic<LogLevel> level_{LogLevel::INFO};
     
     // Config Mutex (protects file_stream_, use_stdout_, enabled_, level_)
     std::mutex config_mutex_;
@@ -41,7 +40,6 @@ private:
     static std::string get_timestamp();
     void process_queue();
 
-    // Private Constructor (Singleton)
     Logger();
 
 public:
@@ -50,33 +48,50 @@ public:
     // Global Access Point
     static Logger& instance();
 
-    // Configuration
     void configure(const std::string& path);
-    void set_level(LogLevel level) { level_ = level; }
-    LogLevel get_level() const { return level_; }
+    void set_level(const LogLevel level) { level_.store(level, std::memory_order_relaxed); }
+    LogLevel get_level() const { return level_.load(std::memory_order_relaxed); }
 
     void log(LogLevel level, std::string_view message);
 
-    void log_access(std::string_view client_ip,
-                   std::string_view method,
-                   std::string_view path,
-                   int status_code,
-                   long long response_time_ms);
+    void log_access(
+        std::string_view client_ip,
+        std::string_view method,
+        std::string_view path,
+        int status_code,
+        long long response_time_ms);
 
     void log_error(const std::string& message);
     
-    // Convenience methods
-    void debug(const std::string& msg) { log(LogLevel::DEBUG, msg); }
-    void info(const std::string& msg) { log(LogLevel::INFO, msg); }
-    void warn(const std::string& msg) { log(LogLevel::WARN, msg); }
-    void error(const std::string& msg) { log(LogLevel::ERROR, msg); }
+    void debug(const std::string& msg) {
+        log(LogLevel::DEBUG, msg);
+    }
+    void info(const std::string& msg) {
+        log(LogLevel::INFO, msg);
+    }
+    void warn(const std::string& msg) {
+        log(LogLevel::WARN, msg);
+    }
+    void error(const std::string& msg) {
+        log(LogLevel::ERROR, msg);
+    }
 };
 
-// Global Shortcuts
-inline void info(std::string_view msg) { Logger::instance().log(LogLevel::INFO, msg); }
-inline void warn(std::string_view msg) { Logger::instance().log(LogLevel::WARN, msg); }
-inline void error(std::string_view msg) { Logger::instance().log(LogLevel::ERROR, msg); }
-inline void debug(std::string_view msg) { Logger::instance().log(LogLevel::DEBUG, msg); }
+inline void info(const std::string_view msg) {
+    Logger::instance().log(LogLevel::INFO, msg);
+}
+
+inline void warn(const std::string_view msg) {
+    Logger::instance().log(LogLevel::WARN, msg);
+}
+
+inline void error(const std::string_view msg) {
+    Logger::instance().log(LogLevel::ERROR, msg);
+}
+
+inline void debug(const std::string_view msg) {
+    Logger::instance().log(LogLevel::DEBUG, msg);
+}
 
 } // namespace blaze
 
@@ -88,5 +103,3 @@ inline void debug(std::string_view msg) { Logger::instance().log(LogLevel::DEBUG
 #define BLAZE_LOG_WARN(msg) \
     blaze::Logger::instance().log(blaze::LogLevel::WARN, \
         std::string(__FILE__) + ":" + std::to_string(__LINE__) + " " + msg)
-
-#endif //HTTP_SERVER_LOGGER_H

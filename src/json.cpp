@@ -1,5 +1,8 @@
 #include <blaze/json.h>
 #include <blaze/exceptions.h>
+
+#include <boost/json/src.hpp>
+
 #include <string>
 #include <stdexcept>
 
@@ -33,7 +36,7 @@ size_t Json::size() const {
     return 0;
 }
 
-Json Json::operator[](size_t idx) const {
+Json Json::operator[](const size_t idx) const {
     if (data_.type == Type::BOOST_VAL && data_.boost_ptr && data_.boost_ptr->is_array()) {
         if (idx < data_.boost_ptr->as_array().size()) {
             return Json(data_.boost_ptr->as_array()[idx]);
@@ -42,7 +45,7 @@ Json Json::operator[](size_t idx) const {
     return Json();
 }
 
-Json Json::operator[](std::string_view key) const {
+Json Json::operator[](const std::string_view key) const {
     if (data_.type == Type::BOOST_VAL && data_.boost_ptr && data_.boost_ptr->is_object()) {
         if (data_.boost_ptr->as_object().contains(key)) {
             return Json(data_.boost_ptr->as_object().at(key));
@@ -51,7 +54,7 @@ Json Json::operator[](std::string_view key) const {
     return Json();
 }
 
-bool Json::has(std::string_view key) const {
+bool Json::has(const std::string_view key) const {
     if (data_.type == Type::BOOST_VAL && data_.boost_ptr && data_.boost_ptr->is_object()) {
         return data_.boost_ptr->as_object().contains(key);
     }
@@ -74,16 +77,16 @@ std::string Json::as<std::string>() const {
 template<>
 int Json::as<int>() const {
     if (data_.type == Type::BOOST_VAL && data_.boost_ptr) {
-        if (data_.boost_ptr->is_int64()) return (int)data_.boost_ptr->as_int64();
-        if (data_.boost_ptr->is_uint64()) return (int)data_.boost_ptr->as_uint64();
+        if (data_.boost_ptr->is_int64()) return static_cast<int>(data_.boost_ptr->as_int64());
+        if (data_.boost_ptr->is_uint64()) return static_cast<int>(data_.boost_ptr->as_uint64());
     }
-    
-    std::string s = as<std::string>();
+
+    const auto s = as<std::string>();
     if (s.empty()) return 0;
     
     try { 
         size_t pos;
-        int val = std::stoi(s, &pos);
+        const int val = std::stoi(s, &pos);
         if (pos != s.size()) throw std::invalid_argument("trailing characters");
         return val;
     } catch (...) { 
@@ -110,7 +113,7 @@ const boost::json::value& Json::value() const {
     return empty_val;
 }
 
-boost::json::value Json::move_value() {
+boost::json::value Json::move_value() const {
     if (data_.type == Type::BOOST_VAL && data_.boost_ptr) {
         return *data_.boost_ptr; 
     }

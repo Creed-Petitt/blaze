@@ -13,22 +13,23 @@ This directory contains standalone, educational examples designed to teach you t
 
 ## How to Build
 
-From the project root:
+Each example is its own small CMake project. From the repository root:
 
 ```bash
-mkdir -p build && cd build
-cmake .. -DBLAZE_BUILD_EXAMPLES=ON
-make -j$(nproc)
+cmake -S examples/01_hello_world -B build/examples/01_hello_world
+cmake --build build/examples/01_hello_world --parallel
 ```
 
 ## How to Run
 
-After building, the executables will be in the `build/examples` directory.
+After building, run the executable from that example's build directory.
 
 ```bash
 # Run the Hello World example
-./examples/01_hello_world
+./build/examples/01_hello_world/01_hello_world
 
 # Run the file upload example
-./examples/12_file_uploads
+cmake -S examples/12_file_uploads -B build/examples/12_file_uploads
+cmake --build build/examples/12_file_uploads --parallel
+./build/examples/12_file_uploads/12_file_uploads
 ```

@@ -1,5 +1,4 @@
-#ifndef HTTP_SERVER_MIDDLEWARE_H
-#define HTTP_SERVER_MIDDLEWARE_H
+#pragma once
 
 #include <blaze/router.h>
 #include <blaze/request.h>
@@ -33,21 +32,21 @@ namespace blaze::middleware
     /** @brief Bearer Token Authentication middleware. */
     template<typename Validator>
     Middleware bearer_auth(Validator validator) {
-        return [validator](Request& req, Response& res, auto next) -> Async<void> {
+        return [validator](const Request& req, Response& res, auto next) -> Async<void> {
             if (!req.has_header("Authorization")) {
-                res.status(401).json({{"error", "Unauthorized"}, {"message", "Missing Authorization header"}});
+                res.status(401).json(Json{{"error", "Unauthorized"}, {"message", "Missing Authorization header"}});
                 co_return;
             }
 
             const std::string_view auth = req.get_header("Authorization");
             if (auth.substr(0, 7) != "Bearer ") {
-                res.status(401).json({{"error", "Unauthorized"}, {"message", "Invalid Authorization scheme"}});
+                res.status(401).json(Json{{"error", "Unauthorized"}, {"message", "Invalid Authorization scheme"}});
                 co_return;
             }
 
             std::string_view token = auth.substr(7);
             if (!validator(token)) {
-                res.status(403).json({{"error", "Forbidden"}, {"message", "Invalid Token"}});
+                res.status(403).json(Json{{"error", "Forbidden"}, {"message", "Invalid Token"}});
                 co_return;
             }
 
@@ -57,6 +56,5 @@ namespace blaze::middleware
 
     /** @brief Basic Rate Limiting middleware. */
     Middleware rate_limit(int max_requests, int window_seconds);
-}
 
-#endif
+} // namespace blaze

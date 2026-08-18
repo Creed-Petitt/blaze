@@ -39,5 +39,6 @@ namespace blaze {
         else {
             static_assert(sizeof(T) == 0, "Unsupported type for blaze::env");
         }
+        return -1;
     }
 }

@@ -17,7 +17,7 @@ struct FileCache {
 };
 
 static std::string get_mime_type(const std::string& path) {
-    auto ends_with = [](std::string_view str, std::string_view suffix) {
+    auto ends_with = [](const std::string_view str, const std::string_view suffix) {
         return str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
     };
 
@@ -40,10 +40,10 @@ static std::string get_mime_type(const std::string& path) {
 }
 
 Middleware cors() {
-    return [](Request& req, Response& res, auto next) -> Async<void> {
-        res.header("Access-Control-Allow-Origin", "*");
-        res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    return [](const Request& req, Response& res, auto next) -> Async<void> {
+        res.set_header("Access-Control-Allow-Origin", "*");
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
         if (req.method == "OPTIONS") {
             res.status(204).send("");
@@ -55,10 +55,10 @@ Middleware cors() {
 }
 
 Middleware cors(const std::string& origin, const std::string& methods, const std::string& headers) {
-    return [origin, methods, headers](Request& req, Response& res, const auto& next) -> Async<void> {
-        res.header("Access-Control-Allow-Origin", origin);
-        res.header("Access-Control-Allow-Methods", methods);
-        res.header("Access-Control-Allow-Headers", headers);
+    return [origin, methods, headers](const Request& req, Response& res, const auto& next) -> Async<void> {
+        res.set_header("Access-Control-Allow-Origin", origin);
+        res.set_header("Access-Control-Allow-Methods", methods);
+        res.set_header("Access-Control-Allow-Headers", headers);
 
         if (req.method == "OPTIONS") {
             res.status(204).send("");
@@ -78,14 +78,14 @@ Middleware static_files(const std::string& root_dir, bool serve_index) {
         abs_root = fs::absolute(root_dir);
     }
 
-    return [abs_root, serve_index, cache](Request& req, Response& res, auto next) -> Async<void> {
+    return [abs_root, serve_index, cache](const Request& req, Response& res, auto next) -> Async<void> {
         if (req.method != "GET") {
             co_await next();
             co_return;
         }
 
-        std::string decoded_path = util::url_decode(req.path);
-        fs::path requested_path = abs_root / decoded_path.substr(1);
+        const std::string decoded_path = util::url_decode(req.path);
+        const fs::path requested_path = abs_root / decoded_path.substr(1);
 
         std::error_code ec;
         fs::path canonical_path = fs::canonical(requested_path, ec);
@@ -95,10 +95,10 @@ Middleware static_files(const std::string& root_dir, bool serve_index) {
             co_return;
         }
 
-        std::string p_str = canonical_path.string();
-        std::string r_str = abs_root.string();
+        const std::string p_str = canonical_path.string();
+        const std::string r_str = abs_root.string();
         if (p_str.compare(0, r_str.length(), r_str) != 0) {
-            res.status(403).json({{"error", "Forbidden"}, {"message", "Access Denied"}});
+            res.status(403).json(Json{{"error", "Forbidden"}, {"message", "Access Denied"}});
             co_return;
         }
 
@@ -110,13 +110,13 @@ Middleware static_files(const std::string& root_dir, bool serve_index) {
             }
         }
 
-        std::string file_real_path = canonical_path.string();
+        const std::string file_real_path = canonical_path.string();
         
         // Fast path for MIME type
         std::string content_type;
         {
             std::shared_lock lock(cache->mtx);
-            auto it = cache->type_map.find(file_real_path);
+            const auto it = cache->type_map.find(file_real_path);
             if (it != cache->type_map.end()) {
                 content_type = it->second;
             }
@@ -128,16 +128,16 @@ Middleware static_files(const std::string& root_dir, bool serve_index) {
             cache->type_map[file_real_path] = content_type;
         }
 
-        res.header("Content-Type", content_type);
+        res.set_header("Content-Type", content_type);
         res.file(file_real_path); // ZERO-COPY STREAMING!
         co_return;
     };
 }
 
 Middleware limit_body_size(size_t max_bytes) {
-    return [max_bytes](Request& req, Response& res, auto next) -> Async<void> {
+    return [max_bytes](const Request& req, Response& res, auto next) -> Async<void> {
         if (req.body.size() > max_bytes) {
-            res.status(413).json({
+            res.status(413).json(Json{
                 {"error", "Request body too large"},
                 {"max_size", max_bytes},
                 {"received_size", req.body.size()}
@@ -150,15 +150,15 @@ Middleware limit_body_size(size_t max_bytes) {
 
 Middleware rate_limit(int max_requests, int window_seconds) {
     struct ClientState {
-        int count;
+        int count{};
         std::chrono::steady_clock::time_point window_start;
     };
     
     auto state = std::make_shared<std::pair<std::mutex, std::unordered_map<std::string, ClientState>>>();
 
-    return [max_requests, window_seconds, state](Request& req, Response& res, auto next) -> Async<void> {
+    return [max_requests, window_seconds, state](const Request& req, Response& res, auto next) -> Async<void> {
         std::string ip = "unknown";
-        if (auto ip_ctx = req.get_opt<std::string>("client_ip")) {
+        if (const auto ip_ctx = req.get_opt<std::string>("client_ip")) {
             ip = *ip_ctx;
         }
 
@@ -166,22 +166,24 @@ Middleware rate_limit(int max_requests, int window_seconds) {
             std::lock_guard lock(state->first);
             auto& clients = state->second;
             const auto now = std::chrono::steady_clock::now();
-            auto& client = clients[ip];
+            auto& [count, window_start] = clients[ip];
 
-            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - client.window_start).count();
+            const auto elapsed =
+                std::chrono::duration_cast<std::chrono::seconds>(now - window_start)
+                    .count();
             if (elapsed > window_seconds) {
-                client.count = 0;
-                client.window_start = now;
+                count = 0;
+                window_start = now;
             }
 
-            if (client.count >= max_requests) {
-                res.status(429).json({
+            if (count >= max_requests) {
+                res.status(429).json(Json{
                     {"error", "Too Many Requests"},
                     {"retry_after_seconds", window_seconds - elapsed}
                 });
                 co_return;
             }
-            client.count++;
+            count++;
         }
         co_await next();
     };

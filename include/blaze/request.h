@@ -1,97 +1,70 @@
-#ifndef HTTP_SERVER_REQUEST_H
-#define HTTP_SERVER_REQUEST_H
+#pragma once
 
+#include <blaze/header.h>
+#include <blaze/json.h>
+
+#include <any>
+#include <memory>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
-#include <unordered_map>
-#include <optional>
-#include <memory>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
-#include <boost/json.hpp>
-#include <boost/beast/http/message.hpp>
-#include <boost/beast/http/string_body.hpp>
-#include <any>
-#include <blaze/json.h>
-#include <blaze/exceptions.h>
-#include <blaze/di.h>
-#include <blaze/multipart.h>
 
 namespace blaze {
 
-struct Request {
+class Request {
+public:
+
+    // Public HTTP data members
     std::string method;
     std::string path;
     std::string body;
     std::unordered_map<std::string, std::string> params;
-    std::vector<std::string> path_values;
     std::unordered_map<std::string, std::string> query;
+    std::vector<std::string> path_values;
 
-    // Owned copy of Beast headers
-    boost::beast::http::fields headers;
-
+    // Target and headers
     void set_target(std::string_view target);
-    void set_fields(boost::beast::http::fields&& fields);
-    
-    static std::string url_decode(std::string_view str);
-
-    // Returns parsed JSON body wrapper
-    blaze::Json json() const;
-
-    // Typed JSON Extraction
-    // Automatically converts request body to T (std::vector, std::map, etc.)
-    template<typename T>
-    T json() const {
-        try {
-            auto val = boost::json::parse(body);
-            return boost::json::value_to<T>(val);
-        } catch (const std::exception& e) {
-            throw BadRequest(std::string("Invalid JSON body: ") + e.what());
-        }
-    }
-
-    // Multipart Form Data
-    const MultipartFormData& form() const;
-    std::vector<const MultipartPart*> files() const;
-
-    // Helper methods for safe parameter and header access
-    std::string get_query(const std::string& key, const std::string& default_val = "") const;
-    int get_query_int(const std::string& key, int default_val = 0) const;
-    
+    void set_header(std::string_view key, std::string_view value);
+    void add_header(std::string_view key, std::string_view value);
     std::string_view get_header(std::string_view key) const;
     bool has_header(std::string_view key) const;
-    
+    const std::vector<Header>& headers() const { return headers_; }
+
+    static std::string url_decode(std::string_view str);
+
+    // Query and param helpers
+    std::string get_query(const std::string& key, const std::string& default_val = "") const;
+    int get_query_int(const std::string& key, int default_val = 0) const;
     std::optional<int> get_param_int(const std::string& key) const;
 
-    void set_user(blaze::Json user) { user_context_ = std::move(user); }
-    
-    // Returns the user object directly. Throws Unauthorized if not authenticated.
-    const blaze::Json& user() const {
-        if (!user_context_.has_value()) {
-            throw blaze::Unauthorized("User not authenticated");
-        }
-        return *user_context_;
+    // Body parsing
+    Json json() const;
+
+    template<typename T>
+    T json() const {
+        return this->json().template as<T>();
     }
 
-    bool is_authenticated() const { return user_context_.has_value(); }
-
-    std::string cookie(const std::string& name) const;
-
+    // Context bag for middleware
     template<typename T>
     void set(const std::string& key, T&& value) {
-        context_[key] = std::make_any<T>(std::forward<T>(value));
+        context_[key] = std::make_any<std::remove_cvref_t<T>>(std::forward<T>(value));
     }
 
-    // Set context value by Type (for Context<T> injection)
     template<typename T>
     void set(T&& value) {
-        context_[typeid(std::remove_cvref_t<T>).name()] = std::make_any<std::remove_cvref_t<T>>(std::forward<T>(value));
+        context_[typeid(std::remove_cvref_t<T>).name()] =
+            std::make_any<std::remove_cvref_t<T>>(std::forward<T>(value));
     }
 
     template<typename T>
     T get(const std::string& key) const {
-        auto it = context_.find(key);
+        const auto it = context_.find(key);
         if (it == context_.end()) {
             throw std::runtime_error("Key not found in request context: " + key);
         }
@@ -109,26 +82,9 @@ struct Request {
         }
     }
 
-    // Resolves an app-owned service from the request.
-    template<typename T>
-    std::shared_ptr<T> service() const {
-        if (!services_) {
-            throw std::runtime_error("Service registry not attached to request");
-        }
-        return services_->get<T>();
-    }
-
-    // Internal use only
-    void _set_services(Services* services) { services_ = services; }
-
 private:
-    Services* services_ = nullptr;
-    std::optional<blaze::Json> user_context_;
+    std::vector<Header> headers_;
     std::unordered_map<std::string, std::any> context_;
-    mutable std::optional<MultipartFormData> cached_form_;
 };
 
-
 } // namespace blaze
-
-#endif

@@ -1,4 +1,5 @@
 #include <blaze/logger.h>
+
 #include <chrono>
 #include <iomanip>
 #include <sstream>
@@ -44,8 +45,10 @@ void Logger::process_queue() {
     while (running_ || !queue_.empty()) {
         std::string msg;
         {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            cv_.wait(lock, [this] { return !queue_.empty() || !running_; });
+            std::unique_lock lock(queue_mutex_);
+            cv_.wait(lock, [this] {
+                return !queue_.empty() || !running_;
+            });
             
             if (queue_.empty() && !running_) {
                 break;
@@ -59,7 +62,7 @@ void Logger::process_queue() {
         output << "[" << get_timestamp() << "] " << msg << "\n";
         std::string out_str = output.str();
 
-        std::lock_guard<std::mutex> config_lock(config_mutex_);
+        std::lock_guard config_lock(config_mutex_);
         if (use_stdout_) {
             if (msg.find("ERROR") != std::string::npos) {
                 std::cerr << out_str;
@@ -81,14 +84,14 @@ void Logger::process_queue() {
 }
 
 void Logger::configure(const std::string& path) {
-    std::lock_guard<std::mutex> lock(config_mutex_);
+    std::lock_guard lock(config_mutex_);
     
     if (path == "/dev/null") {
-        enabled_ = false;
+        enabled_.store(false, std::memory_order_relaxed);
         return;
     }
 
-    enabled_ = true;
+    enabled_.store(true, std::memory_order_relaxed);
 
     if (path == "stdout" || path.empty()) {
         use_stdout_ = true;
@@ -105,16 +108,16 @@ void Logger::configure(const std::string& path) {
     
     log_path_ = path;
 
-    std::filesystem::path p(path);
+    const std::filesystem::path p(path);
     if (p.has_parent_path()) {
         std::filesystem::create_directories(p.parent_path());
     }
 }
 
-void Logger::log(LogLevel level, std::string_view message) {
-    {
-        std::lock_guard<std::mutex> config_lock(config_mutex_);
-        if (!enabled_ || level < level_) return;
+void Logger::log(const LogLevel level, const std::string_view message) {
+    if (!enabled_.load(std::memory_order_relaxed) ||
+        level < level_.load(std::memory_order_relaxed)) {
+        return;
     }
 
     std::string level_str;
@@ -125,22 +128,23 @@ void Logger::log(LogLevel level, std::string_view message) {
         case LogLevel::ERROR: level_str = "ERROR"; break;
     }
 
-    std::string msg = level_str + ": " + std::string(message);
     {
-        std::lock_guard<std::mutex> lock(queue_mutex_);
+        std::string msg = level_str + ": " + std::string(message);
+        std::lock_guard lock(queue_mutex_);
         queue_.push(std::move(msg));
     }
     cv_.notify_one();
 }
 
-void Logger::log_access(std::string_view client_ip,
-                       std::string_view method,
-                       std::string_view path,
-                       int status_code,
-                       long long response_time_ms) {
-    {
-        std::lock_guard<std::mutex> config_lock(config_mutex_);
-        if (!enabled_ || LogLevel::INFO < level_) return;
+void Logger::log_access(
+    const std::string_view client_ip,
+    const std::string_view method,
+    const std::string_view path,
+    const int status_code,
+    const long long response_time_ms) {
+    if (!enabled_.load(std::memory_order_relaxed) ||
+        LogLevel::INFO < level_.load(std::memory_order_relaxed)) {
+        return;
     }
 
     std::stringstream ss;
@@ -148,7 +152,7 @@ void Logger::log_access(std::string_view client_ip,
        << status_code << " " << response_time_ms << "ms";
     
     {
-        std::lock_guard<std::mutex> lock(queue_mutex_);
+        std::lock_guard lock(queue_mutex_);
         queue_.push(ss.str());
     }
     cv_.notify_one();

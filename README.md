@@ -29,6 +29,21 @@ curl -fsSL https://raw.githubusercontent.com/Creed-Petitt/blaze/main/install.sh 
 ```
 
 > **Note:** The installer (`install.sh`) installs only the core build tools.
+
+## Local Development
+
+Build Blaze from this repository:
+
+```bash
+./build.sh
+```
+
+Build and run the test suite:
+
+```bash
+./build.sh test
+```
+
 ## Quick Start
 
 1. **Write** your logic (e.g., in `src/main.cpp`):
