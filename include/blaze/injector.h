@@ -1,5 +1,4 @@
-#ifndef BLAZE_INJECTOR_H
-#define BLAZE_INJECTOR_H
+#pragma once
 
 #include <blaze/di.h>
 #include <blaze/exceptions.h>
@@ -37,7 +36,7 @@ void try_validate(T& model) {
 
 namespace detail {
 
-    // 1. Resolve a single argument into a std::any (shared_ptr<T>)
+    // Resolve a single argument into a std::any (shared_ptr<T>)
     template<typename ArgType, size_t Is, typename Tuple>
     std::any resolve_arg(Request& req, Response& res) {
         using PureType = std::remove_cvref_t<ArgType>;
@@ -45,23 +44,23 @@ namespace detail {
         if constexpr (std::is_same_v<PureType, Request> || std::is_same_v<PureType, Response>) {
             return nullptr; // Placeholders
         } else if constexpr (is_instantiation_of<Path, PureType>::value) {
-            using InnerT = typename PureType::value_type;
+            using InnerT = PureType::value_type;
             static constexpr size_t idx = count_instances_before<Path, Is, Tuple>::count();
             if (idx < req.path_values.size()) {
                 return std::make_shared<PureType>(convert_string<InnerT>(req.path_values[idx]));
             }
             return std::make_shared<PureType>();
         } else if constexpr (is_instantiation_of<Body, PureType>::value) {
-            using InnerT = typename PureType::value_type;
+            using InnerT = PureType::value_type;
             auto model = req.json<InnerT>();
             try_validate(model);
             return std::make_shared<PureType>(std::move(model));
         } else if constexpr (is_instantiation_of<Query, PureType>::value) {
-            using InnerT = typename PureType::value_type;
+            using InnerT = PureType::value_type;
             InnerT model{};
             using Members = boost::describe::describe_members<InnerT, boost::describe::mod_any_access>;
             boost::mp11::mp_for_each<Members>([&](auto meta) {
-                std::string key = meta.name;
+                const std::string key = meta.name;
                 if (req.query.contains(key)) {
                     using FieldT = std::remove_cvref_t<decltype(model.*meta.pointer)>;
                     model.*meta.pointer = convert_string<FieldT>(req.query.at(key));
@@ -70,7 +69,7 @@ namespace detail {
             try_validate(model);
             return std::make_shared<PureType>(model);
         } else if constexpr (is_instantiation_of<Context, PureType>::value) {
-            using InnerT = typename PureType::value_type;
+            using InnerT = PureType::value_type;
             auto val = req.get_opt<InnerT>(typeid(InnerT).name());
             if (val) return std::make_shared<PureType>(*val);
             return std::make_shared<PureType>();
@@ -86,7 +85,7 @@ namespace detail {
         }
     }
 
-    // 2. Unwrap the std::any into the exact type the function needs
+    // Unwrap the std::any into the exact type the function needs
     template<typename ArgType>
     decltype(auto) unwrap_arg(std::any& val, Request& req, Response& res) {
         using PureType = std::remove_cvref_t<ArgType>;
@@ -115,7 +114,7 @@ auto call_with_deps_impl(Func& func, Request& req, Response& res, std::index_seq
 template<typename Func>
 auto inject_and_call(Func& func, Request& req, Response& res) {
     using Traits = function_traits<Func>;
-    using ArgsTuple = typename Traits::args_tuple;
+    using ArgsTuple = Traits::args_tuple;
     
     return call_with_deps_impl<Func, ArgsTuple>(
         func, 
@@ -126,5 +125,3 @@ auto inject_and_call(Func& func, Request& req, Response& res) {
 }
 
 } // namespace blaze
-
-#endif
