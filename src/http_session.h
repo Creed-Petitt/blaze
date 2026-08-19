@@ -16,8 +16,7 @@ using tcp = boost::asio::ip::tcp;
 
 namespace blaze
 {
-    class RequestDispatcher;
-    class WebSocketHub;
+    class Dispatcher;
 
     template <class Stream>
     class HttpSession : public std::enable_shared_from_this<HttpSession<Stream>>
@@ -25,12 +24,12 @@ namespace blaze
         Stream stream_;
         beast::flat_buffer buffer_;
         std::optional<http::request_parser<http::string_body>> parser_;
-        RequestDispatcher& dispatcher_;
+        Dispatcher& dispatcher_;
         const Config& config_;
 
     public:
         HttpSession(
-            RequestDispatcher& dispatcher,
+            Dispatcher& dispatcher,
             const Config& config,
             Stream&& stream);
 

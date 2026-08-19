@@ -4,19 +4,19 @@
 #include <memory>
 #include <iostream>
 
-#include "request/request_dispatcher.h"
+#include "dispatcher.h"
 #include "server/server.h"
 
 namespace blaze {
 
 App::App() {
-    dispatcher_ = std::make_unique<RequestDispatcher>(router_, middleware_, config_);
+    dispatcher_ = std::make_unique<Dispatcher>(router_, middleware_, config_);
     server_ = std::make_unique<Server>(*dispatcher_, config_);
 }
 
 App::App(Config config)
     : config_{std::move(config)} {
-    dispatcher_ = std::make_unique<RequestDispatcher>(router_, middleware_, config_);
+    dispatcher_ = std::make_unique<Dispatcher>(router_, middleware_, config_);
     server_ = std::make_unique<Server>(*dispatcher_, config_);
 }
 
@@ -51,10 +51,6 @@ void App::listen(const int port, const int num_threads) const {
 
 void App::use(const Middleware &mw) {
     middleware_.push_back(mw);
-}
-
-RouteGroup App::group(const std::string& prefix) {
-    return RouteGroup(router_, prefix);
 }
 
 } // namespace blaze

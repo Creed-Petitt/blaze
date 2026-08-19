@@ -1,5 +1,5 @@
-#include "http/http_session.h"
-#include "request/request_dispatcher.h"
+#include "http_session.h"
+#include "dispatcher.h"
 
 #include <blaze/exceptions.h>
 #include <blaze/request.h>
@@ -107,7 +107,7 @@ template <typename Stream, typename SessionPtr>
 boost::asio::awaitable<void> handle_session(
     Stream& stream,
     SessionPtr self,
-    RequestDispatcher& dispatcher,
+    Dispatcher& dispatcher,
     Request req,
     const std::string& client_ip,
     bool keep_alive)
@@ -157,7 +157,7 @@ boost::asio::awaitable<void> handle_session(
 
 template<class Stream>
 HttpSession<Stream>::HttpSession(
-    RequestDispatcher& dispatcher,
+    Dispatcher& dispatcher,
     const Config& config,
     Stream&& stream)
     : stream_(std::move(stream)),

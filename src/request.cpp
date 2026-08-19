@@ -1,5 +1,5 @@
-#include <blaze/request.h>
 #include <blaze/exceptions.h>
+#include <blaze/request.h>
 #include <blaze/util/string.h>
 
 #include <boost/json.hpp>
@@ -66,7 +66,7 @@ void Request::add_header(const std::string_view key, const std::string_view valu
     headers_.push_back({std::string(key), std::string(value)});
 }
 
-std::string_view Request::get_header(std::string_view key) const {
+std::string_view Request::get_header(const std::string_view key) const {
     for (const auto& [name, value] : headers_) {
         if (header_name_equal(name, key)) {
             return value;

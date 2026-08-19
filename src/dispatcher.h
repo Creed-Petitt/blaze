@@ -10,13 +10,13 @@
 
 namespace blaze {
 
-class RequestDispatcher {
+class Dispatcher {
     Router& router_;
     std::vector<Middleware>& middleware_;
     const Config& config_;
 
 public:
-    RequestDispatcher(Router& router, std::vector<Middleware>& middleware, const Config& config);
+    Dispatcher(Router& router, std::vector<Middleware>& middleware, const Config& config);
 
     Async<Response> handle(Request& req, const std::string& client_ip, bool keep_alive);
 

@@ -1,4 +1,4 @@
-#include "request_dispatcher.h"
+#include "dispatcher.h"
 
 #include <blaze/exceptions.h>
 #include <blaze/logger.h>
@@ -7,13 +7,13 @@
 
 namespace blaze {
 
-RequestDispatcher::RequestDispatcher(
+Dispatcher::Dispatcher(
     Router& router,
     std::vector<Middleware>& middleware,
     const Config& config)
         : router_(router), middleware_(middleware), config_(config) {}
 
-Async<void> RequestDispatcher::run_middleware(
+Async<void> Dispatcher::run_middleware(
     const size_t index,
     Request& req,
     Response& res,
@@ -29,7 +29,7 @@ Async<void> RequestDispatcher::run_middleware(
     }
 }
 
-Async<Response> RequestDispatcher::handle(Request& req, const std::string& client_ip, const bool keep_alive) {
+Async<Response> Dispatcher::handle(Request& req, const std::string& client_ip, const bool keep_alive) {
     const auto start_time = std::chrono::steady_clock::now();
     Response res;
     int status_code{};
