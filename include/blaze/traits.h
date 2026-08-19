@@ -1,5 +1,4 @@
-#ifndef BLAZE_TRAITS_H
-#define BLAZE_TRAITS_H
+#pragma once
 
 #include <type_traits>
 #include <tuple>
@@ -56,5 +55,3 @@ namespace blaze {
     };
 
 } // namespace blaze
-
-#endif

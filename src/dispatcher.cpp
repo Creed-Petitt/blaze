@@ -7,8 +7,11 @@
 
 namespace blaze {
 
-RequestDispatcher::RequestDispatcher(Router& router, std::vector<Middleware>& middleware, const Config& config)
-    : router_(router), middleware_(middleware), config_(config) {}
+RequestDispatcher::RequestDispatcher(
+    Router& router,
+    std::vector<Middleware>& middleware,
+    const Config& config)
+        : router_(router), middleware_(middleware), config_(config) {}
 
 Async<void> RequestDispatcher::run_middleware(
     const size_t index,
@@ -29,7 +32,7 @@ Async<void> RequestDispatcher::run_middleware(
 Async<Response> RequestDispatcher::handle(Request& req, const std::string& client_ip, const bool keep_alive) {
     const auto start_time = std::chrono::steady_clock::now();
     Response res;
-    int status_code = 500;
+    int status_code{};
 
     try {
         req.set("client_ip", client_ip);
@@ -41,8 +44,8 @@ Async<Response> RequestDispatcher::handle(Request& req, const std::string& clien
             req.path_values = match->path_values;
             handler = match->handler;
         } else {
-            handler = [](Request&, Response& res) -> Async<void> {
-                res.status(404).send("404 Not Found\n");
+            handler = [](Request&, Response& resp) -> Async<void> {
+                resp.status(404).send("404 Not Found\n");
                 co_return;
             };
         }
@@ -50,13 +53,13 @@ Async<Response> RequestDispatcher::handle(Request& req, const std::string& clien
         co_await run_middleware(0, req, res, handler);
         status_code = res.get_status();
     } catch (const HttpError& e) {
-        res.status(e.status()).json(Json{
+        res.status(e.status()).json({
             {"error", "HTTP Error"},
             {"message", e.what()}
         });
         status_code = e.status();
     } catch (const std::exception& e) {
-        res.status(500).json(Json{
+        res.status(500).json({
             {"error", "Internal Server Error"},
             {"message", e.what()}
         });

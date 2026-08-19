@@ -32,22 +32,20 @@ if(NOT TARGET blaze_boost_system)
 endif()
 
 set(BLAZE_SOURCES
-        src/core/app.cpp
-        src/core/config.cpp
-        src/core/environment.cpp
-        src/http/http_session.cpp
+        src/app.cpp
+        src/config.cpp
+        src/http_session.cpp
     src/json.cpp
     src/logger.cpp
     src/middleware.cpp
-        src/request/request.cpp
-        src/request/request_dispatcher.cpp
-        src/response/response.cpp
-        src/router/router.cpp
-        src/server/server.cpp
-        src/signal/signal_handler.cpp
+        src/request.cpp
+        src/dispatcher.cpp
+        src/response.cpp
+        src/router.cpp
+    src/server/server.cpp
+    src/server/listener.cpp
+        src/signal_handler.cpp
     src/util/string.cpp
-        src/websocket/websocket_session.cpp
-        src/websocket/websocket_registry.cpp
 )
 
 add_library(blaze_core STATIC ${BLAZE_SOURCES})

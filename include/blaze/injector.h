@@ -1,6 +1,6 @@
 #pragma once
 
-#include <blaze/di.h>
+#include <blaze/service.h>
 #include <blaze/exceptions.h>
 #include <blaze/request.h>
 #include <blaze/response.h>
@@ -83,6 +83,7 @@ namespace detail {
                     "Unsupported handler argument. Use Request&, Response&, Path<T>, Query<T>, Body<T>, Context<T>, or req.service<T>().");
             }
         }
+        return nullptr;
     }
 
     // Unwrap the std::any into the exact type the function needs
@@ -117,9 +118,7 @@ auto inject_and_call(Func& func, Request& req, Response& res) {
     using ArgsTuple = Traits::args_tuple;
     
     return call_with_deps_impl<Func, ArgsTuple>(
-        func, 
-        req, 
-        res, 
+        func, req, res,
         std::make_index_sequence<std::tuple_size_v<ArgsTuple>>{}
     );
 }

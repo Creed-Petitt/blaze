@@ -4,7 +4,6 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <blaze/config.h>
-#include <blaze/websocket_registry.h>
 
 #include <optional>
 #include <string>
@@ -18,6 +17,7 @@ using tcp = boost::asio::ip::tcp;
 namespace blaze
 {
     class RequestDispatcher;
+    class WebSocketHub;
 
     template <class Stream>
     class HttpSession : public std::enable_shared_from_this<HttpSession<Stream>>
@@ -26,13 +26,11 @@ namespace blaze
         beast::flat_buffer buffer_;
         std::optional<http::request_parser<http::string_body>> parser_;
         RequestDispatcher& dispatcher_;
-        WebSocketRegistry& websockets_;
         const Config& config_;
 
     public:
         HttpSession(
             RequestDispatcher& dispatcher,
-            WebSocketRegistry& websockets,
             const Config& config,
             Stream&& stream);
 
@@ -46,7 +44,6 @@ namespace blaze
     private:
         std::string get_client_ip();
         void send_error_response(http::status status, std::string_view message);
-        bool try_websocket_upgrade();
     };
 
     using Session = HttpSession<beast::tcp_stream>;

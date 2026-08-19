@@ -137,9 +137,8 @@ Organize your API into logical blocks. A controller is a class where you group r
 class ProductController {
 public:
     static void register_routes(App& app) {
-        auto products = app.group("/products");
-        products->get("/", &ProductController::list);
-        products->get("/:id", &ProductController::get_one);
+        app.get("/products", &ProductController::list);
+        app.get("/products/:id", &ProductController::get_one);
     }
 
     static Async<void> list(Response& res) {

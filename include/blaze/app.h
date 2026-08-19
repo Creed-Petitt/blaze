@@ -2,9 +2,7 @@
 
 #include <blaze/router.h>
 #include <blaze/logger.h>
-#include <blaze/websocket.h>
-#include <blaze/websocket_registry.h>
-#include <blaze/di.h>
+#include <blaze/service.h>
 #include <blaze/injector.h>
 #include <blaze/json.h>
 #include <blaze/config.h>
@@ -16,19 +14,7 @@
 namespace blaze {
 
 class Server;
-class RequestDispatcher;
-
-template<typename T>
-struct extract_async_type {
-    using type = void;
-    static constexpr bool is_async = false;
-};
-
-template<typename T>
-struct extract_async_type<boost::asio::awaitable<T>> {
-    using type = T;
-    static constexpr bool is_async = true;
-};
+class Dispatcher;
 
 /**
  * @brief The primary entry point for a Blaze application.
@@ -39,13 +25,10 @@ struct extract_async_type<boost::asio::awaitable<T>> {
 class App {
 private:
     Router router_;
-    WebSocketRegistry websockets_;
-
-    void broadcast_raw(const std::string& path, const std::string& payload);
+    const Config config_;
 
     std::vector<Middleware> middleware_;
-    const Config config_;
-    std::unique_ptr<RequestDispatcher> dispatcher_;
+    std::unique_ptr<Dispatcher> dispatcher_;
     std::unique_ptr<Server> server_;
 
 public:
@@ -59,7 +42,7 @@ public:
      * @brief Stops the application gracefully.
      * Closes listeners and notifies WebSockets.
      */
-    void stop();
+    void stop() const;
 
     /**
      * @brief Access the application configuration.
@@ -70,8 +53,8 @@ public:
     /**
      * @brief Registers a GET route.
      *
-     * The handler function supports Request&, Response&, Path<T>, Query<T>,
-     * Body<T>, and Context<T>. Use req.service<T>() for app services.
+    * Body<T>, and Context<T>. Use req.service<T>() for app services.
+      * The handler function supports Request&, Response&, Path<T>, Query<T>,
      *
      * @param path The URL path (e.g., "/users/:id").
      * @param handler The callback function or lambda.
@@ -99,17 +82,6 @@ public:
         router_.add_route("DELETE", path, wrap_handler(handler));
     }
 
-    /** @brief Registers a WebSocket route. */
-    void ws(const std::string& path, WebSocketHandlers handlers);
-    /**
-     * @brief Broadcasts a message to all connected WebSockets on a specific path.
-     * Automatically handles serialization and dead connection pruning.
-     */
-    template<typename T>
-    void broadcast(const std::string& path, const T& data) {
-        broadcast_raw(path, Json(data).dump());
-    }
-
     /** @brief Starts a background task (coroutine) in the event loop. */
     void spawn(Async<void> task) const;
 
@@ -126,9 +98,6 @@ public:
      */
     void use(const Middleware &mw);
 
-    /** @brief Creates a route group with a common prefix. */
-    RouteGroup group(const std::string& prefix);
-
     /**
      * @brief Auto-registers multiple controllers.
      * Requires static void register_routes(App& app) in each controller.
@@ -141,14 +110,12 @@ public:
     /** @brief Access the internal router. */
     Router& get_router();
 
-    WebSocketRegistry& websockets() { return websockets_; }
-
 private:
     // Takes lambda and converts it into a standard (Request, Response) handler
     template<typename Func>
     Handler wrap_handler(Func handler) {
         using ReturnType = function_traits<Func>::return_type;
-        using AsyncInfo = extract_async_type<ReturnType>;
+        using AsyncInfo = async_result<ReturnType>;
 
         return [this, handler](Request& req, Response& res) -> Async<void> {
             if constexpr (AsyncInfo::is_async && !std::is_void_v<typename AsyncInfo::type>) {

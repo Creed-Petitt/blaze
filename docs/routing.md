@@ -213,27 +213,7 @@ app.post("/users", [](Body<User> user, Response& res) -> Async<void> {
 
 ---
 
-## 6. Route Groups
-
-Organize your API into logical blocks or versions using `group()`. You can also **nest** groups for granular versioning.
-
-```cpp
-// 1. Create a top-level group
-auto api = app.group("/api");
-
-// 2. Create a nested group (Result: /api/v1)
-auto v1 = api.group("/v1");
-
-// 3. Register routes (Result: /api/v1/status)
-v1.get("/status", [](Response& res) -> Async<void> {
-    res.send("Online");
-    co_return;
-});
-```
-
----
-
-## 7. The Request Object
+## 6. The Request Object
 
 When you need headers, cookies, request context, or app services, request `Request&` directly.
 
@@ -261,13 +241,13 @@ app.get("/manual", [](Request& req, Response& res) -> Async<void> {
 
 ---
 
-## 8. API Documentation
+## 7. API Documentation
 
 Blaze no longer registers OpenAPI or Swagger routes in the core server. Keep API documentation as an external `openapi.yaml`, generated artifact, or a separate extension so routing stays focused on request dispatch.
 
 ---
 
-## 9. Error Handling
+## 8. Error Handling
 
 Blaze uses exceptions to handle HTTP errors. If you throw an `HttpError` (or any of its children) inside a handler, Blaze will automatically catch it and return the correct status code and a JSON error message to the client.
 

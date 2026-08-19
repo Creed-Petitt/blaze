@@ -1,6 +1,5 @@
-#include "http_session.h"
-#include "../request/request_dispatcher.h"
-#include "../websocket/websocket_session.h"
+#include "http/http_session.h"
+#include "request/request_dispatcher.h"
 
 #include <blaze/exceptions.h>
 #include <blaze/request.h>
@@ -46,13 +45,12 @@ boost::asio::awaitable<void> write_error(
     Stream& stream,
     const http::status status,
     const std::string_view message,
-    const unsigned version = 11
-) {
-    http::response<http::string_body> res{status, version};
-    res.set(http::field::content_type, "text/plain");
-    res.body() = std::string(message);
-    res.prepare_payload();
-    co_await http::async_write(stream, res, net::use_awaitable);
+    const unsigned version = 11) {
+        http::response<http::string_body> res{status, version};
+        res.set(http::field::content_type, "text/plain");
+        res.body() = std::string(message);
+        res.prepare_payload();
+        co_await http::async_write(stream, res, net::use_awaitable);
 }
 
 template <typename Stream>
@@ -112,8 +110,8 @@ boost::asio::awaitable<void> handle_session(
     RequestDispatcher& dispatcher,
     Request req,
     const std::string& client_ip,
-    bool keep_alive
-) {
+    bool keep_alive)
+{
     Response blaze_res;
     bool error_occurred = false;
     std::optional<std::pair<http::status, std::string>> pending_error;
@@ -160,12 +158,10 @@ boost::asio::awaitable<void> handle_session(
 template<class Stream>
 HttpSession<Stream>::HttpSession(
     RequestDispatcher& dispatcher,
-    WebSocketRegistry& websockets,
     const Config& config,
     Stream&& stream)
     : stream_(std::move(stream)),
       dispatcher_(dispatcher),
-      websockets_(websockets),
       config_(config) {}
 
 template<class Stream>
@@ -211,10 +207,6 @@ void HttpSession<Stream>::on_read(const beast::error_code& ec, std::size_t bytes
         return;
     }
 
-    if (try_websocket_upgrade()) {
-        return;
-    }
-
     auto beast_req = parser_->release();
     const bool keep_alive = beast_req.keep_alive();
     std::string client_ip = get_client_ip();
@@ -237,7 +229,7 @@ template<class Stream>
 void HttpSession<Stream>::on_write(
     const bool keep_alive,
     const beast::error_code& ec,
-    std::size_t bytes_transferred) {
+    const std::size_t bytes_transferred) {
 
         boost::ignore_unused(bytes_transferred);
         if (ec) return;
@@ -266,7 +258,7 @@ std::string HttpSession<Stream>::get_client_ip() {
 }
 
 template<class Stream>
-void HttpSession<Stream>::send_error_response(http::status status, std::string_view message) {
+void HttpSession<Stream>::send_error_response(http::status status, const std::string_view message) {
     auto res = std::make_shared<http::response<http::string_body>>(status, parser_->get().version());
     res->set(http::field::content_type, "text/plain");
     res->body() = std::string(message);
@@ -275,22 +267,6 @@ void HttpSession<Stream>::send_error_response(http::status status, std::string_v
     http::async_write(stream_, *res, [self = this->shared_from_this(), res](beast::error_code, std::size_t) {
         self->do_shutdown();
     });
-}
-
-template<class Stream>
-bool HttpSession<Stream>::try_websocket_upgrade() {
-    if (websocket::is_upgrade(parser_->get())) {
-        std::string target(parser_->get().target());
-        const WebSocketHandlers* handlers = websockets_.find_handler(target);
-
-        if (handlers) {
-            std::make_shared<WebSocketSession<Stream>>(
-                std::move(stream_), *handlers, websockets_, target
-            )->run(parser_->release());
-            return true;
-        }
-    }
-    return false;
 }
 
 template class HttpSession<beast::tcp_stream>;

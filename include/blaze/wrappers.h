@@ -19,7 +19,6 @@ struct Wrapper {
     explicit operator T&() { return value; }
     explicit operator const T&() const { return value; }
 
-    // Operators for seamless usage
     template<typename U> bool operator==(const U& other) const { return value == other; }
     template<typename U> bool operator!=(const U& other) const { return value != other; }
     template<typename U> auto operator+(const U& other) const { return value + other; }
