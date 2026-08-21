@@ -1,19 +1,11 @@
 #include <blaze/router.h>
 #include <blaze/util/string.h>
 
-#include <algorithm>
 #include <utility>
 
 namespace blaze {
 
 namespace {
-
-struct RouteEntry {
-    std::string method;
-    std::string path;
-    std::vector<std::string> segments;
-    Handler handler;
-};
 
 std::string_view path_without_query(std::string_view target) {
     const size_t query_pos = target.find('?');
@@ -95,22 +87,10 @@ bool match_segments(
 }
 
 } // namespace
-
-struct Router::Impl {
-    std::vector<RouteEntry> routes;
-};
-
-Router::Router() : impl_(std::make_unique<Impl>()) {}
-
-Router::~Router() = default;
-
-Router::Router(Router&&) noexcept = default;
-
-Router& Router::operator=(Router&&) noexcept = default;
-
-void Router::add_route(const std::string_view method, const std::string& path, Handler handler) const
+ 
+void Router::add_route(const std::string_view method, const std::string& path, Handler handler)
 {
-    impl_->routes.push_back({
+    routes_.push_back({
         std::string(method),
         path,
         split(path),
@@ -125,7 +105,7 @@ std::optional<MatchedRoute> Router::match(
     const auto request_path = path_without_query(path);
     const auto request_segments = split_view(request_path);
 
-    for (const auto& route : impl_->routes) {
+    for (const auto& route : routes_) {
         if (route.method != method) continue;
         if (route.segments.size() != request_segments.size()) continue;
 

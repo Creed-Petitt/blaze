@@ -1,7 +1,6 @@
 #include <blaze/middleware.h>
 #include <blaze/util/string.h>
 #include <filesystem>
-#include <fstream>
 #include <shared_mutex>
 
 namespace blaze::middleware {
@@ -129,7 +128,7 @@ Middleware static_files(const std::string& root_dir, bool serve_index) {
         }
 
         res.set_header("Content-Type", content_type);
-        res.file(file_real_path); // ZERO-COPY STREAMING!
+        res.file(file_real_path);
         co_return;
     };
 }

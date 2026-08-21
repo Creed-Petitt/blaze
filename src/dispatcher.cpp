@@ -8,8 +8,8 @@
 namespace blaze {
 
 Dispatcher::Dispatcher(
-    Router& router,
-    std::vector<Middleware>& middleware,
+    const Router& router,
+    const std::vector<Middleware>& middleware,
     const Config& config)
         : router_(router), middleware_(middleware), config_(config) {}
 
@@ -18,7 +18,7 @@ Async<void> Dispatcher::run_middleware(
     Request& req,
     Response& res,
     const Handler& final_handler
-) {
+) const {
     if (index < middleware_.size()) {
         const auto& mw = middleware_[index];
         co_await mw(req, res, [this, index, &req, &res, &final_handler]() -> Async<void> {
@@ -29,7 +29,7 @@ Async<void> Dispatcher::run_middleware(
     }
 }
 
-Async<Response> Dispatcher::handle(Request& req, const std::string& client_ip, const bool keep_alive) {
+Async<Response> Dispatcher::handle(Request& req, const std::string& client_ip, const bool keep_alive) const {
     const auto start_time = std::chrono::steady_clock::now();
     Response res;
     int status_code{};

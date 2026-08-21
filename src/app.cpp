@@ -1,6 +1,5 @@
 #include <blaze/app.h>
 
-#include <chrono>
 #include <memory>
 #include <iostream>
 
@@ -22,13 +21,12 @@ App::App(Config config)
 
 App::~App() = default;
 
-
-
 void App::spawn(Async<void> task) const {
     server_->spawn(std::move(task));
 }
 
-Router& App::get_router() {
+Router& App::get_router() 
+{
     return router_;
 }
 
@@ -37,12 +35,12 @@ void App::stop() const
     server_->stop();
 }
 
-void App::listen(const int port, const int num_threads) const {
+void App::listen(const int port) const {
     Logger::instance().configure(config_.log_path);
     Logger::instance().set_level(config_.log_level);
 
     try {
-        server_->listen(port, num_threads);
+        server_->listen(port, config_.threads);
     } catch (const std::exception& e) {
         std::cerr << "[Blaze] FATAL: Could not start listener: " << e.what() << std::endl;
         throw;

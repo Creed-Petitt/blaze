@@ -8,7 +8,6 @@
 #include <thread>
 #include <atomic>
 #include <fstream>
-#include <sstream>
 
 namespace blaze {
 
@@ -25,7 +24,7 @@ private:
     bool use_stdout_{false};
     std::atomic<bool> enabled_{true};
     std::atomic<LogLevel> level_{LogLevel::INFO};
-    
+
     // Config Mutex (protects file_stream_, use_stdout_, enabled_, level_)
     std::mutex config_mutex_;
     std::string log_path_;
@@ -44,7 +43,7 @@ private:
 
 public:
     ~Logger();
-    
+
     // Global Access Point
     static Logger& instance();
 
@@ -62,7 +61,7 @@ public:
         long long response_time_ms);
 
     void log_error(const std::string& message);
-    
+
     void debug(const std::string& msg) {
         log(LogLevel::DEBUG, msg);
     }

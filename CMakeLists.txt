@@ -53,7 +53,7 @@ set(BLAZE_SOURCES
 add_library(blaze_core STATIC ${BLAZE_SOURCES})
 add_library(blaze::core ALIAS blaze_core)
 set_target_properties(blaze_core PROPERTIES EXPORT_NAME core)
-target_compile_features(blaze_core PUBLIC cxx_std_20)
+target_compile_features(blaze_core PUBLIC cxx_std_23)
 
 target_include_directories(blaze_core BEFORE PUBLIC
     $<BUILD_INTERFACE:${BLAZE_BOOST_SOURCE_DIR}>

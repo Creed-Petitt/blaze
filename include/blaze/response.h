@@ -4,7 +4,6 @@
 #include <blaze/json.h>
 
 #include <optional>
-#include <type_traits>
 #include <string>
 #include <string_view>
 #include <initializer_list>

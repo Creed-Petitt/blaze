@@ -4,7 +4,6 @@
 #include <blaze/json.h>
 
 #include <any>
-#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>

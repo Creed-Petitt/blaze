@@ -3,7 +3,6 @@
 #include <boost/asio.hpp>
 
 #include <functional>
-#include <memory>
 
 namespace net = boost::asio;
 

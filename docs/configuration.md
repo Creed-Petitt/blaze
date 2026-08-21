@@ -19,7 +19,7 @@ int main() {
     app.server_name("Blaze-API/1.0")    // Custom 'Server' HTTP header
        .max_body_size(10 * 1024 * 1024) // 10MB limit
        .timeout(30)                     // 30s request timeout
-       .num_threads(4);                 // Event loop thread count
+       .threads(4);                 // Event loop thread count
 
     app.listen(8080);
 }

@@ -1,4 +1,5 @@
 #include "listener.h"
+#include "boost/asio/strand.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -10,7 +11,7 @@ Listener::Listener(
     net::io_context& ioc,
     const tcp::endpoint& endpoint,
     AcceptHandler on_accept)
-    : ioc_(ioc), acceptor_(ioc), on_accept_(std::move(on_accept))
+    : ioc_(ioc), acceptor_(net::make_strand(ioc)), on_accept_(std::move(on_accept))
 {
     beast::error_code ec;
 

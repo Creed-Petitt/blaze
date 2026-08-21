@@ -26,7 +26,6 @@ class App {
 private:
     Router router_;
     const Config config_;
-
     std::vector<Middleware> middleware_;
     std::unique_ptr<Dispatcher> dispatcher_;
     std::unique_ptr<Server> server_;
@@ -91,7 +90,7 @@ public:
      * @param port The port to listen on.
      * @param num_threads Number of threads for the event loop (0 = auto-detect).
      */
-    void listen(int port, int num_threads = 0) const;
+    void listen(int port) const;
 
     /**
      * @brief Registers global middleware.

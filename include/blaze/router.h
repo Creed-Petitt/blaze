@@ -2,12 +2,11 @@
 
 #include <blaze/handler.h>
 
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 namespace blaze {
 
@@ -19,22 +18,30 @@ struct MatchedRoute {
 
 class Router {
 public:
-    Router();
-    ~Router();
+    struct RouteEntry {
+        std::string method;
+        std::string path;
+        std::vector<std::string> segments;
+        Handler handler;
+    };
 
-    Router(Router&&) noexcept;
-    Router& operator=(Router&&) noexcept;
+    Router() = default;
+    ~Router() = default;
+
+    Router(Router&&) noexcept = default;
+    Router& operator=(Router&&) noexcept = default;
 
     Router(const Router&) = delete;
     Router& operator=(const Router&) = delete;
 
-    void add_route(std::string_view method, const std::string& path, Handler handler) const;
+    void add_route(std::string_view method, const std::string& path, Handler handler);
 
     std::optional<MatchedRoute> match(std::string_view method, std::string_view path) const;
 
+    const std::vector<RouteEntry>& routes() const noexcept { return routes_; }
+
 private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
+    std::vector<RouteEntry> routes_;
 };
 
 } // namespace blaze

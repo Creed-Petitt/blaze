@@ -17,7 +17,7 @@ bool header_name_equal(const std::string_view lhs, const std::string_view rhs) {
            });
 }
 
-std::string_view reason_phrase(const int status) {
+std::string_view http_to_msg(const int status) {
     switch (status) {
     case 200: return "OK";
     case 201: return "Created";
@@ -99,7 +99,7 @@ Response& Response::json_raw(const std::string_view body) {
 
 std::string Response::build_response() const {
     std::ostringstream oss;
-    oss << "HTTP/1.1 " << status_code_ << ' ' << reason_phrase(status_code_) << "\r\n";
+    oss << "HTTP/1.1 " << status_code_ << ' ' << http_to_msg(status_code_) << "\r\n";
     for (const auto& [name, value] : headers_) {
         oss << name << ": " << value << "\r\n";
     }

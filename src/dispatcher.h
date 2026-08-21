@@ -11,17 +11,17 @@
 namespace blaze {
 
 class Dispatcher {
-    Router& router_;
-    std::vector<Middleware>& middleware_;
+    const Router& router_;
+    const std::vector<Middleware>& middleware_;
     const Config& config_;
 
 public:
-    Dispatcher(Router& router, std::vector<Middleware>& middleware, const Config& config);
+    Dispatcher(const Router& router, const std::vector<Middleware>& middleware, const Config& config);
 
-    Async<Response> handle(Request& req, const std::string& client_ip, bool keep_alive);
+    Async<Response> handle(Request& req, const std::string& client_ip, bool keep_alive) const ;
 
 private:
-    Async<void> run_middleware(size_t index, Request& req, Response& res, const Handler& final_handler);
+    Async<void> run_middleware(size_t index, Request& req, Response& res, const Handler& final_handler) const;
 };
 
 } // namespace blaze
