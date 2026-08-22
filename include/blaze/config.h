@@ -15,7 +15,7 @@ struct Config {
     std::chrono::seconds timeout_seconds{30};
     std::chrono::seconds shutdown_timeout{30};
     std::string log_path{"stdout"};
-    LogLevel log_level{LogLevel ::INFO};
+    LogLevel log_level{LogLevel::INFO};
     std::string server_name{"Blaze/1.0"};
 };
 

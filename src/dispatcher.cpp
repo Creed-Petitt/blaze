@@ -10,15 +10,13 @@ namespace blaze {
 Dispatcher::Dispatcher(
     const Router& router,
     const std::vector<Middleware>& middleware,
-    const Config& config)
-        : router_(router), middleware_(middleware), config_(config) {}
+    const Config& config) : router_(router), middleware_(middleware), config_(config) {}
 
 Async<void> Dispatcher::run_middleware(
-    const size_t index,
+    size_t index,
     Request& req,
     Response& res,
-    const Handler& final_handler
-) const {
+    const Handler& final_handler) const {
     if (index < middleware_.size()) {
         const auto& mw = middleware_[index];
         co_await mw(req, res, [this, index, &req, &res, &final_handler]() -> Async<void> {

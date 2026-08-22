@@ -2,7 +2,6 @@
 
 #include <blaze/router.h>
 #include <blaze/logger.h>
-#include <blaze/service.h>
 #include <blaze/injector.h>
 #include <blaze/json.h>
 #include <blaze/config.h>
@@ -10,11 +9,22 @@
 #include <functional>
 #include <vector>
 #include <memory>
+#include <stdexcept>
 
 namespace blaze {
 
 class Server;
 class Dispatcher;
+
+/**
+ * @brief Represents the lifecycle state of a Blaze application.
+ */
+enum class AppState {
+    Configuring,
+    Running,
+    Stopping,
+    Stopped
+};
 
 /**
  * @brief The primary entry point for a Blaze application.
@@ -29,6 +39,7 @@ private:
     std::vector<Middleware> middleware_;
     std::unique_ptr<Dispatcher> dispatcher_;
     std::unique_ptr<Server> server_;
+    mutable AppState state_{AppState::Configuring};
 
 public:
     App();
@@ -38,10 +49,15 @@ public:
     ~App();
 
     /**
-     * @brief Stops the application gracefully.
-     * Closes listeners and notifies WebSockets.
+     * @brief Stops the application.
+     * Closes the listener and stops the event loop.
      */
     void stop() const;
+
+    /**
+     * @brief Access the current lifecycle state.
+     */
+    AppState state() const { return state_; }
 
     /**
      * @brief Access the application configuration.
@@ -52,32 +68,36 @@ public:
     /**
      * @brief Registers a GET route.
      *
-    * Body<T>, and Context<T>. Use req.service<T>() for app services.
-      * The handler function supports Request&, Response&, Path<T>, Query<T>,
+     * Body<T>, and Context<T>.
+     * The handler function supports Request&, Response&, Path<T>, Query<T>,
      *
      * @param path The URL path (e.g., "/users/:id").
      * @param handler The callback function or lambda.
      */
     template<typename Func>
     void get(const std::string& path, Func handler) {
+        ensure_configuring("Cannot register GET route");
         router_.add_route("GET", path, wrap_handler(handler));
     }
 
     /** @brief Registers a POST route. */
     template<typename Func>
     void post(const std::string& path, Func handler) {
+        ensure_configuring("Cannot register POST route");
         router_.add_route("POST", path, wrap_handler(handler));
     }
 
     /** @brief Registers a PUT route. */
     template<typename Func>
     void put(const std::string& path, Func handler) {
+        ensure_configuring("Cannot register PUT route");
         router_.add_route("PUT", path, wrap_handler(handler));
     }
 
     /** @brief Registers a DELETE route. */
     template<typename Func>
     void del(const std::string& path, Func handler) {
+        ensure_configuring("Cannot register DELETE route");
         router_.add_route("DELETE", path, wrap_handler(handler));
     }
 
@@ -103,13 +123,24 @@ public:
      */
     template<typename... Controllers>
     void register_controllers() {
+        ensure_configuring("Cannot register controllers");
         (Controllers::register_routes(*this), ...);
     }
 
     /** @brief Access the internal router. */
-    Router& get_router();
+    const Router& get_router() const;
 
 private:
+    void ensure_configuring(const std::string& action) const {
+        if (state_ != AppState::Configuring) {
+            throw std::logic_error(action + ": cannot mutate app once it has started listening.");
+        }
+    }
+
+    void check_configuring(const std::string& action) const {
+        ensure_configuring(action);
+    }
+
     // Takes lambda and converts it into a standard (Request, Response) handler
     template<typename Func>
     Handler wrap_handler(Func handler) {

@@ -17,11 +17,11 @@ template<class Stream>
 struct StreamTraits {
     static void shutdown(Stream& stream) {
         beast::error_code ec;
-        stream.socket().shutdown(tcp::socket::shutdown_send, ec);
+        beast::get_lowest_layer(stream).socket().shutdown(tcp::socket::shutdown_send, ec);
     }
 
     static tcp::socket& get_socket(Stream& stream) {
-        return stream.socket();
+        return beast::get_lowest_layer(stream).socket();
     }
 };
 
@@ -110,7 +110,8 @@ boost::asio::awaitable<void> handle_session(
     Dispatcher& dispatcher,
     Request req,
     const std::string& client_ip,
-    bool keep_alive)
+    bool keep_alive,
+    const unsigned version)
 {
     Response blaze_res;
     bool error_occurred = false;
@@ -134,20 +135,20 @@ boost::asio::awaitable<void> handle_session(
 
     if (pending_error) {
         try {
-            co_await write_error(stream, pending_error->first, pending_error->second, 11);
+            co_await write_error(stream, pending_error->first, pending_error->second, version);
         } catch (...) {
             error_occurred = true;
         }
     } else {
         try {
-            co_await write_response(stream, blaze_res, keep_alive, 11);
+            co_await write_response(stream, blaze_res, keep_alive, version);
         } catch (...) {
             error_occurred = true;
         }
     }
 
     if (error_occurred || !keep_alive) {
-        StreamTraits<Stream>::shutdown(stream);
+        self->do_shutdown();
     } else {
         self->do_read();
     }
@@ -199,16 +200,18 @@ void HttpSession<Stream>::on_read(const beast::error_code& ec, std::size_t bytes
             return;
         }
 
-        if (ec != net::error::connection_reset && ec != net::error::eof && ec != beast::error::timeout) {
+        if (ec != net::error::connection_reset && ec != net::error::eof && ec != beast::error::timeout && ec != net::error::operation_aborted) {
             std::cerr << "Request Parse Error: " << ec.message() << "\n";
             send_error_response(http::status::bad_request, "Bad Request");
             return;
         }
+        do_shutdown();
         return;
     }
 
     auto beast_req = parser_->release();
     const bool keep_alive = beast_req.keep_alive();
+    const unsigned version = beast_req.version();
     std::string client_ip = get_client_ip();
 
     boost::asio::co_spawn(
@@ -219,33 +222,18 @@ void HttpSession<Stream>::on_read(const beast::error_code& ec, std::size_t bytes
             dispatcher_,
             make_request(std::move(beast_req)),
             client_ip,
-            keep_alive
+            keep_alive,
+            version
         ),
         boost::asio::detached
     );
 }
 
 template<class Stream>
-void HttpSession<Stream>::on_write(
-    const bool keep_alive,
-    const beast::error_code& ec,
-    const std::size_t bytes_transferred) {
-
-        boost::ignore_unused(bytes_transferred);
-        if (ec) return;
-        if (!keep_alive) {
-            do_shutdown();
-            return;
-        }
-    do_read();
-}
-
-template<class Stream>
 void HttpSession<Stream>::do_shutdown() {
     beast::get_lowest_layer(stream_).
         expires_after(std::chrono::seconds(30));
-    beast::error_code ec;
-    stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
+    StreamTraits<Stream>::shutdown(stream_);
 }
 
 template<class Stream>
@@ -259,7 +247,8 @@ std::string HttpSession<Stream>::get_client_ip() {
 
 template<class Stream>
 void HttpSession<Stream>::send_error_response(http::status status, const std::string_view message) {
-    auto res = std::make_shared<http::response<http::string_body>>(status, parser_->get().version());
+    const unsigned version = parser_ ? parser_->get().version() : 11;
+    auto res = std::make_shared<http::response<http::string_body>>(status, version);
     res->set(http::field::content_type, "text/plain");
     res->body() = std::string(message);
     res->prepare_payload();

@@ -1,9 +1,10 @@
 #pragma once
 
+#include <blaze/config.h>
+
 #include <boost/asio.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
-#include <blaze/config.h>
 
 #include <optional>
 #include <string>
@@ -19,8 +20,7 @@ namespace blaze
     class Dispatcher;
 
     template <class Stream>
-    class HttpSession : public std::enable_shared_from_this<HttpSession<Stream>>
-    {
+    class HttpSession : public std::enable_shared_from_this<HttpSession<Stream>> {
         Stream stream_;
         beast::flat_buffer buffer_;
         std::optional<http::request_parser<http::string_body>> parser_;
@@ -36,7 +36,6 @@ namespace blaze
         void run();
         void do_read();
         void on_read(const beast::error_code& ec, std::size_t bytes_transferred);
-        void on_write(bool keep_alive, const beast::error_code& ec, std::size_t bytes_transferred);
 
         void do_shutdown();
 

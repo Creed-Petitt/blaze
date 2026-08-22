@@ -5,7 +5,8 @@
 #include "../signal_handler.h"
 #include <blaze/logger.h>
 
-#include <iostream>
+#include <cstdio>
+#include <stdexcept>
 #include <utility>
 
 namespace blaze {
@@ -26,32 +27,63 @@ Server::~Server() {
 }
 
 void Server::listen(const int port, int num_threads) {
-    num_threads = resolve_thread_count(num_threads, config_.threads);
+    ServerState expected = ServerState::Stopped;
+    if (!state_.compare_exchange_strong(expected, ServerState::Starting)) {
+        throw std::logic_error("Server::listen: Server is already running or stopping.");
+    }
 
-    const auto address = net::ip::make_address("0.0.0.0");
-    const auto endpoint = tcp::endpoint{address, static_cast<unsigned short>(port)};
+    try {
+        num_threads = resolve_thread_count(num_threads, config_.threads);
 
-    listener_ = std::make_shared<Listener>(
-        ioc_,
-        endpoint,
-        [this](tcp::socket socket) {
-            std::make_shared<Session>(
-                dispatcher_,
-                config_,
-                beast::tcp_stream(std::move(socket)))->run();
+        const auto address = net::ip::make_address("0.0.0.0");
+        const auto endpoint = tcp::endpoint{address, static_cast<unsigned short>(port)};
+
+        listener_ = std::make_shared<Listener>(
+            ioc_,
+            endpoint,
+            [this](tcp::socket socket) {
+                if (state_.load() != ServerState::Running) {
+                    boost::system::error_code ec;
+                    socket.close(ec);
+                    return;
+                }
+                auto session = std::make_shared<Session>(
+                    dispatcher_,
+                    config_,
+                    beast::tcp_stream(std::move(socket)));
+                session->run();
+            });
+        listener_->run();
+
+        signals_ = std::make_unique<SignalHandler>(ioc_, [this](const int signal_number) {
+            std::printf("[Blaze] Received signal %d, stopping...\n", signal_number);
+            stop();
         });
-    listener_->run();
+        signals_->start();
 
-    signals_ = std::make_unique<SignalHandler>(ioc_, [this](const int signal_number) {
-        std::cout << "[Blaze] Received signal " << signal_number << ", stopping..." << std::endl;
-        stop();
-    });
-    signals_->start();
+        expected = ServerState::Starting;
+        if (!state_.compare_exchange_strong(expected, ServerState::Running)) {
+            listener_->stop();
+            return;
+        }
 
-    run(num_threads);
+        run(num_threads);
+    } catch (...) {
+        state_.store(ServerState::Stopped);
+        throw;
+    }
 }
 
 void Server::stop() {
+    ServerState expected = ServerState::Running;
+    if (!state_.compare_exchange_strong(expected, ServerState::Stopping)) {
+        if (state_.load() == ServerState::Starting) {
+            state_.store(ServerState::Stopping);
+        } else {
+            return;
+        }
+    }
+
     if (signals_) {
         signals_->cancel();
     }
@@ -59,6 +91,7 @@ void Server::stop() {
         listener_->stop();
     }
     ioc_.stop();
+    state_.store(ServerState::Stopped);
 }
 
 void Server::spawn(Async<void> task) {
@@ -95,6 +128,7 @@ void Server::run(const int num_threads) {
         }
     }
     threads_.clear();
+    state_.store(ServerState::Stopped);
 }
 
 } // namespace blaze

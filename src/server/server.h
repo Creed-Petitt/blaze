@@ -5,6 +5,7 @@
 
 #include <boost/asio.hpp>
 
+#include <atomic>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -17,6 +18,13 @@ class Listener;
 class Dispatcher;
 class SignalHandler;
 
+enum class ServerState {
+    Stopped,
+    Starting,
+    Running,
+    Stopping
+};
+
 class Server {
     Dispatcher& dispatcher_;
     const Config& config_;
@@ -24,6 +32,8 @@ class Server {
     std::shared_ptr<Listener> listener_;
     std::unique_ptr<SignalHandler> signals_;
     std::vector<std::thread> threads_;
+
+    std::atomic<ServerState> state_{ServerState::Stopped};
 
 public:
     Server(
@@ -39,6 +49,8 @@ public:
     void stop();
     void spawn(Async<void> task);
     net::io_context& engine() { return ioc_; }
+
+    ServerState state() const { return state_.load(); }
 
 private:
     static int resolve_thread_count(int requested, int configured);
