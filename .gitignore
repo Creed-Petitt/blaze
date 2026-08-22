@@ -19,8 +19,8 @@ Thumbs.db
 /json.hpp
 *.pem
 
-/blaze-cypto/
-/cli/blaze-linux-amd64
-/cli/blaze-darwin-arm64
-/cli/blaze-darwin-amd64
-/cli/blaze-linux-arm64
+
+.cache/neocmakelsp/tree_cmake_map_cache.json
+.cache/neocmakelsp/project_completions_cache.json
+.cache/neocmakelsp/tree_map_cache.json
+.cache/neocmakelsp/project_jumpitems_cache.json

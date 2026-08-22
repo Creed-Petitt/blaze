@@ -22,7 +22,7 @@ int main() {
     auto cfg = ConfigBuilder()
         .server_name("HelloWorldApp/1.0")
         .log_level(LogLevel::DEBUG)
-        .threads(4)
+        .threads(8)
         .log_path("/dev/null")
         .build();
 
