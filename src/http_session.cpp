@@ -56,7 +56,7 @@ boost::asio::awaitable<void> write_error(
 template <typename Stream>
 boost::asio::awaitable<void> write_response(
     Stream& stream,
-    const Response& blaze_res,
+    Response& blaze_res,
     const bool keep_alive,
     const unsigned version = 11
 ) {
@@ -97,7 +97,7 @@ boost::asio::awaitable<void> write_response(
         res.set(name, value);
     }
 
-    res.body() = blaze_res.get_body();
+    res.body() = blaze_res.take_body();
     res.keep_alive(keep_alive);
     res.prepare_payload();
     co_await http::async_write(stream, res, net::use_awaitable);
@@ -109,7 +109,7 @@ boost::asio::awaitable<void> handle_session(
     SessionPtr self,
     Dispatcher& dispatcher,
     Request req,
-    const std::string& client_ip,
+    const std::string_view client_ip,
     bool keep_alive,
     const unsigned version)
 {
@@ -163,7 +163,8 @@ HttpSession<Stream>::HttpSession(
     Stream&& stream)
     : stream_(std::move(stream)),
       dispatcher_(dispatcher),
-      config_(config) {}
+      config_(config),
+      client_ip_(get_client_ip()) {}
 
 template<class Stream>
 void HttpSession<Stream>::run() {
@@ -212,7 +213,6 @@ void HttpSession<Stream>::on_read(const beast::error_code& ec, std::size_t bytes
     auto beast_req = parser_->release();
     const bool keep_alive = beast_req.keep_alive();
     const unsigned version = beast_req.version();
-    std::string client_ip = get_client_ip();
 
     boost::asio::co_spawn(
         stream_.get_executor(),
@@ -221,7 +221,7 @@ void HttpSession<Stream>::on_read(const beast::error_code& ec, std::size_t bytes
             this->shared_from_this(),
             dispatcher_,
             make_request(std::move(beast_req)),
-            client_ip,
+            std::string_view(client_ip_),
             keep_alive,
             version
         ),

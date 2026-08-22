@@ -17,14 +17,14 @@ class Response {
 public:
     // Status and headers
     Response& status(int code);
-    Response& header(const std::string& key, const std::string& value);
-    Response& set_header(const std::string& key, const std::string& value);
-    Response& add_header(const std::string& key, const std::string& value);
+    Response& header(std::string_view key, std::string_view value);
+    Response& set_header(std::string_view key, std::string_view value);
+    Response& add_header(std::string_view key, std::string_view value);
     Response& headers(std::initializer_list<std::pair<std::string, std::string>> headers);
 
     // Payload / Body
-    Response& send(const std::string& text);
-    Response& file(const std::string& path);
+    Response& send(std::string text);
+    Response& file(std::string path);
     Response& json(const Json& data);
     template<typename T>
     Response& json(const T& data) {
@@ -36,6 +36,7 @@ public:
     // Getters / Inspection
     int get_status() const;
     const std::string& get_body() const;
+    std::string take_body();
     const std::vector<Header>& get_headers() const;
     bool is_file() const;
     const std::string& get_file_path() const;

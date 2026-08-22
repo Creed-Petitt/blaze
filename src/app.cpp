@@ -30,7 +30,7 @@ const Router& App::get_router() const {
     return router_;
 }
 
-void App::stop() const {
+void App::stop() {
     if (state_ == AppState::Running) {
         state_ = AppState::Stopping;
         server_->stop();
@@ -40,7 +40,7 @@ void App::stop() const {
     }
 }
 
-void App::listen(const int port) const {
+void App::listen(const int port) {
     if (state_ != AppState::Configuring) {
         throw std::logic_error("App::listen: App has already started listening or was stopped.");
     }

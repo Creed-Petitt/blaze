@@ -1,5 +1,6 @@
 #include <blaze/json.h>
 #include <blaze/exceptions.h>
+#include <blaze/util/string.h>
 
 #include <boost/json/src.hpp>
 
@@ -84,14 +85,11 @@ int Json::as<int>() const {
     const auto s = as<std::string>();
     if (s.empty()) return 0;
     
-    try { 
-        size_t pos;
-        const int val = std::stoi(s, &pos);
-        if (pos != s.size()) throw std::invalid_argument("trailing characters");
-        return val;
-    } catch (...) { 
-        throw BadRequest("Invalid integer format: " + s); 
+    auto parsed = util::parse_value<int>(s);
+    if (!parsed) {
+        throw BadRequest(parsed.error().message);
     }
+    return *parsed;
 }
 
 template<>

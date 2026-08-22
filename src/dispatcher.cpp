@@ -4,8 +4,23 @@
 #include <blaze/logger.h>
 
 #include <chrono>
+#include <utility>
 
 namespace blaze {
+
+namespace {
+
+Async<void> not_found_handler(Request&, Response& resp) {
+    resp.status(404).send("404 Not Found\n");
+    co_return;
+}
+
+const Handler& not_found() {
+    static const Handler handler = not_found_handler;
+    return handler;
+}
+
+} // namespace
 
 Dispatcher::Dispatcher(
     const Router& router,
@@ -27,28 +42,27 @@ Async<void> Dispatcher::run_middleware(
     }
 }
 
-Async<Response> Dispatcher::handle(Request& req, const std::string& client_ip, const bool keep_alive) const {
+Async<Response> Dispatcher::handle(Request& req, const std::string_view client_ip, const bool keep_alive) const {
     const auto start_time = std::chrono::steady_clock::now();
     Response res;
     int status_code{};
 
     try {
-        req.set("client_ip", client_ip);
-        const auto match = router_.match(req.method, req.path);
+        if (config_.expose_client_ip) {
+            req.set("client_ip", std::string(client_ip));
+        }
+        auto match = router_.match(req.method, req.path);
 
-        Handler handler;
+        const Handler* handler = nullptr;
         if (match.has_value()) {
-            req.params = match->params;
-            req.path_values = match->path_values;
+            req.params = std::move(match->params);
+            req.path_values = std::move(match->path_values);
             handler = match->handler;
         } else {
-            handler = [](Request&, Response& resp) -> Async<void> {
-                resp.status(404).send("404 Not Found\n");
-                co_return;
-            };
+            handler = &not_found();
         }
 
-        co_await run_middleware(0, req, res, handler);
+        co_await run_middleware(0, req, res, *handler);
         status_code = res.get_status();
     } catch (const HttpError& e) {
         res.status(e.status()).json({

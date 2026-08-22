@@ -35,6 +35,15 @@ void try_validate(T& model) {
 
 namespace detail {
 
+    template<typename T>
+    T parse_or_bad_request(std::string_view value) {
+        auto parsed = util::parse_value<T>(value);
+        if (!parsed) {
+            throw HttpError(400, parsed.error().message);
+        }
+        return std::move(*parsed);
+    }
+
     // Resolve a single argument into a std::any (shared_ptr<T>)
     template<typename ArgType, size_t Is, typename Tuple>
     std::any resolve_arg(Request& req, Response& res) {
@@ -46,12 +55,16 @@ namespace detail {
             using InnerT = PureType::value_type;
             static constexpr size_t idx = count_instances_before<Path, Is, Tuple>::count();
             if (idx < req.path_values.size()) {
-                return std::make_shared<PureType>(convert_string<InnerT>(req.path_values[idx]));
+                return std::make_shared<PureType>(parse_or_bad_request<InnerT>(req.path_values[idx]));
             }
             return std::make_shared<PureType>();
         } else if constexpr (is_instantiation_of<Body, PureType>::value) {
             using InnerT = PureType::value_type;
-            auto model = req.json<InnerT>();
+            auto parsed = req.template try_json_as<InnerT>();
+            if (!parsed) {
+                throw HttpError(400, parsed.error().message);
+            }
+            auto model = std::move(*parsed);
             try_validate(model);
             return std::make_shared<PureType>(std::move(model));
         } else if constexpr (is_instantiation_of<Query, PureType>::value) {
@@ -62,7 +75,7 @@ namespace detail {
                 const std::string key = meta.name;
                 if (req.query.contains(key)) {
                     using FieldT = std::remove_cvref_t<decltype(model.*meta.pointer)>;
-                    model.*meta.pointer = convert_string<FieldT>(req.query.at(key));
+                    model.*meta.pointer = parse_or_bad_request<FieldT>(req.query.at(key));
                 }
             });
             try_validate(model);
@@ -74,7 +87,11 @@ namespace detail {
             return std::make_shared<PureType>();
         } else {
             if constexpr (boost::describe::has_describe_members<PureType>::value) {
-                auto model = req.json<PureType>();
+                auto parsed = req.template try_json_as<PureType>();
+                if (!parsed) {
+                    throw HttpError(400, parsed.error().message);
+                }
+                auto model = std::move(*parsed);
                 try_validate(model);
                 return std::make_shared<PureType>(std::move(model));
             } else {

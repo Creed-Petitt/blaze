@@ -39,7 +39,7 @@ private:
     std::vector<Middleware> middleware_;
     std::unique_ptr<Dispatcher> dispatcher_;
     std::unique_ptr<Server> server_;
-    mutable AppState state_{AppState::Configuring};
+    AppState state_{AppState::Configuring};
 
 public:
     App();
@@ -52,7 +52,7 @@ public:
      * @brief Stops the application.
      * Closes the listener and stops the event loop.
      */
-    void stop() const;
+    void stop();
 
     /**
      * @brief Access the current lifecycle state.
@@ -110,7 +110,7 @@ public:
      * @param port The port to listen on.
      * @param num_threads Number of threads for the event loop (0 = auto-detect).
      */
-    void listen(int port) const;
+    void listen(int port);
 
     /**
      * @brief Registers global middleware.

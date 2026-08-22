@@ -94,37 +94,32 @@ std::string Request::get_query(const std::string& key, const std::string& defaul
 }
 
 int Request::get_query_int(const std::string& key, const int default_val) const {
-    const auto it = query.find(key);
-    if (it == query.end()) {
-        return default_val;
-    }
-
-    try {
-        return std::stoi(it->second);
-    } catch (const std::exception&) {
-        return default_val;
-    }
+    return query_as<int>(key).value_or(default_val);
 }
 
 std::optional<int> Request::get_param_int(const std::string& key) const {
-    const auto it = params.find(key);
-    if (it == params.end()) {
-        return std::nullopt;
+    return param_as<int>(key);
+}
+
+std::expected<Json, util::ParseError> Request::try_json() const {
+    boost::system::error_code ec;
+    auto value = boost::json::parse(body, ec);
+    if (ec) {
+        return std::unexpected(util::ParseError{
+            util::ParseErrorCode::Invalid,
+            "Invalid JSON in request body: " + ec.message()
+        });
     }
 
-    try {
-        return std::stoi(it->second);
-    } catch (const std::exception&) {
-        return std::nullopt;
-    }
+    return Json(std::move(value));
 }
 
 Json Request::json() const {
-    try {
-        return Json(boost::json::parse(body));
-    } catch (const std::exception& e) {
-        throw BadRequest("Invalid JSON in request body: " + std::string(e.what()));
+    auto parsed = try_json();
+    if (!parsed) {
+        throw BadRequest(parsed.error().message);
     }
+    return std::move(*parsed);
 }
 
 } // namespace blaze

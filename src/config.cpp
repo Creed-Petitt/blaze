@@ -50,8 +50,13 @@ namespace blaze {
         return *this;
     }
 
+    ConfigBuilder&
+    ConfigBuilder::expose_client_ip(const bool enabled) {
+        config_.expose_client_ip = enabled;
+        return *this;
+    }
+
     Config ConfigBuilder::build() {
         return std::move(config_);
     }
 } // namespace blaze
-

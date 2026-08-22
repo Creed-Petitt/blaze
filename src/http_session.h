@@ -26,6 +26,7 @@ namespace blaze
         std::optional<http::request_parser<http::string_body>> parser_;
         Dispatcher& dispatcher_;
         const Config& config_;
+        std::string client_ip_;
 
     public:
         HttpSession(

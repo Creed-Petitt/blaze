@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <cstddef>
 #include <chrono>
+#include <string>
+#include <string_view>
 
 namespace blaze {
 
@@ -17,6 +19,7 @@ struct Config {
     std::string log_path{"stdout"};
     LogLevel log_level{LogLevel::INFO};
     std::string server_name{"Blaze/1.0"};
+    bool expose_client_ip{false};
 };
 
 class ConfigBuilder {
@@ -29,6 +32,7 @@ public:
     ConfigBuilder& log_path(std::string_view);
     ConfigBuilder& log_level(LogLevel);
     ConfigBuilder& server_name(std::string_view);
+    ConfigBuilder& expose_client_ip(bool enabled = true);
 
     Config build();
 

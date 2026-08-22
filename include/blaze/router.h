@@ -11,7 +11,7 @@
 namespace blaze {
 
 struct MatchedRoute {
-    Handler handler;
+    const Handler* handler;
     std::unordered_map<std::string, std::string> params;
     std::vector<std::string> path_values;
 };

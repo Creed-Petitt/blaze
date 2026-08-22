@@ -2,6 +2,7 @@
 
 #include <blaze/header.h>
 #include <blaze/json.h>
+#include <blaze/util/string.h>
 
 #include <any>
 #include <optional>
@@ -41,12 +42,54 @@ public:
     int get_query_int(const std::string& key, int default_val = 0) const;
     std::optional<int> get_param_int(const std::string& key) const;
 
+    template<typename T>
+    std::optional<T> query_as(std::string_view key) const {
+        for (const auto& [name, value] : query) {
+            if (name == key) {
+                auto parsed = util::parse_value<T>(value);
+                if (parsed) return std::move(*parsed);
+                return std::nullopt;
+            }
+        }
+        return std::nullopt;
+    }
+
+    template<typename T>
+    std::optional<T> param_as(std::string_view key) const {
+        for (const auto& [name, value] : params) {
+            if (name == key) {
+                auto parsed = util::parse_value<T>(value);
+                if (parsed) return std::move(*parsed);
+                return std::nullopt;
+            }
+        }
+        return std::nullopt;
+    }
+
     // Body parsing
+    std::expected<Json, util::ParseError> try_json() const;
     Json json() const;
 
     template<typename T>
     T json() const {
         return this->json().template as<T>();
+    }
+
+    template<typename T>
+    std::expected<T, util::ParseError> try_json_as() const {
+        auto parsed = try_json();
+        if (!parsed) {
+            return std::unexpected(parsed.error());
+        }
+
+        try {
+            return parsed->template as<T>();
+        } catch (const std::exception& e) {
+            return std::unexpected(util::ParseError{
+                util::ParseErrorCode::Invalid,
+                "Invalid JSON body: " + std::string(e.what())
+            });
+        }
     }
 
     // Context bag for middleware

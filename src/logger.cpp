@@ -1,10 +1,12 @@
 #include <blaze/logger.h>
 
 #include <chrono>
+#include <format>
 #include <iomanip>
 #include <sstream>
 #include <iostream>
 #include <filesystem>
+#include <utility>
 
 namespace blaze {
 
@@ -64,7 +66,7 @@ void Logger::process_queue() {
 
         std::lock_guard config_lock(config_mutex_);
         if (use_stdout_) {
-            if (msg.find("ERROR") != std::string::npos) {
+            if (msg.contains("ERROR")) {
                 std::cerr << out_str;
             } else {
                 std::cout << out_str;
@@ -75,7 +77,7 @@ void Logger::process_queue() {
             }
             if (file_stream_.is_open()) {
                 file_stream_ << out_str;
-                if (msg.find("ERROR") != std::string::npos) {
+                if (msg.contains("ERROR")) {
                     file_stream_.flush();
                 }
             }
@@ -147,13 +149,17 @@ void Logger::log_access(
         return;
     }
 
-    std::stringstream ss;
-    ss << "ACCESS: " << client_ip << " " << method << " " << path << " " 
-       << status_code << " " << response_time_ms << "ms";
-    
+    auto msg = std::format(
+        "ACCESS: {} {} {} {} {}ms",
+        client_ip,
+        method,
+        path,
+        status_code,
+        response_time_ms);
+
     {
         std::lock_guard lock(queue_mutex_);
-        queue_.push(ss.str());
+        queue_.push(std::move(msg));
     }
     cv_.notify_one();
 }

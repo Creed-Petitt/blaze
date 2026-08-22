@@ -6,8 +6,22 @@
 #include <string_view>
 #include <type_traits>
 #include <charconv>
+#include <expected>
+#include <system_error>
+#include <utility>
 
 namespace blaze::util {
+
+enum class ParseErrorCode {
+    Invalid,
+    OutOfRange,
+    UnsupportedType
+};
+
+struct ParseError {
+    ParseErrorCode code;
+    std::string message;
+};
 
 /**
  * @brief Decodes a URL-encoded string (e.g., %20 to space).
@@ -31,13 +45,8 @@ std::string to_string_param(const T& val) {
     else return std::to_string(val);
 }
 
-/**
- * @brief Efficiently converts a string_view to a numeric or boolean type.
- * Uses std::from_chars for high-performance parsing without allocations.
- * @throws HttpError(400) if parsing fails.
- */
 template<typename T>
-T convert_string(std::string_view s) {
+std::expected<T, ParseError> parse_value(std::string_view s) {
     using PureT = std::remove_cvref_t<T>;
 
     if constexpr (std::is_same_v<PureT, std::string>) {
@@ -45,27 +54,66 @@ T convert_string(std::string_view s) {
     } else if constexpr (std::is_same_v<PureT, bool>) {
         if (s == "true" || s == "1" || s == "yes" || s == "t") return true;
         if (s == "false" || s == "0" || s == "no" || s == "f") return false;
-        throw HttpError(400, "Invalid boolean format: " + std::string(s));
+        return std::unexpected(ParseError{
+            ParseErrorCode::Invalid,
+            "Invalid boolean format: " + std::string(s)
+        });
     } else if constexpr (std::is_integral_v<PureT>) {
-        PureT val;
+        PureT val{};
         auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
-        if (ec != std::errc()) throw HttpError(400, "Invalid integer format: " + std::string(s));
+        if (ec == std::errc::result_out_of_range) {
+            return std::unexpected(ParseError{
+                ParseErrorCode::OutOfRange,
+                "Integer out of range: " + std::string(s)
+            });
+        }
+        if (ec != std::errc() || ptr != s.data() + s.size()) {
+            return std::unexpected(ParseError{
+                ParseErrorCode::Invalid,
+                "Invalid integer format: " + std::string(s)
+            });
+        }
         return val;
     } else if constexpr (std::is_floating_point_v<PureT>) {
-        // MacOS fallback
-        try {
-            return static_cast<PureT>(std::stod(std::string(s)));
-        } catch (...) {
-            throw HttpError(400, "Invalid floating point format: " + std::string(s));
+        PureT val{};
+        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
+        if (ec == std::errc::result_out_of_range) {
+            return std::unexpected(ParseError{
+                ParseErrorCode::OutOfRange,
+                "Floating point value out of range: " + std::string(s)
+            });
         }
+        if (ec != std::errc() || ptr != s.data() + s.size()) {
+            return std::unexpected(ParseError{
+                ParseErrorCode::Invalid,
+                "Invalid floating point format: " + std::string(s)
+            });
+        }
+        return val;
     } else {
-        return PureT{};
+        return std::unexpected(ParseError{
+            ParseErrorCode::UnsupportedType,
+            "Unsupported conversion type"
+        });
     }
+}
+
+/**
+ * @brief Compatibility wrapper for APIs that still surface parse failures as HTTP 400 exceptions.
+ */
+template<typename T>
+T convert_string(std::string_view s) {
+    auto parsed = parse_value<T>(s);
+    if (!parsed) {
+        throw HttpError(400, parsed.error().message);
+    }
+    return std::move(*parsed);
 }
 
 } // namespace blaze::util
 
 namespace blaze {
     using util::to_string_param;
+    using util::parse_value;
     using util::convert_string;
 }

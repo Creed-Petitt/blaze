@@ -112,7 +112,7 @@ std::optional<MatchedRoute> Router::match(
         std::unordered_map<std::string, std::string> params;
         std::vector<std::string> path_values;
         if (match_segments(route.segments, request_segments, params, path_values)) {
-            return MatchedRoute{route.handler, std::move(params), std::move(path_values)};
+            return MatchedRoute{&route.handler, std::move(params), std::move(path_values)};
         }
     }
 

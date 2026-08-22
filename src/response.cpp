@@ -4,6 +4,7 @@
 #include <cctype>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
 namespace blaze {
 
@@ -43,11 +44,11 @@ Response& Response::status(const int code) {
     return *this;
 }
 
-Response& Response::header(const std::string& key, const std::string& value) {
+Response& Response::header(const std::string_view key, const std::string_view value) {
     return set_header(key, value);
 }
 
-Response& Response::set_header(const std::string& key, const std::string& value) {
+Response& Response::set_header(const std::string_view key, const std::string_view value) {
     for (auto& [name, existing_value] : headers_) {
         if (header_name_equal(name, key)) {
             name = key;
@@ -59,8 +60,8 @@ Response& Response::set_header(const std::string& key, const std::string& value)
     return add_header(key, value);
 }
 
-Response& Response::add_header(const std::string& key, const std::string& value) {
-    headers_.push_back({key, value});
+Response& Response::add_header(const std::string_view key, const std::string_view value) {
+    headers_.push_back({std::string(key), std::string(value)});
     return *this;
 }
 
@@ -71,14 +72,14 @@ Response& Response::headers(std::initializer_list<std::pair<std::string, std::st
     return *this;
 }
 
-Response& Response::send(const std::string& text) {
-    body_ = text;
+Response& Response::send(std::string text) {
+    body_ = std::move(text);
     file_path_.reset();
     return *this;
 }
 
-Response& Response::file(const std::string& path) {
-    file_path_ = path;
+Response& Response::file(std::string path) {
+    file_path_ = std::move(path);
     body_.clear();
     return *this;
 }
@@ -119,6 +120,10 @@ int Response::get_status() const {
 
 const std::string& Response::get_body() const {
     return body_;
+}
+
+std::string Response::take_body() {
+    return std::move(body_);
 }
 
 const std::vector<Header>& Response::get_headers() const {
